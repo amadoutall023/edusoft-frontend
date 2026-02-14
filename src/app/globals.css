@@ -24,3 +24,19 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Global input styles for search fields */
+input[type="text"],
+input[type="search"],
+input[type="email"],
+input[type="password"] {
+  color: #000000 !important;
+}
+
+input[type="text"]::placeholder,
+input[type="search"]::placeholder,
+input[type="email"]::placeholder,
+input[type="password"]::placeholder {
+  color: #000000 !important;
+  opacity: 0.6 !important;
+}
