@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { GraduationCap, LayoutGrid, Book, Users, UserCheck, Calendar, Settings, LogOut, Building2 } from 'lucide-react';
 
 interface SidebarProps {
@@ -10,12 +11,12 @@ interface SidebarProps {
 export default function Sidebar({ activeItem }: SidebarProps) {
     const menuItems = [
         { icon: LayoutGrid, label: 'Tableau de bord', path: '/dashboard' },
-        { icon: Book, label: 'Cours', path: '/cours' },
+        { icon: Book, label: 'Cours', path: '/dashboard/cours' },
         { icon: Users, label: 'Élèves', path: '/eleves' },
-        { icon: UserCheck, label: 'Professeurs', path: '/professeurs' },
-        { icon: Users, label: 'Administration', path: '/administration' },
+        { icon: UserCheck, label: 'Professeurs', path: '/dashboard/prof' },
+        { icon: Users, label: 'Administration', path: '/dashboard/administration' },
         { icon: Calendar, label: 'Planning', path: '/planning' },
-        { icon: Building2, label: 'Structure académique', path: '/structure' },
+        { icon: Building2, label: 'Structure académique', path: '/dashboard/structure' },
         { icon: Settings, label: 'Paramètre', path: '/parametre' },
     ];
 
@@ -91,7 +92,8 @@ export default function Sidebar({ activeItem }: SidebarProps) {
                     const isActive = item.label === activeItem;
 
                     return (
-                        <div
+                        <Link
+                            href={item.path}
                             key={index}
                             style={{
                                 display: 'flex',
@@ -112,6 +114,7 @@ export default function Sidebar({ activeItem }: SidebarProps) {
                                 backdropFilter: isActive ? 'blur(10px)' : 'none',
                                 boxShadow: isActive ? '0 4px 12px rgba(0,0,0,0.1)' : 'none',
                                 transform: 'translateX(0)',
+                                textDecoration: 'none',
                             }}
                             onMouseEnter={(e) => {
                                 if (!isActive) {
@@ -128,7 +131,7 @@ export default function Sidebar({ activeItem }: SidebarProps) {
                         >
                             <Icon size={20} strokeWidth={2.3} />
                             <span>{item.label}</span>
-                        </div>
+                        </Link>
                     );
                 })}
             </nav>

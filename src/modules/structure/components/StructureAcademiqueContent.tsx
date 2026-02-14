@@ -60,7 +60,8 @@ export default function StructureAcademiqueContent() {
                 flexDirection: 'column',
                 position: 'relative',
                 overflow: 'hidden',
-                marginLeft: '280px'
+                marginLeft: '280px',
+                paddingTop: '80px'
             }}>
                 {/* Header */}
                 <Header userName="M. Diaby Kande" userRole="Responsable pédagogique" />

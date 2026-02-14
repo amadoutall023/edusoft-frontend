@@ -19,7 +19,11 @@ export default function Header({ userName, userRole }: HeaderProps) {
             justifyContent: 'space-between',
             boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
             zIndex: 5,
-            backdropFilter: 'blur(20px)'
+            backdropFilter: 'blur(20px)',
+            position: 'fixed',
+            top: 0,
+            left: '280px',
+            right: 0
         }}>
             {/* Academic Year Selector */}
             <div style={{

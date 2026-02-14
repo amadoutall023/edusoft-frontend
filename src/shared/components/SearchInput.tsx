@@ -47,7 +47,8 @@ export default function SearchInput({
                     outline: 'none',
                     transition: 'all 0.2s ease',
                     fontFamily: 'inherit',
-                    background: 'white'
+                    background: 'white',
+                    color: '#000000'
                 }}
                 onFocus={(e: any) => {
                     e.currentTarget.style.borderColor = '#5B8DEF';
@@ -58,6 +59,12 @@ export default function SearchInput({
                     e.currentTarget.style.boxShadow = 'none';
                 }}
             />
+            <style jsx>{`
+                input::placeholder {
+                    color: #000000;
+                    opacity: 0.6;
+                }
+            `}</style>
         </div>
     );
 }
