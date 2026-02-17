@@ -1,12 +1,14 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Sidebar from '@/shared/components/Sidebar';
 import Header from '@/shared/components/Header';
 import TableAdmin from './TableAdmin';
 import { membresAdministrationData } from '../data/membres';
 
 export default function AdministrationContent() {
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
     return (
         <div style={{
             fontFamily: '"Outfit", "Poppins", -apple-system, sans-serif',
@@ -32,17 +34,21 @@ export default function AdministrationContent() {
             <Sidebar activeItem="Administration" />
 
             {/* Main Content Area */}
-            <main style={{
+            <main className="main-content" style={{
                 flex: 1,
                 display: 'flex',
                 flexDirection: 'column',
                 position: 'relative',
                 overflow: 'hidden',
                 marginLeft: '280px',
-                paddingTop: '80px'
+                paddingTop: '80px',
+                transition: 'margin-left 0.3s ease'
             }}>
                 {/* Header */}
-                <Header userName="M. Diaby Kande" userRole="Attaché de classe" />
+                <Header
+                    onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                    isSidebarOpen={isSidebarOpen}
+                />
 
                 {/* Content Container with white background */}
                 <div style={{
@@ -56,7 +62,7 @@ export default function AdministrationContent() {
                     flexDirection: 'column'
                 }}>
                     {/* Page Title */}
-                    <div style={{
+                    <div className="page-title" style={{
                         padding: '32px 40px 24px',
                         borderBottom: '1px solid #e2e8f0'
                     }}>
@@ -73,6 +79,22 @@ export default function AdministrationContent() {
                     <TableAdmin data={membresAdministrationData} />
                 </div>
             </main>
+
+            <style jsx>{`
+                @media (max-width: 1024px) {
+                    .main-content {
+                        margin-left: 0 !important;
+                    }
+                }
+                @media (max-width: 768px) {
+                    .page-title {
+                        padding: 20px !important;
+                    }
+                    .page-title h1 {
+                        font-size: 22px !important;
+                    }
+                }
+            `}</style>
 
             <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Poppins:wght@400;500;600;700&display=swap');

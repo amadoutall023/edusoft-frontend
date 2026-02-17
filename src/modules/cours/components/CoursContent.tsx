@@ -1,19 +1,46 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Search, Filter } from 'lucide-react';
+import { Search, Filter, Plus, X, Archive } from 'lucide-react';
 import Sidebar from '@/shared/components/Sidebar';
 import Header from '@/shared/components/Header';
 import CoursCard from './CoursCard';
 import Pagination from '@/shared/components/Pagination';
 import { coursData } from '../data/cours';
 import { FiltreCours } from '../types';
+import { filieresData } from '@/modules/structure/data/filieres';
+import { modulesData } from '@/modules/structure/data/modules';
+import { professeursData } from '@/modules/prof/data/professeurs';
 
 export default function CoursContent() {
     const [searchTerm, setSearchTerm] = useState('');
     const [filtres, setFiltres] = useState<FiltreCours>({});
     const [currentPage, setCurrentPage] = useState(1);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [showModal, setShowModal] = useState(false);
+    const [showArchive, setShowArchive] = useState(false);
+    const [archivedCours, setArchivedCours] = useState<number[]>([]);
+    const [newCours, setNewCours] = useState({
+        titre: '',
+        niveau: '',
+        professeur: '',
+        volumeHoraire: 0,
+        heuresPlanifie: 0,
+        heuresFaites: 0,
+        heuresRestantes: 0,
+        progression: 0
+    });
     const itemsPerPage = 4;
+
+    const handleArchive = (id: number) => {
+        setArchivedCours([...archivedCours, id]);
+        console.log('Cours archivé:', id);
+    };
+
+    const handleUnarchive = (id: number) => {
+        setArchivedCours(archivedCours.filter(c => c !== id));
+        console.log('Cours désarchivé:', id);
+    };
 
     // Extraire les valeurs uniques pour les filtres
     const niveaux = useMemo(() => {
@@ -51,7 +78,12 @@ export default function CoursContent() {
     }, []);
 
     const coursFiltres = useMemo(() => {
-        return coursData.filter(cours => {
+        // Filter out archived courses unless we're viewing the archive
+        const availableCours = showArchive
+            ? coursData.filter(cours => archivedCours.includes(cours.id))
+            : coursData.filter(cours => !archivedCours.includes(cours.id));
+
+        return availableCours.filter(cours => {
             if (searchTerm) {
                 const search = searchTerm.toLowerCase();
                 const matchSearch =
@@ -75,7 +107,7 @@ export default function CoursContent() {
 
             return true;
         });
-    }, [searchTerm, filtres]);
+    }, [searchTerm, filtres, archivedCours, showArchive]);
 
     // Reset to page 1 when filters or search change
     useEffect(() => {
@@ -90,6 +122,22 @@ export default function CoursContent() {
 
     const handlePageChange = (page: number) => {
         setCurrentPage(page);
+    };
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        console.log('Nouveau cours:', newCours);
+        setShowModal(false);
+        setNewCours({
+            titre: '',
+            niveau: '',
+            professeur: '',
+            volumeHoraire: 0,
+            heuresPlanifie: 0,
+            heuresFaites: 0,
+            heuresRestantes: 0,
+            progression: 0
+        });
     };
 
     return (
@@ -114,16 +162,20 @@ export default function CoursContent() {
 
             <Sidebar activeItem="Cours" />
 
-            <main style={{
+            <main className="main-content" style={{
                 flex: 1,
                 display: 'flex',
                 flexDirection: 'column',
                 position: 'relative',
                 overflow: 'hidden',
                 marginLeft: '280px',
-                paddingTop: '80px'
+                paddingTop: '80px',
+                transition: 'margin-left 0.3s ease'
             }}>
-                <Header userName="M. Diaby Kande" userRole="Attaché de classe" />
+                <Header
+                    onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                    isSidebarOpen={isSidebarOpen}
+                />
 
                 <div style={{
                     flex: 1,
@@ -135,11 +187,13 @@ export default function CoursContent() {
                     display: 'flex',
                     flexDirection: 'column'
                 }}>
-                    <div style={{ padding: '20px 24px', borderBottom: '1px solid #e2e8f0' }}>
-                        <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#1a202c', margin: 0 }}>Gestion des cours</h1>
+                    <div className="page-title" style={{ padding: '20px 24px', borderBottom: '1px solid #e2e8f0' }}>
+                        <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#1a202c', margin: 0 }}>
+                            {showArchive ? 'Cours archivés' : 'Gestion des cours'}
+                        </h1>
                     </div>
 
-                    <div style={{
+                    <div className="search-section" style={{
                         padding: '16px 24px',
                         display: 'flex',
                         gap: '12px',
@@ -188,23 +242,30 @@ export default function CoursContent() {
                             <Filter size={16} strokeWidth={2.5} />
                         </button>
 
-                        <button style={{
+                        <button className="action-btn" onClick={() => setShowArchive(!showArchive)} style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
                             padding: '12px 24px',
-                            background: '#5B8DEF',
-                            border: 'none',
+                            background: showArchive ? '#5B8DEF' : 'white',
+                            border: '1.5px solid #e5e7eb',
                             borderRadius: '12px',
-                            color: 'white',
+                            color: showArchive ? 'white' : '#4a5568',
                             fontSize: '14px',
-                            fontWeight: '600',
+                            fontWeight: '500',
                             cursor: 'pointer',
                             transition: 'all 0.2s ease',
                             fontFamily: 'inherit',
                             whiteSpace: 'nowrap'
                         }}>
-                            Gerer les evaluations
+                            <Archive size={18} />
+                            {showArchive ? 'Liste active' : 'Listes archive'}
                         </button>
 
-                        <button style={{
+                        <button className="action-btn" onClick={() => setShowModal(true)} style={{
+                            display: showArchive ? 'none' : 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
                             padding: '12px 24px',
                             background: '#5B8DEF',
                             border: 'none',
@@ -217,11 +278,12 @@ export default function CoursContent() {
                             fontFamily: 'inherit',
                             whiteSpace: 'nowrap'
                         }}>
-                            Gerer les salles
+                            <Plus size={18} />
+                            Ajouter cours
                         </button>
                     </div>
 
-                    <div style={{
+                    <div className="filters-section" style={{
                         padding: '12px 24px',
                         background: '#f8fafc',
                         borderBottom: '1px solid #f1f5f9',
@@ -317,7 +379,7 @@ export default function CoursContent() {
                             </button>
                         )}
 
-                        <div style={{ marginLeft: 'auto', fontSize: '13px', color: '#64748b', fontWeight: '500' }}>
+                        <div className="results-count" style={{ marginLeft: 'auto', fontSize: '13px', color: '#64748b', fontWeight: '500' }}>
                             {coursFiltres.length > 0
                                 ? `${startIndex + 1}-${Math.min(endIndex, coursFiltres.length)} sur ${coursFiltres.length} cours`
                                 : `0 cours`
@@ -325,17 +387,24 @@ export default function CoursContent() {
                         </div>
                     </div>
 
-                    <div style={{ flex: 1, padding: '16px', overflowY: 'auto' }}>
+                    <div className="cards-container" style={{ flex: 1, padding: '16px', overflowY: 'auto' }}>
                         {coursPagines.length > 0 ? (
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
+                            <div className="cards-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
                                 {coursPagines.map(cours => (
-                                    <CoursCard key={cours.id} cours={cours} />
+                                    <CoursCard
+                                        key={cours.id}
+                                        cours={cours}
+                                        onArchive={showArchive ? handleUnarchive : handleArchive}
+                                        isArchiveView={showArchive}
+                                    />
                                 ))}
                             </div>
                         ) : (
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 20px', color: '#94a3b8' }}>
                                 <div style={{ fontSize: '48px', marginBottom: '16px' }}>📚</div>
-                                <div style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px', color: '#64748b' }}>Aucun cours trouvé</div>
+                                <div style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px', color: '#64748b' }}>
+                                    {showArchive ? 'Aucun cours archivé' : 'Aucun cours trouvé'}
+                                </div>
                                 <div style={{ fontSize: '14px', color: '#94a3b8' }}>Essayez de modifier vos filtres de recherche</div>
                             </div>
                         )}
@@ -348,8 +417,394 @@ export default function CoursContent() {
                             onPageChange={handlePageChange}
                         />
                     )}
+
+                    {/* Modal for adding new cours */}
+                    {showModal && (
+                        <div className="modal-overlay" style={{
+                            position: 'fixed',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            background: 'rgba(0,0,0,0.5)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            zIndex: 1000,
+                            backdropFilter: 'blur(4px)'
+                        }}
+                            onClick={() => setShowModal(false)}
+                        >
+                            <div className="modal-content" style={{
+                                background: 'white',
+                                borderRadius: '20px',
+                                padding: '32px',
+                                width: '90%',
+                                maxWidth: '600px',
+                                maxHeight: '90vh',
+                                overflowY: 'auto',
+                                boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+                                animation: 'slideIn 0.3s ease'
+                            }}
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                <div style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    marginBottom: '24px'
+                                }}>
+                                    <h2 style={{
+                                        fontSize: '22px',
+                                        fontWeight: '700',
+                                        color: '#1a202c',
+                                        margin: 0
+                                    }}>Créer un cours</h2>
+                                    <button
+                                        onClick={() => setShowModal(false)}
+                                        style={{
+                                            width: '36px',
+                                            height: '36px',
+                                            borderRadius: '10px',
+                                            border: 'none',
+                                            background: '#f1f5f9',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center'
+                                        }}
+                                    >
+                                        <X size={20} color="#64748b" />
+                                    </button>
+                                </div>
+
+                                <form onSubmit={handleSubmit}>
+                                    <div style={{ marginBottom: '20px' }}>
+                                        <label style={{
+                                            display: 'block',
+                                            fontSize: '14px',
+                                            fontWeight: '600',
+                                            color: '#4a5568',
+                                            marginBottom: '8px'
+                                        }}>Titre du cours</label>
+                                        <input
+                                            type="text"
+                                            value={newCours.titre}
+                                            onChange={(e) => setNewCours({ ...newCours, titre: e.target.value })}
+                                            placeholder="Ex: Algorithmique"
+                                            required
+                                            style={{
+                                                width: '100%',
+                                                padding: '12px 16px',
+                                                borderRadius: '10px',
+                                                border: '1.5px solid #e2e8f0',
+                                                fontSize: '15px',
+                                                outline: 'none',
+                                                transition: 'border-color 0.2s ease',
+                                                fontFamily: 'inherit'
+                                            }}
+                                            onFocus={(e: any) => e.target.style.borderColor = '#5B8DEF'}
+                                            onBlur={(e: any) => e.target.style.borderColor = '#e2e8f0'}
+                                        />
+                                    </div>
+
+                                    <div style={{ marginBottom: '20px' }}>
+                                        <label style={{
+                                            display: 'block',
+                                            fontSize: '14px',
+                                            fontWeight: '600',
+                                            color: '#4a5568',
+                                            marginBottom: '8px'
+                                        }}>Filière</label>
+                                        <select
+                                            value={newCours.niveau}
+                                            onChange={(e) => setNewCours({ ...newCours, niveau: e.target.value })}
+                                            required
+                                            style={{
+                                                width: '100%',
+                                                padding: '12px 16px',
+                                                borderRadius: '10px',
+                                                border: '1.5px solid #e2e8f0',
+                                                fontSize: '15px',
+                                                outline: 'none',
+                                                transition: 'border-color 0.2s ease',
+                                                fontFamily: 'inherit',
+                                                background: 'white',
+                                                cursor: 'pointer'
+                                            }}
+                                            onFocus={(e: any) => e.target.style.borderColor = '#5B8DEF'}
+                                            onBlur={(e: any) => e.target.style.borderColor = '#e2e8f0'}
+                                        >
+                                            <option value="">Sélectionner une filière</option>
+                                            {filieresData.map(filiere => (
+                                                <option key={filiere.id} value={filiere.nom}>{filiere.nom}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    <div style={{ marginBottom: '20px' }}>
+                                        <label style={{
+                                            display: 'block',
+                                            fontSize: '14px',
+                                            fontWeight: '600',
+                                            color: '#4a5568',
+                                            marginBottom: '8px'
+                                        }}>Module</label>
+                                        <select
+                                            onChange={(e) => setNewCours({ ...newCours, niveau: e.target.value })}
+                                            required
+                                            style={{
+                                                width: '100%',
+                                                padding: '12px 16px',
+                                                borderRadius: '10px',
+                                                border: '1.5px solid #e2e8f0',
+                                                fontSize: '15px',
+                                                outline: 'none',
+                                                transition: 'border-color 0.2s ease',
+                                                fontFamily: 'inherit',
+                                                background: 'white',
+                                                cursor: 'pointer'
+                                            }}
+                                            onFocus={(e: any) => e.target.style.borderColor = '#5B8DEF'}
+                                            onBlur={(e: any) => e.target.style.borderColor = '#e2e8f0'}
+                                        >
+                                            <option value="">Sélectionner un module</option>
+                                            {modulesData.map(module => (
+                                                <option key={module.id} value={module.nom}>{module.nom}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    <div style={{ marginBottom: '20px' }}>
+                                        <label style={{
+                                            display: 'block',
+                                            fontSize: '14px',
+                                            fontWeight: '600',
+                                            color: '#4a5568',
+                                            marginBottom: '8px'
+                                        }}>Professeur</label>
+                                        <select
+                                            value={newCours.professeur}
+                                            onChange={(e) => setNewCours({ ...newCours, professeur: e.target.value })}
+                                            required
+                                            style={{
+                                                width: '100%',
+                                                padding: '12px 16px',
+                                                borderRadius: '10px',
+                                                border: '1.5px solid #e2e8f0',
+                                                fontSize: '15px',
+                                                outline: 'none',
+                                                transition: 'border-color 0.2s ease',
+                                                fontFamily: 'inherit',
+                                                background: 'white',
+                                                cursor: 'pointer'
+                                            }}
+                                            onFocus={(e: any) => e.target.style.borderColor = '#5B8DEF'}
+                                            onBlur={(e: any) => e.target.style.borderColor = '#e2e8f0'}
+                                        >
+                                            <option value="">Sélectionner un professeur</option>
+                                            {professeursData.map(prof => (
+                                                <option key={prof.id} value={`${prof.prenom} ${prof.nom}`}>{prof.prenom} {prof.nom}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    <div style={{ marginBottom: '24px' }}>
+                                        <label style={{
+                                            display: 'block',
+                                            fontSize: '14px',
+                                            fontWeight: '600',
+                                            color: '#4a5568',
+                                            marginBottom: '8px'
+                                        }}>Volume horaire</label>
+                                        <input
+                                            type="number"
+                                            value={newCours.volumeHoraire || ''}
+                                            onChange={(e) => setNewCours({ ...newCours, volumeHoraire: parseInt(e.target.value) || 0 })}
+                                            placeholder="Ex: 30"
+                                            required
+                                            min="0"
+                                            style={{
+                                                width: '100%',
+                                                padding: '12px 16px',
+                                                borderRadius: '10px',
+                                                border: '1.5px solid #e2e8f0',
+                                                fontSize: '15px',
+                                                outline: 'none',
+                                                transition: 'border-color 0.2s ease',
+                                                fontFamily: 'inherit'
+                                            }}
+                                            onFocus={(e: any) => e.target.style.borderColor = '#5B8DEF'}
+                                            onBlur={(e: any) => e.target.style.borderColor = '#e2e8f0'}
+                                        />
+                                    </div>
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '24px' }}>
+                                        <div>
+                                            <label style={{
+                                                display: 'block',
+                                                fontSize: '14px',
+                                                fontWeight: '600',
+                                                color: '#4a5568',
+                                                marginBottom: '8px'
+                                            }}>Heures planifiées</label>
+                                            <input
+                                                type="number"
+                                                value={newCours.heuresPlanifie || ''}
+                                                onChange={(e) => setNewCours({ ...newCours, heuresPlanifie: parseInt(e.target.value) || 0 })}
+                                                placeholder="Ex: 20"
+                                                required
+                                                min="0"
+                                                style={{
+                                                    width: '100%',
+                                                    padding: '12px 16px',
+                                                    borderRadius: '10px',
+                                                    border: '1.5px solid #e2e8f0',
+                                                    fontSize: '15px',
+                                                    outline: 'none',
+                                                    transition: 'border-color 0.2s ease',
+                                                    fontFamily: 'inherit'
+                                                }}
+                                                onFocus={(e: any) => e.target.style.borderColor = '#5B8DEF'}
+                                                onBlur={(e: any) => e.target.style.borderColor = '#e2e8f0'}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{
+                                                display: 'block',
+                                                fontSize: '14px',
+                                                fontWeight: '600',
+                                                color: '#4a5568',
+                                                marginBottom: '8px'
+                                            }}>Heures faites</label>
+                                            <input
+                                                type="number"
+                                                value={newCours.heuresFaites || ''}
+                                                onChange={(e) => setNewCours({ ...newCours, heuresFaites: parseInt(e.target.value) || 0 })}
+                                                placeholder="Ex: 10"
+                                                required
+                                                min="0"
+                                                style={{
+                                                    width: '100%',
+                                                    padding: '12px 16px',
+                                                    borderRadius: '10px',
+                                                    border: '1.5px solid #e2e8f0',
+                                                    fontSize: '15px',
+                                                    outline: 'none',
+                                                    transition: 'border-color 0.2s ease',
+                                                    fontFamily: 'inherit'
+                                                }}
+                                                onFocus={(e: any) => e.target.style.borderColor = '#5B8DEF'}
+                                                onBlur={(e: any) => e.target.style.borderColor = '#e2e8f0'}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{
+                                                display: 'block',
+                                                fontSize: '14px',
+                                                fontWeight: '600',
+                                                color: '#4a5568',
+                                                marginBottom: '8px'
+                                            }}>Heures restantes</label>
+                                            <input
+                                                type="number"
+                                                value={newCours.heuresRestantes || ''}
+                                                onChange={(e) => setNewCours({ ...newCours, heuresRestantes: parseInt(e.target.value) || 0 })}
+                                                placeholder="Ex: 20"
+                                                required
+                                                min="0"
+                                                style={{
+                                                    width: '100%',
+                                                    padding: '12px 16px',
+                                                    borderRadius: '10px',
+                                                    border: '1.5px solid #e2e8f0',
+                                                    fontSize: '15px',
+                                                    outline: 'none',
+                                                    transition: 'border-color 0.2s ease',
+                                                    fontFamily: 'inherit'
+                                                }}
+                                                onFocus={(e: any) => e.target.style.borderColor = '#5B8DEF'}
+                                                onBlur={(e: any) => e.target.style.borderColor = '#e2e8f0'}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowModal(false)}
+                                            style={{
+                                                padding: '12px 24px',
+                                                borderRadius: '10px',
+                                                border: '1.5px solid #e2e8f0',
+                                                background: 'white',
+                                                color: '#64748b',
+                                                fontSize: '14px',
+                                                fontWeight: '600',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s ease'
+                                            }}
+                                        >
+                                            Annuler
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            style={{
+                                                padding: '12px 24px',
+                                                borderRadius: '10px',
+                                                border: 'none',
+                                                background: 'linear-gradient(135deg, #5B8DEF 0%, #4169B8 100%)',
+                                                color: 'white',
+                                                fontSize: '14px',
+                                                fontWeight: '600',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s ease',
+                                                boxShadow: '0 4px 12px rgba(91,141,239,0.3)'
+                                            }}
+                                        >
+                                            Créer le cours
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </main>
+
+            <style jsx>{`
+                @media (max-width: 1024px) {
+                    .main-content {
+                        margin-left: 0 !important;
+                    }
+                }
+                @media (max-width: 768px) {
+                    .page-title {
+                        padding: 16px 20px !important;
+                    }
+                    .page-title h1 {
+                        fontSize: '18px' !important;
+                    }
+                    .search-section {
+                        padding: 12px 20px !important;
+                    }
+                    .filters-section {
+                        padding: 12px 20px !important;
+                    }
+                    .cards-grid {
+                        grid-template-columns: 1fr !important;
+                    }
+                    .action-btn {
+                        flex: 1 !important;
+                        text-align: center;
+                    }
+                    .results-count {
+                        width: 100%;
+                        margin-left: 0 !important;
+                        margin-top: 8px;
+                    }
+                }
+            `}</style>
 
             <style>{`
                 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Poppins:wght@400;500;600;700&display=swap');

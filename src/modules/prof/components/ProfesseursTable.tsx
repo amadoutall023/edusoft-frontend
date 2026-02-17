@@ -77,7 +77,7 @@ export default function ProfesseursTable({ data }: ProfesseursTableProps) {
     return (
         <>
             {/* Search and Filter Section */}
-            <div style={{
+            <div className="search-filter-section" style={{
                 padding: '24px 40px',
                 display: 'flex',
                 justifyContent: 'space-between',
@@ -127,7 +127,7 @@ export default function ProfesseursTable({ data }: ProfesseursTableProps) {
 
             {/* Filter Panel */}
             {showFilters && (
-                <div style={{
+                <div className="filter-panel" style={{
                     padding: '20px 40px',
                     background: '#f0f7ff',
                     borderBottom: '1px solid #e2e8f0',
@@ -232,7 +232,7 @@ export default function ProfesseursTable({ data }: ProfesseursTableProps) {
                         </button>
                     )}
 
-                    <div style={{
+                    <div className="results-count" style={{
                         marginLeft: 'auto',
                         fontSize: '14px',
                         color: '#4a5568',
@@ -244,8 +244,8 @@ export default function ProfesseursTable({ data }: ProfesseursTableProps) {
             )}
 
             {/* Table */}
-            <div style={{
-                overflow: 'auto',
+            <div className="table-container" style={{
+                overflowX: 'auto',
                 padding: '0 40px'
             }}>
                 <table style={{
@@ -458,6 +458,25 @@ export default function ProfesseursTable({ data }: ProfesseursTableProps) {
                 totalPages={totalPages}
                 onPageChange={setCurrentPage}
             />
+
+            <style jsx>{`
+                @media (max-width: 768px) {
+                    .search-filter-section {
+                        padding: 16px 20px !important;
+                    }
+                    .filter-panel {
+                        padding: 16px 20px !important;
+                    }
+                    .table-container {
+                        padding: 0 20px !important;
+                    }
+                    .results-count {
+                        width: 100%;
+                        margin-left: 0 !important;
+                        margin-top: 12px;
+                    }
+                }
+            `}</style>
         </>
     );
 }

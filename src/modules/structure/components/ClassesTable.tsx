@@ -1,20 +1,48 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Eye } from 'lucide-react';
+import { Eye, Plus, X, Pencil, Trash2 } from 'lucide-react';
 import SearchInput from '@/shared/components/SearchInput';
 import FilterButton from '@/shared/components/FilterButton';
 import Pagination from '@/shared/components/Pagination';
-import { ClasseData } from '@/modules/structure/types';
+import { ClasseData, NiveauData } from '@/modules/structure/types';
+import { filieresData, FiliereData } from '@/modules/structure/data/filieres';
 
 interface ClassesTableProps {
     data: ClasseData[];
+    niveauxData?: NiveauData[];
 }
 
-export default function ClassesTable({ data }: ClassesTableProps) {
+export default function ClassesTable({ data, niveauxData = [] }: ClassesTableProps) {
     const [currentPage, setCurrentPage] = useState(1);
     const [searchTerm, setSearchTerm] = useState('');
+    const [showModal, setShowModal] = useState(false);
+    const [newClasse, setNewClasse] = useState({
+        libelle: '',
+        filiereId: '',
+        niveauId: ''
+    });
     const itemsPerPage = 5;
+
+    // Default niveaux if not provided
+    const defaultNiveaux: NiveauData[] = niveauxData.length > 0 ? niveauxData : [
+        { libelle: 'Première année' },
+        { libelle: 'Deuxième année' },
+        { libelle: 'Troisième année' },
+        { libelle: 'Quatrième année' },
+        { libelle: 'Cinquième année' },
+    ];
+
+    // Get filiere names for display
+    const getFiliereName = (id: string) => {
+        const filiere = filieresData.find(f => f.id.toString() === id);
+        return filiere ? filiere.nom : id;
+    };
+
+    // Get niveau name for display
+    const getNiveauName = (libelle: string) => {
+        return libelle;
+    };
 
     // Filter data based on search term
     const filteredData = data.filter(item =>
@@ -28,33 +56,77 @@ export default function ClassesTable({ data }: ClassesTableProps) {
     const startIndex = (currentPage - 1) * itemsPerPage;
     const paginatedData = filteredData.slice(startIndex, startIndex + itemsPerPage);
 
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        // Here you would typically save the data to your backend
+        console.log('Nouvelle classe:', newClasse);
+        setShowModal(false);
+        setNewClasse({ libelle: '', filiereId: '', niveauId: '' });
+    };
+
     return (
         <>
             {/* Search and Filter Section */}
-            <div style={{
+            <div className="search-filter-section" style={{
                 padding: '24px 40px',
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                background: '#fafbfc'
+                background: '#fafbfc',
+                flexWrap: 'wrap',
+                gap: '16px'
             }}>
-                <SearchInput
-                    value={searchTerm}
-                    onChange={setSearchTerm}
-                    placeholder="Rechercher une classe..."
-                />
-                <FilterButton label="Filtrer" />
+                <div className="search-wrapper" style={{ flex: '1', minWidth: '200px', maxWidth: '400px' }}>
+                    <SearchInput
+                        value={searchTerm}
+                        onChange={setSearchTerm}
+                        placeholder="Rechercher une classe..."
+                    />
+                </div>
+                <div className="actions-wrapper" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                    <FilterButton label="Filtrer" />
+                    <button
+                        onClick={() => setShowModal(true)}
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: '10px 20px',
+                            background: 'linear-gradient(135deg, #5B8DEF 0%, #4169B8 100%)',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '10px',
+                            fontSize: '14px',
+                            fontWeight: '600',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease',
+                            boxShadow: '0 4px 12px rgba(91,141,239,0.3)',
+                            whiteSpace: 'nowrap'
+                        }}
+                        onMouseEnter={(e: any) => {
+                            e.currentTarget.style.transform = 'translateY(-2px)';
+                            e.currentTarget.style.boxShadow = '0 6px 16px rgba(91,141,239,0.4)';
+                        }}
+                        onMouseLeave={(e: any) => {
+                            e.currentTarget.style.transform = 'translateY(0)';
+                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(91,141,239,0.3)';
+                        }}
+                    >
+                        <Plus size={18} />
+                        Ajouter
+                    </button>
+                </div>
             </div>
 
             {/* Table */}
-            <div style={{
-                overflow: 'auto',
+            <div className="table-container" style={{
+                overflowX: 'auto',
                 padding: '0 40px'
             }}>
                 <table style={{
                     width: '100%',
                     borderCollapse: 'collapse',
-                    minWidth: '600px'
+                    minWidth: '700px'
                 }}>
                     <thead>
                         <tr style={{
@@ -67,7 +139,7 @@ export default function ClassesTable({ data }: ClassesTableProps) {
                                 color: 'white',
                                 fontWeight: '600',
                                 fontSize: '14px',
-                                width: '80px',
+                                width: '60px',
                                 borderBottom: '3px solid rgba(255,255,255,0.2)'
                             }}>N°</th>
                             <th style={{
@@ -76,7 +148,7 @@ export default function ClassesTable({ data }: ClassesTableProps) {
                                 color: 'white',
                                 fontWeight: '600',
                                 fontSize: '14px',
-                                width: '200px',
+                                width: '180px',
                                 borderBottom: '3px solid rgba(255,255,255,0.2)'
                             }}>Libellé</th>
                             <th style={{
@@ -85,7 +157,7 @@ export default function ClassesTable({ data }: ClassesTableProps) {
                                 color: 'white',
                                 fontWeight: '600',
                                 fontSize: '14px',
-                                width: '180px',
+                                width: '160px',
                                 borderBottom: '3px solid rgba(255,255,255,0.2)'
                             }}>Filière </th>
                             <th style={{
@@ -94,7 +166,7 @@ export default function ClassesTable({ data }: ClassesTableProps) {
                                 color: 'white',
                                 fontWeight: '600',
                                 fontSize: '14px',
-                                width: '180px',
+                                width: '160px',
                                 borderBottom: '3px solid rgba(255,255,255,0.2)'
                             }}>Niveau </th>
                             <th style={{
@@ -103,7 +175,7 @@ export default function ClassesTable({ data }: ClassesTableProps) {
                                 color: 'white',
                                 fontWeight: '600',
                                 fontSize: '14px',
-                                width: '120px',
+                                width: '140px',
                                 borderBottom: '3px solid rgba(255,255,255,0.2)'
                             }}>ACTIONS</th>
                         </tr>
@@ -146,7 +218,7 @@ export default function ClassesTable({ data }: ClassesTableProps) {
                                     fontSize: '14px',
                                     fontWeight: '500',
                                     borderBottom: '1px solid #f1f5f9'
-                                }}>{classe.filiereId}</td>
+                                }}>{getFiliereName(classe.filiereId)}</td>
                                 <td style={{
                                     padding: '16px',
                                     textAlign: 'center',
@@ -160,29 +232,77 @@ export default function ClassesTable({ data }: ClassesTableProps) {
                                     textAlign: 'center',
                                     borderBottom: '1px solid #f1f5f9'
                                 }}>
-                                    <button style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        width: '36px',
-                                        height: '36px',
-                                        borderRadius: '8px',
-                                        border: 'none',
-                                        background: '#E3F2FD',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.2s ease'
-                                    }}
-                                        onMouseEnter={(e: any) => {
-                                            e.currentTarget.style.background = '#5B8DEF';
-                                            e.currentTarget.querySelector('svg').style.color = 'white';
+                                    <div style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}>
+                                        <button style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            width: '36px',
+                                            height: '36px',
+                                            borderRadius: '8px',
+                                            border: 'none',
+                                            background: '#E3F2FD',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s ease'
                                         }}
-                                        onMouseLeave={(e: any) => {
-                                            e.currentTarget.style.background = '#E3F2FD';
-                                            e.currentTarget.querySelector('svg').style.color = '#5B8DEF';
+                                            onMouseEnter={(e: any) => {
+                                                e.currentTarget.style.background = '#5B8DEF';
+                                                e.currentTarget.querySelector('svg').style.color = 'white';
+                                            }}
+                                            onMouseLeave={(e: any) => {
+                                                e.currentTarget.style.background = '#E3F2FD';
+                                                e.currentTarget.querySelector('svg').style.color = '#5B8DEF';
+                                            }}
+                                        >
+                                            <Eye size={18} color="#5B8DEF" strokeWidth={2.5} />
+                                        </button>
+                                        <button style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            width: '36px',
+                                            height: '36px',
+                                            borderRadius: '8px',
+                                            border: 'none',
+                                            background: '#E3F2FD',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s ease'
                                         }}
-                                    >
-                                        <Eye size={18} color="#5B8DEF" strokeWidth={2.5} />
-                                    </button>
+                                            onMouseEnter={(e: any) => {
+                                                e.currentTarget.style.background = '#5B8DEF';
+                                                e.currentTarget.querySelector('svg').style.color = 'white';
+                                            }}
+                                            onMouseLeave={(e: any) => {
+                                                e.currentTarget.style.background = '#E3F2FD';
+                                                e.currentTarget.querySelector('svg').style.color = '#5B8DEF';
+                                            }}
+                                        >
+                                            <Pencil size={18} color="#5B8DEF" strokeWidth={2.5} />
+                                        </button>
+                                        <button style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            width: '36px',
+                                            height: '36px',
+                                            borderRadius: '8px',
+                                            border: 'none',
+                                            background: '#E3F2FD',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s ease'
+                                        }}
+                                            onMouseEnter={(e: any) => {
+                                                e.currentTarget.style.background = '#5B8DEF';
+                                                e.currentTarget.querySelector('svg').style.color = 'white';
+                                            }}
+                                            onMouseLeave={(e: any) => {
+                                                e.currentTarget.style.background = '#E3F2FD';
+                                                e.currentTarget.querySelector('svg').style.color = '#5B8DEF';
+                                            }}
+                                        >
+                                            <Trash2 size={18} color="#5B8DEF" strokeWidth={2.5} />
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         ))}
@@ -196,6 +316,235 @@ export default function ClassesTable({ data }: ClassesTableProps) {
                 totalPages={totalPages}
                 onPageChange={setCurrentPage}
             />
+
+            {/* Modal for adding new class */}
+            {showModal && (
+                <div className="modal-overlay" style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(0,0,0,0.5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 1000,
+                    backdropFilter: 'blur(4px)'
+                }}
+                    onClick={() => setShowModal(false)}
+                >
+                    <div className="modal-content" style={{
+                        background: 'white',
+                        borderRadius: '20px',
+                        padding: '32px',
+                        width: '90%',
+                        maxWidth: '500px',
+                        boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+                        animation: 'slideIn 0.3s ease'
+                    }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            marginBottom: '24px'
+                        }}>
+                            <h2 style={{
+                                fontSize: '22px',
+                                fontWeight: '700',
+                                color: '#1a202c',
+                                margin: 0
+                            }}>Ajouter une classe</h2>
+                            <button
+                                onClick={() => setShowModal(false)}
+                                style={{
+                                    width: '36px',
+                                    height: '36px',
+                                    borderRadius: '10px',
+                                    border: 'none',
+                                    background: '#f1f5f9',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}
+                            >
+                                <X size={20} color="#64748b" />
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleSubmit}>
+                            <div style={{ marginBottom: '20px' }}>
+                                <label style={{
+                                    display: 'block',
+                                    fontSize: '14px',
+                                    fontWeight: '600',
+                                    color: '#4a5568',
+                                    marginBottom: '8px'
+                                }}>Libellé</label>
+                                <input
+                                    type="text"
+                                    value={newClasse.libelle}
+                                    onChange={(e) => setNewClasse({ ...newClasse, libelle: e.target.value })}
+                                    placeholder="Ex: Classe A1"
+                                    required
+                                    style={{
+                                        width: '100%',
+                                        padding: '12px 16px',
+                                        borderRadius: '10px',
+                                        border: '1.5px solid #e2e8f0',
+                                        fontSize: '15px',
+                                        outline: 'none',
+                                        transition: 'border-color 0.2s ease',
+                                        fontFamily: 'inherit'
+                                    }}
+                                    onFocus={(e: any) => e.target.style.borderColor = '#5B8DEF'}
+                                    onBlur={(e: any) => e.target.style.borderColor = '#e2e8f0'}
+                                />
+                            </div>
+
+                            <div style={{ marginBottom: '20px' }}>
+                                <label style={{
+                                    display: 'block',
+                                    fontSize: '14px',
+                                    fontWeight: '600',
+                                    color: '#4a5568',
+                                    marginBottom: '8px'
+                                }}>Filière</label>
+                                <select
+                                    value={newClasse.filiereId}
+                                    onChange={(e) => setNewClasse({ ...newClasse, filiereId: e.target.value })}
+                                    required
+                                    style={{
+                                        width: '100%',
+                                        padding: '12px 16px',
+                                        borderRadius: '10px',
+                                        border: '1.5px solid #e2e8f0',
+                                        fontSize: '15px',
+                                        outline: 'none',
+                                        transition: 'border-color 0.2s ease',
+                                        fontFamily: 'inherit',
+                                        background: 'white',
+                                        cursor: 'pointer'
+                                    }}
+                                    onFocus={(e: any) => e.target.style.borderColor = '#5B8DEF'}
+                                    onBlur={(e: any) => e.target.style.borderColor = '#e2e8f0'}
+                                >
+                                    <option value="">Sélectionner une filière</option>
+                                    {filieresData.map((filiere) => (
+                                        <option key={filiere.id} value={filiere.id}>
+                                            {filiere.nom}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div style={{ marginBottom: '24px' }}>
+                                <label style={{
+                                    display: 'block',
+                                    fontSize: '14px',
+                                    fontWeight: '600',
+                                    color: '#4a5568',
+                                    marginBottom: '8px'
+                                }}>Niveau</label>
+                                <select
+                                    value={newClasse.niveauId}
+                                    onChange={(e) => setNewClasse({ ...newClasse, niveauId: e.target.value })}
+                                    required
+                                    style={{
+                                        width: '100%',
+                                        padding: '12px 16px',
+                                        borderRadius: '10px',
+                                        border: '1.5px solid #e2e8f0',
+                                        fontSize: '15px',
+                                        outline: 'none',
+                                        transition: 'border-color 0.2s ease',
+                                        fontFamily: 'inherit',
+                                        background: 'white',
+                                        cursor: 'pointer'
+                                    }}
+                                    onFocus={(e: any) => e.target.style.borderColor = '#5B8DEF'}
+                                    onBlur={(e: any) => e.target.style.borderColor = '#e2e8f0'}
+                                >
+                                    <option value="">Sélectionner un niveau</option>
+                                    {defaultNiveaux.map((niveau, index) => (
+                                        <option key={index} value={niveau.libelle}>
+                                            {niveau.libelle}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowModal(false)}
+                                    style={{
+                                        padding: '12px 24px',
+                                        borderRadius: '10px',
+                                        border: '1.5px solid #e2e8f0',
+                                        background: 'white',
+                                        color: '#64748b',
+                                        fontSize: '14px',
+                                        fontWeight: '600',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s ease'
+                                    }}
+                                >
+                                    Annuler
+                                </button>
+                                <button
+                                    type="submit"
+                                    style={{
+                                        padding: '12px 24px',
+                                        borderRadius: '10px',
+                                        border: 'none',
+                                        background: 'linear-gradient(135deg, #5B8DEF 0%, #4169B8 100%)',
+                                        color: 'white',
+                                        fontSize: '14px',
+                                        fontWeight: '600',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s ease',
+                                        boxShadow: '0 4px 12px rgba(91,141,239,0.3)'
+                                    }}
+                                >
+                                    Enregistrer
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            <style jsx>{`
+                @keyframes slideIn {
+                    from {
+                        opacity: 0;
+                        transform: translateY(-20px);
+                    }
+                    to {
+                        opacity: 1;
+                        transform: translateY(0);
+                    }
+                }
+                @media (max-width: 768px) {
+                    .search-filter-section {
+                        padding: 16px 20px !important;
+                    }
+                    .search-wrapper {
+                        max-width: 100% !important;
+                    }
+                    .actions-wrapper {
+                        width: 100%;
+                        justify-content: flex-start;
+                    }
+                    .table-container {
+                        padding: 0 20px !important;
+                    }
+                }
+            `}</style>
         </>
     );
 }

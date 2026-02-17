@@ -1,16 +1,21 @@
 'use client';
 
 import React from 'react';
-import { Bell } from 'lucide-react';
+import { Bell, Menu } from 'lucide-react';
+import { useAuth } from '@/modules/auth/context/AuthContext';
 
 interface HeaderProps {
-    userName: string;
-    userRole: string;
+    onMenuClick?: () => void;
+    isSidebarOpen?: boolean;
 }
 
-export default function Header({ userName, userRole }: HeaderProps) {
+export default function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
+    const { user } = useAuth();
+
+    const userName = user ? `${user.prenom} ${user.nom}` : '';
+    const userRole = user ? user.role : '';
     return (
-        <header style={{
+        <header className="header" style={{
             background: 'rgba(255,255,255,0.98)',
             padding: '20px 40px',
             borderBottom: '1px solid rgba(0,0,0,0.06)',
@@ -23,18 +28,41 @@ export default function Header({ userName, userRole }: HeaderProps) {
             position: 'fixed',
             top: 0,
             left: '280px',
-            right: 0
+            right: 0,
+            transition: 'left 0.3s ease'
         }}>
+            {/* Mobile Menu Button */}
+            <button
+                onClick={onMenuClick}
+                className="mobile-menu-btn"
+                style={{
+                    display: 'none',
+                    width: '40px',
+                    height: '40px',
+                    borderRadius: '10px',
+                    border: 'none',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginRight: '12px'
+                }}
+            >
+                <Menu size={24} color="#4a5568" />
+            </button>
+
             {/* Academic Year Selector */}
-            <div style={{
+            <div className="year-selector" style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '12px'
+                gap: '12px',
+                flexWrap: 'wrap'
             }}>
                 <label style={{
                     fontSize: '15px',
                     fontWeight: '500',
-                    color: '#4a5568'
+                    color: '#4a5568',
+                    whiteSpace: 'nowrap'
                 }}>Année scolaire :</label>
                 <select style={{
                     padding: '10px 16px',
@@ -113,11 +141,12 @@ export default function Header({ userName, userRole }: HeaderProps) {
                         color: 'white',
                         fontWeight: '700',
                         fontSize: '16px',
-                        border: '2px solid #e2e8f0'
+                        border: '2px solid #e2e8f0',
+                        flexShrink: 0
                     }}>
                         {userName.split(' ').map(n => n[0]).join('').slice(0, 2)}
                     </div>
-                    <div style={{
+                    <div className="profile-info" style={{
                         textAlign: 'left'
                     }}>
                         <div style={{
@@ -132,6 +161,26 @@ export default function Header({ userName, userRole }: HeaderProps) {
                     </div>
                 </div>
             </div>
+
+            <style jsx>{`
+                @media (max-width: 1024px) {
+                    .header {
+                        left: 0 !important;
+                        padding: 16px 20px !important;
+                    }
+                    .mobile-menu-btn {
+                        display: flex !important;
+                    }
+                }
+                @media (max-width: 768px) {
+                    .year-selector {
+                        display: none !important;
+                    }
+                    .profile-info {
+                        display: none !important;
+                    }
+                }
+            `}</style>
         </header>
     );
 }
