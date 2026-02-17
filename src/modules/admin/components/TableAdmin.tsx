@@ -32,12 +32,14 @@ export default function TableAdmin({ data }: TableAdminProps) {
     return (
         <>
             {/* Search and Filter Section */}
-            <div style={{
+            <div className="search-filter-section" style={{
                 padding: '24px 40px',
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                background: '#fafbfc'
+                background: '#fafbfc',
+                flexWrap: 'wrap',
+                gap: '16px'
             }}>
                 <SearchInput
                     value={searchTerm}
@@ -48,8 +50,8 @@ export default function TableAdmin({ data }: TableAdminProps) {
             </div>
 
             {/* Table */}
-            <div style={{
-                overflow: 'auto',
+            <div className="table-container" style={{
+                overflowX: 'auto',
                 padding: '0 40px'
             }}>
                 <table style={{
@@ -232,6 +234,17 @@ export default function TableAdmin({ data }: TableAdminProps) {
                 totalPages={totalPages}
                 onPageChange={setCurrentPage}
             />
+
+            <style jsx>{`
+                @media (max-width: 768px) {
+                    .search-filter-section {
+                        padding: 16px 20px !important;
+                    }
+                    .table-container {
+                        padding: 0 20px !important;
+                    }
+                }
+            `}</style>
         </>
     );
 }

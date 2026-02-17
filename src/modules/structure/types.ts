@@ -6,6 +6,10 @@ export interface ClasseData {
     schoolId: string;
 }
 
+export interface NiveauData {
+    libelle: string;
+}
+
 export interface FiliereData {
     id: number;
     nom: string;

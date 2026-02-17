@@ -40,3 +40,69 @@ input[type="password"]::placeholder {
   color: #000000 !important;
   opacity: 0.6 !important;
 }
+
+/* Global Responsive Styles */
+@media (max-width: 1024px) {
+  /* Tablet and below */
+}
+
+@media (max-width: 768px) {
+
+  /* Mobile specific */
+  .pagination-container {
+    padding: 16px 20px !important;
+    gap: 6px !important;
+  }
+
+  .search-filter-section {
+    padding: 16px 20px !important;
+  }
+
+  .table-container {
+    padding: 0 20px !important;
+  }
+
+  .filter-panel {
+    padding: 16px 20px !important;
+  }
+
+  .results-count {
+    width: 100%;
+    margin-left: 0 !important;
+    margin-top: 12px;
+  }
+
+  .page-title {
+    padding: 20px !important;
+  }
+
+  .page-title h1 {
+    font-size: 22px !important;
+  }
+
+  .tabs-nav {
+    padding: 0 20px !important;
+  }
+
+  .cards-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .action-btn {
+    flex: 1 !important;
+    text-align: center;
+  }
+
+  .main-content {
+    margin-left: 0 !important;
+  }
+
+  /* Sidebar responsive */
+  .sidebar {
+    transform: translateX(-100%);
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
+  }
+}

@@ -63,14 +63,15 @@ export default function Pagination({
     };
 
     return (
-        <div style={{
+        <div className="pagination-container" style={{
             padding: '20px 40px',
             borderTop: '1px solid #f1f5f9',
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'center',
             gap: '8px',
-            background: '#fafbfc'
+            background: '#fafbfc',
+            flexWrap: 'wrap'
         }}>
             {/* Previous Button */}
             <button

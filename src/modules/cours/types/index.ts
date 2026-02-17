@@ -8,6 +8,7 @@ export interface Cours {
     heuresFaites: number;
     heuresRestantes: number;
     progression: number;
+    isArchive?: boolean;
 }
 
 export interface StatistiquesCours {
