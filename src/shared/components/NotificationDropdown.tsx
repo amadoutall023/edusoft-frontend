@@ -9,7 +9,7 @@ import {
     getNotificationIcon,
     formatTimestamp
 } from '@/shared/data/notifications';
-import { Bell, X, Check, CheckCheck } from 'lucide-react';
+import { Bell, Check, CheckCheck } from 'lucide-react';
 
 interface NotificationDropdownProps {
     isOpen: boolean;
@@ -44,7 +44,6 @@ export default function NotificationDropdown({ isOpen, onClose }: NotificationDr
     const handleNotificationClick = (notification: Notification) => {
         setSelectedNotification(notification);
 
-        // Mark as read if not already
         if (!notification.isRead) {
             setNotifications(prev =>
                 prev.map(n =>
@@ -81,26 +80,154 @@ export default function NotificationDropdown({ isOpen, onClose }: NotificationDr
     if (!isOpen) return null;
 
     return (
-        <div
-            ref={dropdownRef}
-            style={{
-                position: 'absolute',
-                top: '100%',
-                right: 0,
-                marginTop: '8px',
-                width: '380px',
-                maxWidth: 'calc(100vw - 40px)',
-                maxHeight: '500px',
-                background: 'white',
-                borderRadius: '16px',
-                boxShadow: '0 10px 40px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.05)',
-                overflow: 'hidden',
-                zIndex: 9999,
-                display: 'flex',
-                flexDirection: 'column',
-                animation: 'slideDown 0.2s ease-out'
-            }}
-        >
+        <>
+            {/* Mobile overlay */}
+            <div
+                className="lg:hidden fixed inset-0 bg-black/50 z-[10000]"
+                onClick={onClose}
+            />
+
+            <div
+                ref={dropdownRef}
+                className="notification-dropdown w-[380px] max-w-[calc(100vw-40px)] max-h-[500px] bg-white rounded-2xl shadow-xl overflow-hidden z-[10001] lg:z-[9999] flex flex-col animate-slide-down lg:absolute lg:top-full lg:right-0 lg:mt-2"
+            >
+                {/* Header */}
+                <div className="p-4 lg:p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+                    {selectedNotification ? (
+                        <div className="flex items-center gap-3">
+                            <button
+                                onClick={() => setSelectedNotification(null)}
+                                className="p-1 rounded-lg hover:bg-slate-200 transition-colors"
+                            >
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4a5568" strokeWidth="2">
+                                    <path d="M15 18l-6-6 6-6" />
+                                </svg>
+                            </button>
+                            <div>
+                                <div className="text-[15px] font-semibold text-slate-900">Détails</div>
+                                <div className="text-xs text-slate-500">Notification #{selectedNotification.id}</div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="flex items-center gap-2.5">
+                            <Bell size={20} className="text-[#5B8DEF]" />
+                            <span className="text-base font-semibold text-slate-900">Notifications</span>
+                            {unreadCount > 0 && (
+                                <span className="bg-red-500 text-white text-xs font-semibold px-2 py-0.5 rounded-full">
+                                    {unreadCount}
+                                </span>
+                            )}
+                        </div>
+                    )}
+
+                    {!selectedNotification && unreadCount > 0 && (
+                        <button
+                            onClick={markAllAsRead}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[#5B8DEF] text-sm hover:bg-slate-200 transition-colors"
+                        >
+                            <CheckCheck size={16} />
+                            Tout marquer comme lu
+                        </button>
+                    )}
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 overflow-y-auto max-h-[400px]">
+                    {selectedNotification ? (
+                        <div className="p-5">
+                            <div className="flex items-start gap-4 mb-5">
+                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl ${selectedNotification.isRead ? 'bg-slate-100' : 'bg-blue-50'}`}>
+                                    {getNotificationIcon(selectedNotification.type)}
+                                </div>
+                                <div className="flex-1">
+                                    <div className="text-sm text-[#5B8DEF] font-medium mb-1">
+                                        {getTypeLabel(selectedNotification.type)}
+                                    </div>
+                                    <div className="text-base font-semibold text-slate-900">
+                                        {selectedNotification.title}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-slate-50 rounded-xl p-4 mb-4">
+                                <p className="text-sm text-slate-600 leading-relaxed m-0">
+                                    {selectedNotification.message}
+                                </p>
+                            </div>
+
+                            <div className="flex items-center justify-between">
+                                <div className="text-xs text-slate-500">
+                                    {formatTimestamp(selectedNotification.timestamp)}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    {selectedNotification.isRead ? (
+                                        <span className="text-xs text-emerald-500 flex items-center gap-1">
+                                            <Check size={14} />
+                                            Lu
+                                        </span>
+                                    ) : (
+                                        <span className="text-xs text-[#5B8DEF] flex items-center gap-1">
+                                            <span className="w-2 h-2 rounded-full bg-[#5B8DEF]" />
+                                            Non lu
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        notifications.length === 0 ? (
+                            <div className="p-10 text-center">
+                                <Bell size={40} className="text-slate-300 mb-3 mx-auto" />
+                                <p className="text-slate-500 text-sm">Aucune notification</p>
+                            </div>
+                        ) : (
+                            notifications.map((notification) => (
+                                <div
+                                    key={notification.id}
+                                    onClick={() => handleNotificationClick(notification)}
+                                    className={`p-3.5 border-b border-slate-100 cursor-pointer flex items-start gap-3.5 transition-colors hover:bg-slate-50 ${notification.isRead ? 'bg-white' : 'bg-slate-50'}`}
+                                >
+                                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-lg relative ${notification.isRead ? 'bg-slate-100' : 'bg-blue-50'}`}>
+                                        {getNotificationIcon(notification.type)}
+                                        {!notification.isRead && (
+                                            <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-[#5B8DEF] border-2 border-white" />
+                                        )}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center justify-between mb-1">
+                                            <span className={`text-sm ${notification.isRead ? 'font-medium' : 'font-semibold'} text-slate-900`}>
+                                                {notification.title}
+                                            </span>
+                                            <span className="text-xs text-slate-400 flex-shrink-0 ml-2">
+                                                {formatTimestamp(notification.timestamp)}
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-slate-500 m-0 truncate">
+                                            {notification.message}
+                                        </p>
+                                    </div>
+                                </div>
+                            ))
+                        )
+                    )}
+                </div>
+
+                {/* Footer */}
+                {!selectedNotification && (
+                    <div className="p-3 border-t border-slate-200 text-center bg-slate-50">
+                        <button
+                            onClick={() => {
+                                onClose();
+                                router.push('/dashboard/notifications');
+                            }}
+                            className="bg-none border-none text-[#5B8DEF] text-sm font-medium px-4 py-2 rounded-lg hover:bg-slate-200 transition-colors"
+                        >
+                            Voir toutes les notifications
+                        </button>
+                    </div>
+                )}
+            </div>
+
             <style jsx>{`
                 @keyframes slideDown {
                     from {
@@ -112,343 +239,25 @@ export default function NotificationDropdown({ isOpen, onClose }: NotificationDr
                         transform: translateY(0);
                     }
                 }
-                @media (max-width: 480px) {
+                .animate-slide-down {
+                    animation: slideDown 0.2s ease-out;
+                }
+                @media (max-width: 1023px) {
                     .notification-dropdown {
-                        width: 320px !important;
-                        right: -10px !important;
+                        position: fixed !important;
+                        width: 100% !important;
+                        max-width: 100% !important;
+                        right: 0 !important;
+                        left: 0 !important;
+                        bottom: 0 !important;
+                        top: 60px !important;
+                        margin-top: 0 !important;
+                        border-radius: 16px 16px 0 0 !important;
+                        max-height: none !important;
+                        height: calc(100vh - 60px) !important;
                     }
                 }
             `}</style>
-
-            {/* Header */}
-            <div style={{
-                padding: '16px 20px',
-                borderBottom: '1px solid #e2e8f0',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                background: '#f8fafc'
-            }}>
-                {selectedNotification ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <button
-                            onClick={() => setSelectedNotification(null)}
-                            style={{
-                                background: 'none',
-                                border: 'none',
-                                cursor: 'pointer',
-                                padding: '4px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                borderRadius: '8px',
-                                transition: 'background 0.2s'
-                            }}
-                            onMouseEnter={(e: any) => e.currentTarget.style.background = '#e2e8f0'}
-                            onMouseLeave={(e: any) => e.currentTarget.style.background = 'transparent'}
-                        >
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4a5568" strokeWidth="2">
-                                <path d="M15 18l-6-6 6-6" />
-                            </svg>
-                        </button>
-                        <div>
-                            <div style={{ fontSize: '15px', fontWeight: '600', color: '#1a202c' }}>
-                                Détails
-                            </div>
-                            <div style={{ fontSize: '12px', color: '#718096' }}>
-                                Notification #{selectedNotification.id}
-                            </div>
-                        </div>
-                    </div>
-                ) : (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <Bell size={20} color="#5B8DEF" />
-                        <span style={{ fontSize: '16px', fontWeight: '600', color: '#1a202c' }}>
-                            Notifications
-                        </span>
-                        {unreadCount > 0 && (
-                            <span style={{
-                                background: '#ef4444',
-                                color: 'white',
-                                fontSize: '12px',
-                                fontWeight: '600',
-                                padding: '2px 8px',
-                                borderRadius: '10px'
-                            }}>
-                                {unreadCount}
-                            </span>
-                        )}
-                    </div>
-                )}
-
-                {!selectedNotification && unreadCount > 0 && (
-                    <button
-                        onClick={markAllAsRead}
-                        style={{
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            padding: '6px 12px',
-                            borderRadius: '8px',
-                            fontSize: '13px',
-                            color: '#5B8DEF',
-                            transition: 'background 0.2s'
-                        }}
-                        onMouseEnter={(e: any) => e.currentTarget.style.background = '#e2e8f0'}
-                        onMouseLeave={(e: any) => e.currentTarget.style.background = 'transparent'}
-                    >
-                        <CheckCheck size={16} />
-                        Tout marquer comme lu
-                    </button>
-                )}
-            </div>
-
-            {/* Content */}
-            <div style={{
-                flex: 1,
-                overflowY: 'auto',
-                maxHeight: '400px'
-            }}>
-                {selectedNotification ? (
-                    // Detail view
-                    <div style={{ padding: '20px' }}>
-                        <div style={{
-                            display: 'flex',
-                            alignItems: 'flex-start',
-                            gap: '16px',
-                            marginBottom: '20px'
-                        }}>
-                            <div style={{
-                                width: '48px',
-                                height: '48px',
-                                borderRadius: '12px',
-                                background: selectedNotification.isRead ? '#f1f5f9' : '#eff6ff',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: '24px',
-                                flexShrink: 0
-                            }}>
-                                {getNotificationIcon(selectedNotification.type)}
-                            </div>
-                            <div style={{ flex: 1 }}>
-                                <div style={{
-                                    fontSize: '14px',
-                                    color: '#5B8DEF',
-                                    fontWeight: '500',
-                                    marginBottom: '4px'
-                                }}>
-                                    {getTypeLabel(selectedNotification.type)}
-                                </div>
-                                <div style={{
-                                    fontSize: '16px',
-                                    fontWeight: '600',
-                                    color: '#1a202c'
-                                }}>
-                                    {selectedNotification.title}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div style={{
-                            background: '#f8fafc',
-                            borderRadius: '12px',
-                            padding: '16px',
-                            marginBottom: '16px'
-                        }}>
-                            <p style={{
-                                fontSize: '14px',
-                                color: '#4a5568',
-                                lineHeight: '1.6',
-                                margin: 0
-                            }}>
-                                {selectedNotification.message}
-                            </p>
-                        </div>
-
-                        <div style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between'
-                        }}>
-                            <div style={{
-                                fontSize: '13px',
-                                color: '#718096'
-                            }}>
-                                {formatTimestamp(selectedNotification.timestamp)}
-                            </div>
-                            <div style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '8px'
-                            }}>
-                                {selectedNotification.isRead ? (
-                                    <span style={{
-                                        fontSize: '12px',
-                                        color: '#10b981',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '4px'
-                                    }}>
-                                        <Check size={14} />
-                                        Lu
-                                    </span>
-                                ) : (
-                                    <span style={{
-                                        fontSize: '12px',
-                                        color: '#5B8DEF',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '4px'
-                                    }}>
-                                        <span style={{
-                                            width: '8px',
-                                            height: '8px',
-                                            borderRadius: '50%',
-                                            background: '#5B8DEF'
-                                        }} />
-                                        Non lu
-                                    </span>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                ) : (
-                    // List view
-                    notifications.length === 0 ? (
-                        <div style={{
-                            padding: '40px 20px',
-                            textAlign: 'center'
-                        }}>
-                            <Bell size={40} color="#cbd5e1" style={{ marginBottom: '12px' }} />
-                            <p style={{ color: '#718096', fontSize: '14px' }}>
-                                Aucune notification
-                            </p>
-                        </div>
-                    ) : (
-                        notifications.map((notification) => (
-                            <div
-                                key={notification.id}
-                                onClick={() => handleNotificationClick(notification)}
-                                style={{
-                                    padding: '14px 20px',
-                                    borderBottom: '1px solid #f1f5f9',
-                                    cursor: 'pointer',
-                                    background: notification.isRead ? 'white' : '#f8fafc',
-                                    transition: 'background 0.2s',
-                                    display: 'flex',
-                                    alignItems: 'flex-start',
-                                    gap: '14px'
-                                }}
-                                onMouseEnter={(e: any) => {
-                                    e.currentTarget.style.background = '#f1f5f9';
-                                }}
-                                onMouseLeave={(e: any) => {
-                                    e.currentTarget.style.background = notification.isRead ? 'white' : '#f8fafc';
-                                }}
-                            >
-                                <div style={{
-                                    width: '40px',
-                                    height: '40px',
-                                    borderRadius: '10px',
-                                    background: notification.isRead ? '#f1f5f9' : '#eff6ff',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    fontSize: '18px',
-                                    flexShrink: 0,
-                                    position: 'relative'
-                                }}>
-                                    {getNotificationIcon(notification.type)}
-                                    {!notification.isRead && (
-                                        <div style={{
-                                            position: 'absolute',
-                                            top: '-2px',
-                                            right: '-2px',
-                                            width: '10px',
-                                            height: '10px',
-                                            borderRadius: '50%',
-                                            background: '#5B8DEF',
-                                            border: '2px solid white'
-                                        }} />
-                                    )}
-                                </div>
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'space-between',
-                                        marginBottom: '4px'
-                                    }}>
-                                        <span style={{
-                                            fontSize: '14px',
-                                            fontWeight: notification.isRead ? '500' : '600',
-                                            color: '#1a202c'
-                                        }}>
-                                            {notification.title}
-                                        </span>
-                                        <span style={{
-                                            fontSize: '12px',
-                                            color: '#94a3b8',
-                                            flexShrink: 0,
-                                            marginLeft: '8px'
-                                        }}>
-                                            {formatTimestamp(notification.timestamp)}
-                                        </span>
-                                    </div>
-                                    <p style={{
-                                        fontSize: '13px',
-                                        color: '#64748b',
-                                        margin: 0,
-                                        overflow: 'hidden',
-                                        textOverflow: 'ellipsis',
-                                        whiteSpace: 'nowrap'
-                                    }}>
-                                        {notification.message}
-                                    </p>
-                                </div>
-                            </div>
-                        ))
-                    )
-                )}
-            </div>
-
-            {/* Footer */}
-            {!selectedNotification && (
-                <div style={{
-                    padding: '12px 20px',
-                    borderTop: '1px solid #e2e8f0',
-                    textAlign: 'center',
-                    background: '#f8fafc'
-                }}>
-                    <button
-                        onClick={() => {
-                            // Fermer le dropdown et naviguer vers la page des notifications
-                            onClose();
-                            router.push('/dashboard/notifications');
-                        }}
-                        style={{
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            fontSize: '13px',
-                            color: '#5B8DEF',
-                            fontWeight: '500',
-                            padding: '8px 16px',
-                            borderRadius: '8px',
-                            transition: 'background 0.2s'
-                        }}
-                        onMouseEnter={(e: any) => e.currentTarget.style.background = '#e2e8f0'}
-                        onMouseLeave={(e: any) => e.currentTarget.style.background = 'transparent'}
-                    >
-                        Voir toutes les notifications
-                    </button>
-                </div>
-            )}
-        </div>
+        </>
     );
 }
-

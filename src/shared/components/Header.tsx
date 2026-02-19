@@ -147,12 +147,10 @@ export default function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
                     </div>
 
                     {/* Notification Dropdown */}
-                    <div style={{
-                        position: 'absolute',
-                        top: '100%',
-                        right: 0,
-                        zIndex: 9999
-                    }}>
+                    <div
+                        className="notification-container md:absolute md:top-full md:right-0"
+                        style={{ zIndex: 10000 }}
+                    >
                         <NotificationDropdown
                             isOpen={isNotificationOpen}
                             onClose={() => setIsNotificationOpen(false)}
@@ -216,11 +214,18 @@ export default function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
                     }
                 }
                 @media (max-width: 768px) {
+                    .header {
+                        z-index: 99999 !important;
+                        height: 60px !important;
+                    }
                     .year-selector {
                         display: none !important;
                     }
                     .profile-info {
                         display: none !important;
+                    }
+                    .notification-container {
+                        z-index: 99999 !important;
                     }
                 }
             `}</style>

@@ -40,7 +40,7 @@ export default function SearchInput({
                 onChange={(e) => onChange(e.target.value)}
                 style={{
                     width: '100%',
-                    padding: '12px 16px 12px 42px',
+                    padding: '10px 14px 10px 38px',
                     borderRadius: '12px',
                     border: '1.5px solid #e5e7eb',
                     fontSize: '14px',
