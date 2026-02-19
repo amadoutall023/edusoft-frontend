@@ -24,7 +24,7 @@ export default function Sidebar({ activeItem }: SidebarProps) {
     const menuItems = [
         { icon: LayoutGrid, label: 'Tableau de bord', path: '/dashboard' },
         { icon: Book, label: 'Cours', path: '/dashboard/cours' },
-        { icon: Users, label: 'Élèves', path: '/eleves' },
+        { icon: Users, label: 'Étudiants', path: '/dashboard/etudiant' },
         { icon: UserCheck, label: 'Professeurs', path: '/dashboard/prof' },
         { icon: Users, label: 'Administration', path: '/dashboard/administration' },
         { icon: Calendar, label: 'Planning', path: '/dashboard/planning' },
@@ -272,12 +272,16 @@ export default function Sidebar({ activeItem }: SidebarProps) {
                 @media (max-width: 1024px) {
                     .mobile-menu-btn {
                         display: flex !important;
+                        top: 8px !important;
+                        left: 8px !important;
                     }
                     .mobile-overlay {
                         display: block !important;
                     }
                     .sidebar {
                         transform: translateX(-100%);
+                        top: 60px !important;
+                        height: calc(100vh - 60px) !important;
                     }
                     .sidebar.sidebar-open {
                         transform: translateX(0);

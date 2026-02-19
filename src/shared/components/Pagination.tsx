@@ -64,7 +64,7 @@ export default function Pagination({
 
     return (
         <div className="pagination-container" style={{
-            padding: '20px 40px',
+            padding: '14px 24px',
             borderTop: '1px solid #f1f5f9',
             display: 'flex',
             justifyContent: 'center',
@@ -78,8 +78,8 @@ export default function Pagination({
                 onClick={handlePrevious}
                 disabled={currentPage === 1}
                 style={{
-                    width: '36px',
-                    height: '36px',
+                    width: '32px',
+                    height: '32px',
                     borderRadius: '8px',
                     border: '1.5px solid #e5e7eb',
                     background: 'white',
@@ -111,8 +111,8 @@ export default function Pagination({
                         key={index}
                         onClick={() => onPageChange(page)}
                         style={{
-                            width: '36px',
-                            height: '36px',
+                            width: '32px',
+                            height: '32px',
                             borderRadius: '8px',
                             border: `1.5px solid ${currentPage === page ? '#5B8DEF' : '#e5e7eb'}`,
                             background: currentPage === page ? '#5B8DEF' : 'white',
@@ -150,8 +150,8 @@ export default function Pagination({
                 onClick={handleNext}
                 disabled={currentPage === totalPages}
                 style={{
-                    width: '36px',
-                    height: '36px',
+                    width: '32px',
+                    height: '32px',
                     borderRadius: '8px',
                     border: '1.5px solid #e5e7eb',
                     background: 'white',
