@@ -1,8 +1,11 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Bell, Menu } from 'lucide-react';
 import { useAuth } from '@/modules/auth/context/AuthContext';
+import NotificationDropdown from './NotificationDropdown';
+import { getUnreadCount } from '@/shared/data/notifications';
+import { useSidebar } from '@/shared/context/SidebarContext';
 
 interface HeaderProps {
     onMenuClick?: () => void;
@@ -11,9 +14,20 @@ interface HeaderProps {
 
 export default function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
     const { user } = useAuth();
+    const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+    const { toggleSidebar, isOpen } = useSidebar();
 
     const userName = user ? `${user.prenom} ${user.nom}` : '';
     const userRole = user ? user.role : '';
+
+    const toggleNotifications = () => {
+        setIsNotificationOpen(!isNotificationOpen);
+    };
+
+    const handleMenuClick = () => {
+        toggleSidebar();
+    };
+
     return (
         <header className="header" style={{
             background: 'rgba(255,255,255,0.98)',
@@ -23,7 +37,7 @@ export default function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
             alignItems: 'center',
             justifyContent: 'space-between',
             boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
-            zIndex: 5,
+            zIndex: 9998,
             backdropFilter: 'blur(20px)',
             position: 'fixed',
             top: 0,
@@ -33,7 +47,7 @@ export default function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
         }}>
             {/* Mobile Menu Button */}
             <button
-                onClick={onMenuClick}
+                onClick={handleMenuClick}
                 className="mobile-menu-btn"
                 style={{
                     display: 'none',
@@ -99,22 +113,51 @@ export default function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
                     cursor: 'pointer',
                     padding: '8px',
                     borderRadius: '10px',
-                    transition: 'all 0.2s ease'
+                    transition: 'all 0.2s ease',
+                    background: isNotificationOpen ? '#eff6ff' : 'transparent'
                 }}
-                    onMouseEnter={(e: any) => e.currentTarget.style.background = '#f7fafc'}
-                    onMouseLeave={(e: any) => e.currentTarget.style.background = 'transparent'}
+                    onClick={toggleNotifications}
+                    onMouseEnter={(e: any) => {
+                        if (!isNotificationOpen) e.currentTarget.style.background = '#f7fafc';
+                    }}
+                    onMouseLeave={(e: any) => {
+                        if (!isNotificationOpen) e.currentTarget.style.background = 'transparent';
+                    }}
                 >
-                    <Bell size={22} color="#4a5568" strokeWidth={2} />
+                    <Bell size={22} color={isNotificationOpen ? '#5B8DEF' : '#4a5568'} strokeWidth={2} />
+                    {/* Unread notification badge */}
                     <div style={{
                         position: 'absolute',
-                        top: '6px',
-                        right: '6px',
-                        width: '8px',
-                        height: '8px',
+                        top: '4px',
+                        right: '4px',
+                        minWidth: '18px',
+                        height: '18px',
                         background: '#ef4444',
-                        borderRadius: '50%',
-                        border: '2px solid white'
-                    }} />
+                        borderRadius: '9px',
+                        border: '2px solid white',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '10px',
+                        fontWeight: '700',
+                        color: 'white',
+                        padding: '0 4px'
+                    }}>
+                        2
+                    </div>
+
+                    {/* Notification Dropdown */}
+                    <div style={{
+                        position: 'absolute',
+                        top: '100%',
+                        right: 0,
+                        zIndex: 9999
+                    }}>
+                        <NotificationDropdown
+                            isOpen={isNotificationOpen}
+                            onClose={() => setIsNotificationOpen(false)}
+                        />
+                    </div>
                 </div>
 
                 {/* Profile */}

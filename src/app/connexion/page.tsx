@@ -23,7 +23,7 @@ export default function LoginPage() {
         const success = login(loginInput);
 
         if (success) {
-            router.push('/dashboard/structure');
+            router.push('/dashboard');
         } else {
             setError('Login invalide. Veuillez vérifier vos identifiants.');
         }
@@ -89,8 +89,8 @@ export default function LoginPage() {
                         type="submit"
                         disabled={isSubmitting}
                         className={`w-full py-3 sm:py-[14px] px-4 sm:px-6 rounded-xl border-none text-white text-sm sm:text-base font-semibold cursor-pointer transition-all duration-200 flex items-center justify-center gap-2 ${isSubmitting
-                                ? 'bg-gray-400'
-                                : 'bg-gradient-to-br from-[#5B8DEF] to-[#4169B8] shadow-lg hover:shadow-xl'
+                            ? 'bg-gray-400'
+                            : 'bg-gradient-to-br from-[#5B8DEF] to-[#4169B8] shadow-lg hover:shadow-xl'
                             }`}
                     >
                         {isSubmitting ? (
@@ -140,4 +140,3 @@ export default function LoginPage() {
         </div>
     );
 }
-

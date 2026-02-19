@@ -2,8 +2,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Search, Filter, Plus, X, Archive } from 'lucide-react';
-import Sidebar from '@/shared/components/Sidebar';
-import Header from '@/shared/components/Header';
 import CoursCard from './CoursCard';
 import Pagination from '@/shared/components/Pagination';
 import { coursData } from '../data/cours';
@@ -16,7 +14,6 @@ export default function CoursContent() {
     const [searchTerm, setSearchTerm] = useState('');
     const [filtres, setFiltres] = useState<FiltreCours>({});
     const [currentPage, setCurrentPage] = useState(1);
-    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [showModal, setShowModal] = useState(false);
     const [showArchive, setShowArchive] = useState(false);
     const [archivedCours, setArchivedCours] = useState<number[]>([]);
@@ -54,7 +51,6 @@ export default function CoursContent() {
     const filières = useMemo(() => {
         const filieresSet = new Set<string>();
         coursData.forEach(cours => {
-            // Extraire la filière du niveau (ex: CPD, GRLS de L1-CPD)
             const parts = cours.niveau.split('/');
             parts.forEach(p => {
                 const match = p.match(/[A-Z]+$/);
@@ -64,21 +60,12 @@ export default function CoursContent() {
         return Array.from(filieresSet).sort();
     }, []);
 
-    const classes = useMemo(() => {
-        const classesSet = new Set<string>();
-        coursData.forEach(cours => {
-            cours.niveau.split('/').forEach(c => classesSet.add(c.trim()));
-        });
-        return Array.from(classesSet).sort();
-    }, []);
-
     const professeurs = useMemo(() => {
         const profsSet = new Set(coursData.map(c => c.professeur));
         return Array.from(profsSet).sort();
     }, []);
 
     const coursFiltres = useMemo(() => {
-        // Filter out archived courses unless we're viewing the archive
         const availableCours = showArchive
             ? coursData.filter(cours => archivedCours.includes(cours.id))
             : coursData.filter(cours => !archivedCours.includes(cours.id));
@@ -109,12 +96,10 @@ export default function CoursContent() {
         });
     }, [searchTerm, filtres, archivedCours, showArchive]);
 
-    // Reset to page 1 when filters or search change
     useEffect(() => {
         setCurrentPage(1);
     }, [searchTerm, filtres]);
 
-    // Calculate pagination
     const totalPages = Math.ceil(coursFiltres.length / itemsPerPage);
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
@@ -141,649 +126,593 @@ export default function CoursContent() {
     };
 
     return (
-        <div style={{
-            fontFamily: '"Outfit", "Poppins", -apple-system, sans-serif',
-            minHeight: '100vh',
-            background: 'linear-gradient(135deg, #5B8DEF 0%, #4A7ACC 50%, #3E6AB8 100%)',
-            display: 'flex',
-            overflow: 'hidden',
-            position: 'relative'
-        }}>
-            <div style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                backgroundImage: `radial-gradient(circle at 20px 20px, rgba(255,255,255,0.05) 1px, transparent 1px)`,
-                backgroundSize: '40px 40px',
-                pointerEvents: 'none'
-            }} />
-
-            <Sidebar activeItem="Cours" />
-
-            <main className="main-content" style={{
-                flex: 1,
-                display: 'flex',
-                flexDirection: 'column',
-                position: 'relative',
-                overflow: 'hidden',
-                marginLeft: '280px',
-                paddingTop: '80px',
-                transition: 'margin-left 0.3s ease'
+        <>
+            {/* Page Title */}
+            <div className="page-title" style={{
+                padding: '32px 40px 24px',
+                borderBottom: '1px solid #e2e8f0'
             }}>
-                <Header
-                    onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                    isSidebarOpen={isSidebarOpen}
-                />
-
-                <div style={{
-                    flex: 1,
-                    margin: '16px',
-                    background: 'white',
-                    borderRadius: '16px',
-                    boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
-                    overflow: 'hidden',
-                    display: 'flex',
-                    flexDirection: 'column'
+                <h1 style={{
+                    fontSize: '28px',
+                    fontWeight: '700',
+                    color: '#1a202c',
+                    margin: 0,
+                    letterSpacing: '-0.5px'
                 }}>
-                    <div className="page-title" style={{ padding: '20px 24px', borderBottom: '1px solid #e2e8f0' }}>
-                        <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#1a202c', margin: 0 }}>
-                            {showArchive ? 'Cours archivés' : 'Gestion des cours'}
-                        </h1>
-                    </div>
+                    {showArchive ? 'Cours archivés' : 'Gestion des cours'}
+                </h1>
+            </div>
 
-                    <div className="search-section" style={{
-                        padding: '16px 24px',
-                        display: 'flex',
-                        gap: '12px',
-                        alignItems: 'center',
-                        background: '#fafbfc',
-                        borderBottom: '1px solid #f1f5f9',
-                        flexWrap: 'wrap'
-                    }}>
-                        <div style={{ position: 'relative', flex: '1 1 300px', minWidth: '250px' }}>
-                            <Search size={18} color="#9ca3af" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
-                            <input
-                                type="text"
-                                placeholder="Rechercher"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                style={{
-                                    width: '100%',
-                                    padding: '12px 16px 12px 42px',
-                                    borderRadius: '12px',
-                                    border: '1.5px solid #e5e7eb',
-                                    fontSize: '14px',
-                                    outline: 'none',
-                                    transition: 'all 0.2s ease',
-                                    fontFamily: 'inherit',
-                                    background: 'white',
-                                    color: '#000000'
-                                }}
-                            />
-                        </div>
-
-                        <button style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            padding: '12px 18px',
+            {/* Search Section */}
+            <div className="search-section" style={{
+                padding: '16px 24px',
+                display: 'flex',
+                gap: '12px',
+                alignItems: 'center',
+                background: '#fafbfc',
+                borderBottom: '1px solid #f1f5f9',
+                flexWrap: 'wrap'
+            }}>
+                <div style={{ position: 'relative', flex: '1 1 300px', minWidth: '250px' }}>
+                    <Search size={18} color="#9ca3af" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+                    <input
+                        type="text"
+                        placeholder="Rechercher"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        style={{
+                            width: '100%',
+                            padding: '12px 16px 12px 42px',
+                            borderRadius: '12px',
+                            border: '1.5px solid #e5e7eb',
+                            fontSize: '14px',
+                            outline: 'none',
+                            transition: 'all 0.2s ease',
+                            fontFamily: 'inherit',
                             background: 'white',
-                            border: '1.5px solid #e5e7eb',
-                            borderRadius: '12px',
-                            color: '#4a5568',
-                            fontSize: '14px',
-                            fontWeight: '500',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s ease',
-                            fontFamily: 'inherit'
-                        }}>
-                            <Filter size={16} strokeWidth={2.5} />
-                        </button>
+                            color: '#000000'
+                        }}
+                    />
+                </div>
 
-                        <button className="action-btn" onClick={() => setShowArchive(!showArchive)} style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            padding: '12px 24px',
-                            background: showArchive ? '#5B8DEF' : 'white',
-                            border: '1.5px solid #e5e7eb',
-                            borderRadius: '12px',
-                            color: showArchive ? 'white' : '#4a5568',
-                            fontSize: '14px',
-                            fontWeight: '500',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s ease',
-                            fontFamily: 'inherit',
-                            whiteSpace: 'nowrap'
-                        }}>
-                            <Archive size={18} />
-                            {showArchive ? 'Liste active' : 'Listes archive'}
-                        </button>
+                <button style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '12px 18px',
+                    background: 'white',
+                    border: '1.5px solid #e5e7eb',
+                    borderRadius: '12px',
+                    color: '#4a5568',
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    fontFamily: 'inherit'
+                }}>
+                    <Filter size={16} strokeWidth={2.5} />
+                </button>
 
-                        <button className="action-btn" onClick={() => setShowModal(true)} style={{
-                            display: showArchive ? 'none' : 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            padding: '12px 24px',
-                            background: '#5B8DEF',
+                <button onClick={() => setShowArchive(!showArchive)} style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '12px 24px',
+                    background: showArchive ? '#5B8DEF' : 'white',
+                    border: '1.5px solid #e5e7eb',
+                    borderRadius: '12px',
+                    color: showArchive ? 'white' : '#4a5568',
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    fontFamily: 'inherit',
+                    whiteSpace: 'nowrap'
+                }}>
+                    <Archive size={18} />
+                    {showArchive ? 'Liste active' : 'Listes archive'}
+                </button>
+
+                <button onClick={() => setShowModal(true)} style={{
+                    display: showArchive ? 'none' : 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '12px 24px',
+                    background: '#5B8DEF',
+                    border: 'none',
+                    borderRadius: '12px',
+                    color: 'white',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    fontFamily: 'inherit',
+                    whiteSpace: 'nowrap'
+                }}>
+                    <Plus size={18} />
+                    Ajouter cours
+                </button>
+            </div>
+
+            {/* Filters Section */}
+            <div className="filters-section" style={{
+                padding: '12px 24px',
+                background: '#f8fafc',
+                borderBottom: '1px solid #f1f5f9',
+                display: 'flex',
+                gap: '12px',
+                flexWrap: 'wrap',
+                alignItems: 'center'
+            }}>
+                <span style={{ fontSize: '13px', fontWeight: '600', color: '#64748b' }}>Filtrer par:</span>
+
+                <select
+                    value={filtres.niveau || ''}
+                    onChange={(e) => setFiltres({ ...filtres, niveau: e.target.value || undefined })}
+                    style={{
+                        padding: '8px 12px',
+                        borderRadius: '8px',
+                        border: '1.5px solid #e5e7eb',
+                        fontSize: '13px',
+                        fontWeight: '500',
+                        color: '#475569',
+                        background: 'white',
+                        cursor: 'pointer',
+                        fontFamily: 'inherit',
+                        minWidth: '120px'
+                    }}
+                >
+                    <option value="">Tous les niveaux</option>
+                    {niveaux.map(niveau => (
+                        <option key={niveau} value={niveau}>{niveau}</option>
+                    ))}
+                </select>
+
+                <select
+                    value={filtres.filiere || ''}
+                    onChange={(e) => setFiltres({ ...filtres, filiere: e.target.value || undefined })}
+                    style={{
+                        padding: '8px 12px',
+                        borderRadius: '8px',
+                        border: '1.5px solid #e5e7eb',
+                        fontSize: '13px',
+                        fontWeight: '500',
+                        color: '#475569',
+                        background: 'white',
+                        cursor: 'pointer',
+                        fontFamily: 'inherit',
+                        minWidth: '120px'
+                    }}
+                >
+                    <option value="">Toutes les filières</option>
+                    {filières.map(filiere => (
+                        <option key={filiere} value={filiere}>{filiere}</option>
+                    ))}
+                </select>
+
+                <select
+                    value={filtres.professeur || ''}
+                    onChange={(e) => setFiltres({ ...filtres, professeur: e.target.value || undefined })}
+                    style={{
+                        padding: '8px 12px',
+                        borderRadius: '8px',
+                        border: '1.5px solid #e5e7eb',
+                        fontSize: '13px',
+                        fontWeight: '500',
+                        color: '#475569',
+                        background: 'white',
+                        cursor: 'pointer',
+                        fontFamily: 'inherit',
+                        minWidth: '150px'
+                    }}
+                >
+                    <option value="">Tous les professeurs</option>
+                    {professeurs.map(prof => (
+                        <option key={prof} value={prof}>{prof}</option>
+                    ))}
+                </select>
+
+                {(filtres.niveau || filtres.filiere || filtres.professeur) && (
+                    <button
+                        onClick={() => setFiltres({})}
+                        style={{
+                            padding: '8px 16px',
+                            background: '#f1f5f9',
                             border: 'none',
-                            borderRadius: '12px',
-                            color: 'white',
-                            fontSize: '14px',
-                            fontWeight: '600',
+                            borderRadius: '8px',
+                            fontSize: '13px',
+                            fontWeight: '500',
+                            color: '#64748b',
                             cursor: 'pointer',
-                            transition: 'all 0.2s ease',
-                            fontFamily: 'inherit',
-                            whiteSpace: 'nowrap'
-                        }}>
-                            <Plus size={18} />
-                            Ajouter cours
-                        </button>
+                            fontFamily: 'inherit'
+                        }}
+                    >
+                        Réinitialiser
+                    </button>
+                )}
+
+                <div className="results-count" style={{ marginLeft: 'auto', fontSize: '13px', color: '#64748b', fontWeight: '500' }}>
+                    {coursFiltres.length > 0
+                        ? `${startIndex + 1}-${Math.min(endIndex, coursFiltres.length)} sur ${coursFiltres.length} cours`
+                        : `0 cours`
+                    }
+                </div>
+            </div>
+
+            {/* Cards Container */}
+            <div className="cards-container" style={{ padding: '16px' }}>
+                {coursPagines.length > 0 ? (
+                    <div className="cards-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
+                        {coursPagines.map(cours => (
+                            <CoursCard
+                                key={cours.id}
+                                cours={cours}
+                                onArchive={showArchive ? handleUnarchive : handleArchive}
+                                isArchiveView={showArchive}
+                            />
+                        ))}
                     </div>
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 20px', color: '#94a3b8' }}>
+                        <div style={{ fontSize: '48px', marginBottom: '16px' }}>📚</div>
+                        <div style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px', color: '#64748b' }}>
+                            {showArchive ? 'Aucun cours archivé' : 'Aucun cours trouvé'}
+                        </div>
+                        <div style={{ fontSize: '14px', color: '#94a3b8' }}>Essayez de modifier vos filtres de recherche</div>
+                    </div>
+                )}
+            </div>
 
-                    <div className="filters-section" style={{
-                        padding: '12px 24px',
-                        background: '#f8fafc',
-                        borderBottom: '1px solid #f1f5f9',
-                        display: 'flex',
-                        gap: '12px',
-                        flexWrap: 'wrap',
-                        alignItems: 'center'
-                    }}>
-                        <span style={{ fontSize: '13px', fontWeight: '600', color: '#64748b' }}>Filtrer par:</span>
+            {totalPages > 1 && (
+                <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    onPageChange={handlePageChange}
+                />
+            )}
 
-                        <select
-                            value={filtres.niveau || ''}
-                            onChange={(e) => setFiltres({ ...filtres, niveau: e.target.value || undefined })}
-                            style={{
-                                padding: '8px 12px',
-                                borderRadius: '8px',
-                                border: '1.5px solid #e5e7eb',
-                                fontSize: '13px',
-                                fontWeight: '500',
-                                color: '#475569',
-                                background: 'white',
-                                cursor: 'pointer',
-                                fontFamily: 'inherit',
-                                minWidth: '120px'
-                            }}
-                        >
-                            <option value="">Tous les niveaux</option>
-                            {niveaux.map(niveau => (
-                                <option key={niveau} value={niveau}>{niveau}</option>
-                            ))}
-                        </select>
-
-                        <select
-                            value={filtres.filiere || ''}
-                            onChange={(e) => setFiltres({ ...filtres, filiere: e.target.value || undefined })}
-                            style={{
-                                padding: '8px 12px',
-                                borderRadius: '8px',
-                                border: '1.5px solid #e5e7eb',
-                                fontSize: '13px',
-                                fontWeight: '500',
-                                color: '#475569',
-                                background: 'white',
-                                cursor: 'pointer',
-                                fontFamily: 'inherit',
-                                minWidth: '120px'
-                            }}
-                        >
-                            <option value="">Toutes les filières</option>
-                            {filières.map(filiere => (
-                                <option key={filiere} value={filiere}>{filiere}</option>
-                            ))}
-                        </select>
-
-                        <select
-                            value={filtres.professeur || ''}
-                            onChange={(e) => setFiltres({ ...filtres, professeur: e.target.value || undefined })}
-                            style={{
-                                padding: '8px 12px',
-                                borderRadius: '8px',
-                                border: '1.5px solid #e5e7eb',
-                                fontSize: '13px',
-                                fontWeight: '500',
-                                color: '#475569',
-                                background: 'white',
-                                cursor: 'pointer',
-                                fontFamily: 'inherit',
-                                minWidth: '150px'
-                            }}
-                        >
-                            <option value="">Tous les professeurs</option>
-                            {professeurs.map(prof => (
-                                <option key={prof} value={prof}>{prof}</option>
-                            ))}
-                        </select>
-
-                        {(filtres.niveau || filtres.filiere || filtres.professeur) && (
+            {/* Modal for adding new cours */}
+            {showModal && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(0,0,0,0.5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 9999
+                }}
+                    onClick={() => setShowModal(false)}
+                >
+                    <div style={{
+                        background: 'white',
+                        borderRadius: '20px',
+                        padding: '32px',
+                        width: '90%',
+                        maxWidth: '600px',
+                        maxHeight: '90vh',
+                        overflowY: 'auto',
+                        boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+                        animation: 'slideIn 0.3s ease'
+                    }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            marginBottom: '24px'
+                        }}>
+                            <h2 style={{
+                                fontSize: '22px',
+                                fontWeight: '700',
+                                color: '#1a202c',
+                                margin: 0
+                            }}>Créer un cours</h2>
                             <button
-                                onClick={() => setFiltres({})}
+                                onClick={() => setShowModal(false)}
                                 style={{
-                                    padding: '8px 16px',
-                                    background: '#f1f5f9',
+                                    width: '36px',
+                                    height: '36px',
+                                    borderRadius: '10px',
                                     border: 'none',
-                                    borderRadius: '8px',
-                                    fontSize: '13px',
-                                    fontWeight: '500',
-                                    color: '#64748b',
+                                    background: '#f1f5f9',
                                     cursor: 'pointer',
-                                    fontFamily: 'inherit'
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
                                 }}
                             >
-                                Réinitialiser
+                                <X size={20} color="#64748b" />
                             </button>
-                        )}
-
-                        <div className="results-count" style={{ marginLeft: 'auto', fontSize: '13px', color: '#64748b', fontWeight: '500' }}>
-                            {coursFiltres.length > 0
-                                ? `${startIndex + 1}-${Math.min(endIndex, coursFiltres.length)} sur ${coursFiltres.length} cours`
-                                : `0 cours`
-                            }
                         </div>
-                    </div>
 
-                    <div className="cards-container" style={{ flex: 1, padding: '16px', overflowY: 'auto' }}>
-                        {coursPagines.length > 0 ? (
-                            <div className="cards-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
-                                {coursPagines.map(cours => (
-                                    <CoursCard
-                                        key={cours.id}
-                                        cours={cours}
-                                        onArchive={showArchive ? handleUnarchive : handleArchive}
-                                        isArchiveView={showArchive}
-                                    />
-                                ))}
+                        <form onSubmit={handleSubmit}>
+                            <div style={{ marginBottom: '20px' }}>
+                                <label style={{
+                                    display: 'block',
+                                    fontSize: '14px',
+                                    fontWeight: '600',
+                                    color: '#4a5568',
+                                    marginBottom: '8px'
+                                }}>Titre du cours</label>
+                                <input
+                                    type="text"
+                                    value={newCours.titre}
+                                    onChange={(e) => setNewCours({ ...newCours, titre: e.target.value })}
+                                    placeholder="Ex: Algorithmique"
+                                    required
+                                    style={{
+                                        width: '100%',
+                                        padding: '12px 16px',
+                                        borderRadius: '10px',
+                                        border: '1.5px solid #e2e8f0',
+                                        fontSize: '15px',
+                                        outline: 'none',
+                                        transition: 'border-color 0.2s ease',
+                                        fontFamily: 'inherit'
+                                    }}
+                                />
                             </div>
-                        ) : (
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 20px', color: '#94a3b8' }}>
-                                <div style={{ fontSize: '48px', marginBottom: '16px' }}>📚</div>
-                                <div style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px', color: '#64748b' }}>
-                                    {showArchive ? 'Aucun cours archivé' : 'Aucun cours trouvé'}
-                                </div>
-                                <div style={{ fontSize: '14px', color: '#94a3b8' }}>Essayez de modifier vos filtres de recherche</div>
+
+                            <div style={{ marginBottom: '20px' }}>
+                                <label style={{
+                                    display: 'block',
+                                    fontSize: '14px',
+                                    fontWeight: '600',
+                                    color: '#4a5568',
+                                    marginBottom: '8px'
+                                }}>Filière</label>
+                                <select
+                                    value={newCours.niveau}
+                                    onChange={(e) => setNewCours({ ...newCours, niveau: e.target.value })}
+                                    required
+                                    style={{
+                                        width: '100%',
+                                        padding: '12px 16px',
+                                        borderRadius: '10px',
+                                        border: '1.5px solid #e2e8f0',
+                                        fontSize: '15px',
+                                        outline: 'none',
+                                        transition: 'border-color 0.2s ease',
+                                        fontFamily: 'inherit',
+                                        background: 'white',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    <option value="">Sélectionner une filière</option>
+                                    {filieresData.map(filiere => (
+                                        <option key={filiere.id} value={filiere.nom}>{filiere.nom}</option>
+                                    ))}
+                                </select>
                             </div>
-                        )}
-                    </div>
 
-                    {totalPages > 1 && (
-                        <Pagination
-                            currentPage={currentPage}
-                            totalPages={totalPages}
-                            onPageChange={handlePageChange}
-                        />
-                    )}
+                            <div style={{ marginBottom: '20px' }}>
+                                <label style={{
+                                    display: 'block',
+                                    fontSize: '14px',
+                                    fontWeight: '600',
+                                    color: '#4a5568',
+                                    marginBottom: '8px'
+                                }}>Module</label>
+                                <select
+                                    onChange={(e) => setNewCours({ ...newCours, niveau: e.target.value })}
+                                    required
+                                    style={{
+                                        width: '100%',
+                                        padding: '12px 16px',
+                                        borderRadius: '10px',
+                                        border: '1.5px solid #e2e8f0',
+                                        fontSize: '15px',
+                                        outline: 'none',
+                                        transition: 'border-color 0.2s ease',
+                                        fontFamily: 'inherit',
+                                        background: 'white',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    <option value="">Sélectionner un module</option>
+                                    {modulesData.map(module => (
+                                        <option key={module.id} value={module.nom}>{module.nom}</option>
+                                    ))}
+                                </select>
+                            </div>
 
-                    {/* Modal for adding new cours */}
-                    {showModal && (
-                        <div className="modal-overlay" style={{
-                            position: 'fixed',
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
-                            background: 'rgba(0,0,0,0.5)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            zIndex: 1000,
-                            backdropFilter: 'blur(4px)'
-                        }}
-                            onClick={() => setShowModal(false)}
-                        >
-                            <div className="modal-content" style={{
-                                background: 'white',
-                                borderRadius: '20px',
-                                padding: '32px',
-                                width: '90%',
-                                maxWidth: '600px',
-                                maxHeight: '90vh',
-                                overflowY: 'auto',
-                                boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
-                                animation: 'slideIn 0.3s ease'
-                            }}
-                                onClick={(e) => e.stopPropagation()}
-                            >
-                                <div style={{
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center',
-                                    marginBottom: '24px'
-                                }}>
-                                    <h2 style={{
-                                        fontSize: '22px',
-                                        fontWeight: '700',
-                                        color: '#1a202c',
-                                        margin: 0
-                                    }}>Créer un cours</h2>
-                                    <button
-                                        onClick={() => setShowModal(false)}
+                            <div style={{ marginBottom: '20px' }}>
+                                <label style={{
+                                    display: 'block',
+                                    fontSize: '14px',
+                                    fontWeight: '600',
+                                    color: '#4a5568',
+                                    marginBottom: '8px'
+                                }}>Professeur</label>
+                                <select
+                                    value={newCours.professeur}
+                                    onChange={(e) => setNewCours({ ...newCours, professeur: e.target.value })}
+                                    required
+                                    style={{
+                                        width: '100%',
+                                        padding: '12px 16px',
+                                        borderRadius: '10px',
+                                        border: '1.5px solid #e2e8f0',
+                                        fontSize: '15px',
+                                        outline: 'none',
+                                        transition: 'border-color 0.2s ease',
+                                        fontFamily: 'inherit',
+                                        background: 'white',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    <option value="">Sélectionner un professeur</option>
+                                    {professeursData.map(prof => (
+                                        <option key={prof.id} value={`${prof.prenom} ${prof.nom}`}>{prof.prenom} {prof.nom}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div style={{ marginBottom: '24px' }}>
+                                <label style={{
+                                    display: 'block',
+                                    fontSize: '14px',
+                                    fontWeight: '600',
+                                    color: '#4a5568',
+                                    marginBottom: '8px'
+                                }}>Volume horaire</label>
+                                <input
+                                    type="number"
+                                    value={newCours.volumeHoraire || ''}
+                                    onChange={(e) => setNewCours({ ...newCours, volumeHoraire: parseInt(e.target.value) || 0 })}
+                                    placeholder="Ex: 30"
+                                    required
+                                    min="0"
+                                    style={{
+                                        width: '100%',
+                                        padding: '12px 16px',
+                                        borderRadius: '10px',
+                                        border: '1.5px solid #e2e8f0',
+                                        fontSize: '15px',
+                                        outline: 'none',
+                                        transition: 'border-color 0.2s ease',
+                                        fontFamily: 'inherit'
+                                    }}
+                                />
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '24px' }}>
+                                <div>
+                                    <label style={{
+                                        display: 'block',
+                                        fontSize: '14px',
+                                        fontWeight: '600',
+                                        color: '#4a5568',
+                                        marginBottom: '8px'
+                                    }}>Heures planifiées</label>
+                                    <input
+                                        type="number"
+                                        value={newCours.heuresPlanifie || ''}
+                                        onChange={(e) => setNewCours({ ...newCours, heuresPlanifie: parseInt(e.target.value) || 0 })}
+                                        placeholder="Ex: 20"
+                                        required
+                                        min="0"
                                         style={{
-                                            width: '36px',
-                                            height: '36px',
+                                            width: '100%',
+                                            padding: '12px 16px',
                                             borderRadius: '10px',
-                                            border: 'none',
-                                            background: '#f1f5f9',
-                                            cursor: 'pointer',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center'
+                                            border: '1.5px solid #e2e8f0',
+                                            fontSize: '15px',
+                                            outline: 'none',
+                                            transition: 'border-color 0.2s ease',
+                                            fontFamily: 'inherit'
                                         }}
-                                    >
-                                        <X size={20} color="#64748b" />
-                                    </button>
+                                    />
                                 </div>
-
-                                <form onSubmit={handleSubmit}>
-                                    <div style={{ marginBottom: '20px' }}>
-                                        <label style={{
-                                            display: 'block',
-                                            fontSize: '14px',
-                                            fontWeight: '600',
-                                            color: '#4a5568',
-                                            marginBottom: '8px'
-                                        }}>Titre du cours</label>
-                                        <input
-                                            type="text"
-                                            value={newCours.titre}
-                                            onChange={(e) => setNewCours({ ...newCours, titre: e.target.value })}
-                                            placeholder="Ex: Algorithmique"
-                                            required
-                                            style={{
-                                                width: '100%',
-                                                padding: '12px 16px',
-                                                borderRadius: '10px',
-                                                border: '1.5px solid #e2e8f0',
-                                                fontSize: '15px',
-                                                outline: 'none',
-                                                transition: 'border-color 0.2s ease',
-                                                fontFamily: 'inherit'
-                                            }}
-                                            onFocus={(e: any) => e.target.style.borderColor = '#5B8DEF'}
-                                            onBlur={(e: any) => e.target.style.borderColor = '#e2e8f0'}
-                                        />
-                                    </div>
-
-                                    <div style={{ marginBottom: '20px' }}>
-                                        <label style={{
-                                            display: 'block',
-                                            fontSize: '14px',
-                                            fontWeight: '600',
-                                            color: '#4a5568',
-                                            marginBottom: '8px'
-                                        }}>Filière</label>
-                                        <select
-                                            value={newCours.niveau}
-                                            onChange={(e) => setNewCours({ ...newCours, niveau: e.target.value })}
-                                            required
-                                            style={{
-                                                width: '100%',
-                                                padding: '12px 16px',
-                                                borderRadius: '10px',
-                                                border: '1.5px solid #e2e8f0',
-                                                fontSize: '15px',
-                                                outline: 'none',
-                                                transition: 'border-color 0.2s ease',
-                                                fontFamily: 'inherit',
-                                                background: 'white',
-                                                cursor: 'pointer'
-                                            }}
-                                            onFocus={(e: any) => e.target.style.borderColor = '#5B8DEF'}
-                                            onBlur={(e: any) => e.target.style.borderColor = '#e2e8f0'}
-                                        >
-                                            <option value="">Sélectionner une filière</option>
-                                            {filieresData.map(filiere => (
-                                                <option key={filiere.id} value={filiere.nom}>{filiere.nom}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-
-                                    <div style={{ marginBottom: '20px' }}>
-                                        <label style={{
-                                            display: 'block',
-                                            fontSize: '14px',
-                                            fontWeight: '600',
-                                            color: '#4a5568',
-                                            marginBottom: '8px'
-                                        }}>Module</label>
-                                        <select
-                                            onChange={(e) => setNewCours({ ...newCours, niveau: e.target.value })}
-                                            required
-                                            style={{
-                                                width: '100%',
-                                                padding: '12px 16px',
-                                                borderRadius: '10px',
-                                                border: '1.5px solid #e2e8f0',
-                                                fontSize: '15px',
-                                                outline: 'none',
-                                                transition: 'border-color 0.2s ease',
-                                                fontFamily: 'inherit',
-                                                background: 'white',
-                                                cursor: 'pointer'
-                                            }}
-                                            onFocus={(e: any) => e.target.style.borderColor = '#5B8DEF'}
-                                            onBlur={(e: any) => e.target.style.borderColor = '#e2e8f0'}
-                                        >
-                                            <option value="">Sélectionner un module</option>
-                                            {modulesData.map(module => (
-                                                <option key={module.id} value={module.nom}>{module.nom}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-
-                                    <div style={{ marginBottom: '20px' }}>
-                                        <label style={{
-                                            display: 'block',
-                                            fontSize: '14px',
-                                            fontWeight: '600',
-                                            color: '#4a5568',
-                                            marginBottom: '8px'
-                                        }}>Professeur</label>
-                                        <select
-                                            value={newCours.professeur}
-                                            onChange={(e) => setNewCours({ ...newCours, professeur: e.target.value })}
-                                            required
-                                            style={{
-                                                width: '100%',
-                                                padding: '12px 16px',
-                                                borderRadius: '10px',
-                                                border: '1.5px solid #e2e8f0',
-                                                fontSize: '15px',
-                                                outline: 'none',
-                                                transition: 'border-color 0.2s ease',
-                                                fontFamily: 'inherit',
-                                                background: 'white',
-                                                cursor: 'pointer'
-                                            }}
-                                            onFocus={(e: any) => e.target.style.borderColor = '#5B8DEF'}
-                                            onBlur={(e: any) => e.target.style.borderColor = '#e2e8f0'}
-                                        >
-                                            <option value="">Sélectionner un professeur</option>
-                                            {professeursData.map(prof => (
-                                                <option key={prof.id} value={`${prof.prenom} ${prof.nom}`}>{prof.prenom} {prof.nom}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-
-                                    <div style={{ marginBottom: '24px' }}>
-                                        <label style={{
-                                            display: 'block',
-                                            fontSize: '14px',
-                                            fontWeight: '600',
-                                            color: '#4a5568',
-                                            marginBottom: '8px'
-                                        }}>Volume horaire</label>
-                                        <input
-                                            type="number"
-                                            value={newCours.volumeHoraire || ''}
-                                            onChange={(e) => setNewCours({ ...newCours, volumeHoraire: parseInt(e.target.value) || 0 })}
-                                            placeholder="Ex: 30"
-                                            required
-                                            min="0"
-                                            style={{
-                                                width: '100%',
-                                                padding: '12px 16px',
-                                                borderRadius: '10px',
-                                                border: '1.5px solid #e2e8f0',
-                                                fontSize: '15px',
-                                                outline: 'none',
-                                                transition: 'border-color 0.2s ease',
-                                                fontFamily: 'inherit'
-                                            }}
-                                            onFocus={(e: any) => e.target.style.borderColor = '#5B8DEF'}
-                                            onBlur={(e: any) => e.target.style.borderColor = '#e2e8f0'}
-                                        />
-                                    </div>
-
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '24px' }}>
-                                        <div>
-                                            <label style={{
-                                                display: 'block',
-                                                fontSize: '14px',
-                                                fontWeight: '600',
-                                                color: '#4a5568',
-                                                marginBottom: '8px'
-                                            }}>Heures planifiées</label>
-                                            <input
-                                                type="number"
-                                                value={newCours.heuresPlanifie || ''}
-                                                onChange={(e) => setNewCours({ ...newCours, heuresPlanifie: parseInt(e.target.value) || 0 })}
-                                                placeholder="Ex: 20"
-                                                required
-                                                min="0"
-                                                style={{
-                                                    width: '100%',
-                                                    padding: '12px 16px',
-                                                    borderRadius: '10px',
-                                                    border: '1.5px solid #e2e8f0',
-                                                    fontSize: '15px',
-                                                    outline: 'none',
-                                                    transition: 'border-color 0.2s ease',
-                                                    fontFamily: 'inherit'
-                                                }}
-                                                onFocus={(e: any) => e.target.style.borderColor = '#5B8DEF'}
-                                                onBlur={(e: any) => e.target.style.borderColor = '#e2e8f0'}
-                                            />
-                                        </div>
-                                        <div>
-                                            <label style={{
-                                                display: 'block',
-                                                fontSize: '14px',
-                                                fontWeight: '600',
-                                                color: '#4a5568',
-                                                marginBottom: '8px'
-                                            }}>Heures faites</label>
-                                            <input
-                                                type="number"
-                                                value={newCours.heuresFaites || ''}
-                                                onChange={(e) => setNewCours({ ...newCours, heuresFaites: parseInt(e.target.value) || 0 })}
-                                                placeholder="Ex: 10"
-                                                required
-                                                min="0"
-                                                style={{
-                                                    width: '100%',
-                                                    padding: '12px 16px',
-                                                    borderRadius: '10px',
-                                                    border: '1.5px solid #e2e8f0',
-                                                    fontSize: '15px',
-                                                    outline: 'none',
-                                                    transition: 'border-color 0.2s ease',
-                                                    fontFamily: 'inherit'
-                                                }}
-                                                onFocus={(e: any) => e.target.style.borderColor = '#5B8DEF'}
-                                                onBlur={(e: any) => e.target.style.borderColor = '#e2e8f0'}
-                                            />
-                                        </div>
-                                        <div>
-                                            <label style={{
-                                                display: 'block',
-                                                fontSize: '14px',
-                                                fontWeight: '600',
-                                                color: '#4a5568',
-                                                marginBottom: '8px'
-                                            }}>Heures restantes</label>
-                                            <input
-                                                type="number"
-                                                value={newCours.heuresRestantes || ''}
-                                                onChange={(e) => setNewCours({ ...newCours, heuresRestantes: parseInt(e.target.value) || 0 })}
-                                                placeholder="Ex: 20"
-                                                required
-                                                min="0"
-                                                style={{
-                                                    width: '100%',
-                                                    padding: '12px 16px',
-                                                    borderRadius: '10px',
-                                                    border: '1.5px solid #e2e8f0',
-                                                    fontSize: '15px',
-                                                    outline: 'none',
-                                                    transition: 'border-color 0.2s ease',
-                                                    fontFamily: 'inherit'
-                                                }}
-                                                onFocus={(e: any) => e.target.style.borderColor = '#5B8DEF'}
-                                                onBlur={(e: any) => e.target.style.borderColor = '#e2e8f0'}
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowModal(false)}
-                                            style={{
-                                                padding: '12px 24px',
-                                                borderRadius: '10px',
-                                                border: '1.5px solid #e2e8f0',
-                                                background: 'white',
-                                                color: '#64748b',
-                                                fontSize: '14px',
-                                                fontWeight: '600',
-                                                cursor: 'pointer',
-                                                transition: 'all 0.2s ease'
-                                            }}
-                                        >
-                                            Annuler
-                                        </button>
-                                        <button
-                                            type="submit"
-                                            style={{
-                                                padding: '12px 24px',
-                                                borderRadius: '10px',
-                                                border: 'none',
-                                                background: 'linear-gradient(135deg, #5B8DEF 0%, #4169B8 100%)',
-                                                color: 'white',
-                                                fontSize: '14px',
-                                                fontWeight: '600',
-                                                cursor: 'pointer',
-                                                transition: 'all 0.2s ease',
-                                                boxShadow: '0 4px 12px rgba(91,141,239,0.3)'
-                                            }}
-                                        >
-                                            Créer le cours
-                                        </button>
-                                    </div>
-                                </form>
+                                <div>
+                                    <label style={{
+                                        display: 'block',
+                                        fontSize: '14px',
+                                        fontWeight: '600',
+                                        color: '#4a5568',
+                                        marginBottom: '8px'
+                                    }}>Heures faites</label>
+                                    <input
+                                        type="number"
+                                        value={newCours.heuresFaites || ''}
+                                        onChange={(e) => setNewCours({ ...newCours, heuresFaites: parseInt(e.target.value) || 0 })}
+                                        placeholder="Ex: 10"
+                                        required
+                                        min="0"
+                                        style={{
+                                            width: '100%',
+                                            padding: '12px 16px',
+                                            borderRadius: '10px',
+                                            border: '1.5px solid #e2e8f0',
+                                            fontSize: '15px',
+                                            outline: 'none',
+                                            transition: 'border-color 0.2s ease',
+                                            fontFamily: 'inherit'
+                                        }}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{
+                                        display: 'block',
+                                        fontSize: '14px',
+                                        fontWeight: '600',
+                                        color: '#4a5568',
+                                        marginBottom: '8px'
+                                    }}>Heures restantes</label>
+                                    <input
+                                        type="number"
+                                        value={newCours.heuresRestantes || ''}
+                                        onChange={(e) => setNewCours({ ...newCours, heuresRestantes: parseInt(e.target.value) || 0 })}
+                                        placeholder="Ex: 20"
+                                        required
+                                        min="0"
+                                        style={{
+                                            width: '100%',
+                                            padding: '12px 16px',
+                                            borderRadius: '10px',
+                                            border: '1.5px solid #e2e8f0',
+                                            fontSize: '15px',
+                                            outline: 'none',
+                                            transition: 'border-color 0.2s ease',
+                                            fontFamily: 'inherit'
+                                        }}
+                                    />
+                                </div>
                             </div>
-                        </div>
-                    )}
+
+                            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowModal(false)}
+                                    style={{
+                                        padding: '12px 24px',
+                                        borderRadius: '10px',
+                                        border: '1.5px solid #e2e8f0',
+                                        background: 'white',
+                                        color: '#64748b',
+                                        fontSize: '14px',
+                                        fontWeight: '600',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s ease'
+                                    }}
+                                >
+                                    Annuler
+                                </button>
+                                <button
+                                    type="submit"
+                                    style={{
+                                        padding: '12px 24px',
+                                        borderRadius: '10px',
+                                        border: 'none',
+                                        background: 'linear-gradient(135deg, #5B8DEF 0%, #4169B8 100%)',
+                                        color: 'white',
+                                        fontSize: '14px',
+                                        fontWeight: '600',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s ease',
+                                        boxShadow: '0 4px 12px rgba(91,141,239,0.3)'
+                                    }}
+                                >
+                                    Créer le cours
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
-            </main>
+            )}
 
             <style jsx>{`
-                @media (max-width: 1024px) {
-                    .main-content {
-                        margin-left: 0 !important;
-                    }
-                }
                 @media (max-width: 768px) {
                     .page-title {
-                        padding: 16px 20px !important;
+                        padding: 20px !important;
                     }
                     .page-title h1 {
-                        fontSize: '18px' !important;
+                        font-size: 22px !important;
                     }
                     .search-section {
                         padding: 12px 20px !important;
@@ -794,10 +723,6 @@ export default function CoursContent() {
                     .cards-grid {
                         grid-template-columns: 1fr !important;
                     }
-                    .action-btn {
-                        flex: 1 !important;
-                        text-align: center;
-                    }
                     .results-count {
                         width: 100%;
                         margin-left: 0 !important;
@@ -805,17 +730,7 @@ export default function CoursContent() {
                     }
                 }
             `}</style>
-
-            <style>{`
-                @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Poppins:wght@400;500;600;700&display=swap');
-                * { margin: 0; padding: 0; box-sizing: border-box; }
-                ::-webkit-scrollbar { width: 8px; height: 8px; }
-                ::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 10px; }
-                ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-                ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-                input::placeholder { color: #000000; opacity: 0.6; }
-            `}</style>
-        </div>
+        </>
     );
 }
 
