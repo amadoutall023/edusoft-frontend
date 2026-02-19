@@ -1,63 +1,28 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/modules/auth/context/AuthContext';
+import React, { useState } from 'react';
+import Sidebar from '@/shared/components/Sidebar';
+import Header from '@/shared/components/Header';
 
 export default function DashboardLayout({
     children,
 }: {
     children: React.ReactNode;
 }) {
-    const router = useRouter();
-    const { isAuthenticated, isLoading } = useAuth();
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-    useEffect(() => {
-        if (!isLoading && !isAuthenticated) {
-            router.push('/connexion');
-        }
-    }, [isAuthenticated, isLoading, router]);
-
-    if (isLoading) {
-        return (
-            <div style={{
-                minHeight: '100vh',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: 'linear-gradient(135deg, #5B8DEF 0%, #4A7ACC 50%, #3E6AB8 100%)',
-            }}>
-                <div style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '16px'
-                }}>
-                    <div style={{
-                        width: '48px',
-                        height: '48px',
-                        border: '4px solid rgba(255,255,255,0.3)',
-                        borderTopColor: 'white',
-                        borderRadius: '50%',
-                        animation: 'spin 1s linear infinite'
-                    }} />
-                    <span style={{ color: 'white', fontSize: '16px', fontWeight: '500' }}>
-                        Chargement...
-                    </span>
+    return (
+        <div className="h-screen bg-gradient-to-br from-[#5B8DEF] via-[#4A7ACC] to-[#3E6AB8] relative flex">
+            <Sidebar activeItem="" />
+            <main className="flex-1 lg:ml-[280px] md:ml-0 pt-[80px] h-full flex flex-col">
+                <Header
+                    onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                    isSidebarOpen={isSidebarOpen}
+                />
+                <div className="content-scroll m-4 md:m-6 bg-slate-50 rounded-xl md:rounded-[20px] p-4 md:p-8 overflow-x-auto h-full flex-1">
+                    {children}
                 </div>
-                <style jsx>{`
-                    @keyframes spin {
-                        to { transform: rotate(360deg); }
-                    }
-                `}</style>
-            </div>
-        );
-    }
-
-    if (!isAuthenticated) {
-        return null;
-    }
-
-    return <>{children}</>;
+            </main>
+        </div>
+    );
 }
-

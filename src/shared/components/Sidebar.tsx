@@ -1,17 +1,18 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { GraduationCap, LayoutGrid, Book, Users, UserCheck, Calendar, Settings, LogOut, Building2, Menu, X } from 'lucide-react';
 import { useAuth } from '@/modules/auth/context/AuthContext';
+import { useSidebar } from '@/shared/context/SidebarContext';
 
 interface SidebarProps {
     activeItem?: string;
 }
 
 export default function Sidebar({ activeItem }: SidebarProps) {
-    const [isOpen, setIsOpen] = useState(false); // Only used for mobile toggle
+    const { isOpen, toggleSidebar, closeSidebar } = useSidebar();
     const { logout, user } = useAuth();
     const router = useRouter();
 
@@ -26,25 +27,22 @@ export default function Sidebar({ activeItem }: SidebarProps) {
         { icon: Users, label: 'Élèves', path: '/eleves' },
         { icon: UserCheck, label: 'Professeurs', path: '/dashboard/prof' },
         { icon: Users, label: 'Administration', path: '/dashboard/administration' },
-        { icon: Calendar, label: 'Planning', path: '/planning' },
+        { icon: Calendar, label: 'Planning', path: '/dashboard/planning' },
         { icon: Building2, label: 'Structure académique', path: '/dashboard/structure' },
         { icon: Settings, label: 'Paramètre', path: '/parametre' },
     ];
-
-    const sidebarWidth = isOpen ? '280px' : '0px';
-    const sidebarVisible = isOpen ? 'translateX(0)' : 'translateX(-100%)';
 
     return (
         <>
             {/* Mobile Menu Button */}
             <button
-                onClick={() => setIsOpen(!isOpen)}
+                onClick={toggleSidebar}
                 style={{
                     display: 'none',
                     position: 'fixed',
                     top: '20px',
                     left: '20px',
-                    zIndex: 20,
+                    zIndex: 50,
                     width: '44px',
                     height: '44px',
                     borderRadius: '10px',
@@ -64,7 +62,7 @@ export default function Sidebar({ activeItem }: SidebarProps) {
             {/* Overlay for mobile */}
             {isOpen && (
                 <div
-                    onClick={() => setIsOpen(false)}
+                    onClick={closeSidebar}
                     style={{
                         display: 'none',
                         position: 'fixed',
@@ -73,27 +71,28 @@ export default function Sidebar({ activeItem }: SidebarProps) {
                         right: 0,
                         bottom: 0,
                         background: 'rgba(0,0,0,0.5)',
-                        zIndex: 5,
+                        zIndex: 40,
                         backdropFilter: 'blur(4px)'
                     }}
                     className="mobile-overlay"
                 />
             )}
 
-            <aside className={`sidebar ${isOpen ? 'open' : ''}`} style={{
-                width: '280px',
-                height: '100vh',
-                position: 'fixed',
-                left: 0,
-                top: 0,
-                background: 'linear-gradient(180deg, #5B8DEF 0%, #4169B8 100%)',
-                boxShadow: '4px 0 30px rgba(0,0,0,0.2)',
-                display: 'flex',
-                flexDirection: 'column',
-                zIndex: 10,
-                transition: 'transform 0.3s ease',
-                transform: sidebarVisible
-            }}>
+            <aside
+                className={`sidebar ${isOpen ? 'sidebar-open' : ''}`}
+                style={{
+                    width: '280px',
+                    height: '100vh',
+                    position: 'fixed',
+                    left: 0,
+                    top: 0,
+                    background: 'linear-gradient(180deg, #5B8DEF 0%, #4169B8 100%)',
+                    boxShadow: '4px 0 30px rgba(0,0,0,0.2)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    zIndex: 50,
+                    transition: 'transform 0.3s ease'
+                }}>
                 {/* Logo Section */}
                 <div style={{
                     padding: '28px 24px',
@@ -157,6 +156,7 @@ export default function Sidebar({ activeItem }: SidebarProps) {
                             <Link
                                 href={item.path}
                                 key={index}
+                                onClick={closeSidebar}
                                 style={{
                                     display: 'flex',
                                     alignItems: 'center',
@@ -175,22 +175,8 @@ export default function Sidebar({ activeItem }: SidebarProps) {
                                     border: isActive ? '1px solid rgba(255,255,255,0.3)' : '1px solid transparent',
                                     backdropFilter: isActive ? 'blur(10px)' : 'none',
                                     boxShadow: isActive ? '0 4px 12px rgba(0,0,0,0.1)' : 'none',
-                                    transform: 'translateX(0)',
                                     textDecoration: 'none',
                                     whiteSpace: 'nowrap'
-                                }}
-                                onClick={() => setIsOpen(false)}
-                                onMouseEnter={(e) => {
-                                    if (!isActive) {
-                                        e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
-                                        e.currentTarget.style.transform = 'translateX(4px)';
-                                    }
-                                }}
-                                onMouseLeave={(e) => {
-                                    if (!isActive) {
-                                        e.currentTarget.style.background = 'transparent';
-                                        e.currentTarget.style.transform = 'translateX(0)';
-                                    }
                                 }}
                             >
                                 <Icon size={20} strokeWidth={2.3} />
@@ -205,7 +191,6 @@ export default function Sidebar({ activeItem }: SidebarProps) {
                     padding: '20px',
                     borderTop: '1px solid rgba(255,255,255,0.12)'
                 }}>
-                    {/* User Info */}
                     {user && (
                         <div style={{
                             display: 'flex',
@@ -250,7 +235,6 @@ export default function Sidebar({ activeItem }: SidebarProps) {
                         </div>
                     )}
 
-                    {/* Logout Button */}
                     <div
                         onClick={handleLogout}
                         style={{
@@ -266,12 +250,6 @@ export default function Sidebar({ activeItem }: SidebarProps) {
                             transition: 'all 0.3s ease',
                             background: 'rgba(255,255,255,0.08)'
                         }}
-                        onMouseEnter={(e) => {
-                            e.currentTarget.style.background = 'rgba(255,255,255,0.15)';
-                        }}
-                        onMouseLeave={(e) => {
-                            e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
-                        }}
                     >
                         <LogOut size={20} strokeWidth={2.3} />
                         <span>Déconnexion</span>
@@ -280,7 +258,6 @@ export default function Sidebar({ activeItem }: SidebarProps) {
             </aside>
 
             <style jsx>{`
-                /* Desktop: sidebar always visible */
                 @media (min-width: 1025px) {
                     .sidebar {
                         transform: translateX(0) !important;
@@ -292,7 +269,6 @@ export default function Sidebar({ activeItem }: SidebarProps) {
                         display: none !important;
                     }
                 }
-                /* Mobile/Tablet: sidebar can be toggled */
                 @media (max-width: 1024px) {
                     .mobile-menu-btn {
                         display: flex !important;
@@ -303,7 +279,7 @@ export default function Sidebar({ activeItem }: SidebarProps) {
                     .sidebar {
                         transform: translateX(-100%);
                     }
-                    .sidebar.open {
+                    .sidebar.sidebar-open {
                         transform: translateX(0);
                     }
                 }
@@ -311,4 +287,3 @@ export default function Sidebar({ activeItem }: SidebarProps) {
         </>
     );
 }
-

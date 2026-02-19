@@ -17,11 +17,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         // Check for existing session
-        const savedUser = localStorage.getItem('ecole_ism_user');
-        if (savedUser) {
-            setUser(JSON.parse(savedUser));
+        // Add a timeout to prevent infinite loading state
+        const timeoutId = setTimeout(() => {
+            console.warn('Auth loading timeout - forcing isLoading to false');
+            setIsLoading(false);
+        }, 5000); // 5 second timeout fallback
+
+        // Only run on client side
+        if (typeof window === 'undefined') {
+            setIsLoading(false);
+            return;
         }
-        setIsLoading(false);
+
+        try {
+            const savedUser = localStorage.getItem('ecole_ism_user');
+            if (savedUser) {
+                const parsedUser = JSON.parse(savedUser);
+                // Validate that the parsed user has required fields
+                if (parsedUser && parsedUser.id && parsedUser.login) {
+                    setUser(parsedUser);
+                    console.log('User loaded from localStorage:', parsedUser);
+                }
+            }
+        } catch (error) {
+            console.error('Error parsing user from localStorage:', error);
+            // Clear invalid data from localStorage
+            if (typeof window !== 'undefined') {
+                localStorage.removeItem('ecole_ism_user');
+            }
+        } finally {
+            clearTimeout(timeoutId);
+            setIsLoading(false);
+        }
     }, []);
 
     const login = (loginInput: string): boolean => {

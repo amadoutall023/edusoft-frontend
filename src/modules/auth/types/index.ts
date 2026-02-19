@@ -16,3 +16,22 @@ export interface LoginCredentials {
     login: string;
 }
 
+// Types de notifications
+export type NotificationType =
+    | 'NOUVELLE'
+    | 'INSCRIPTION'
+    | 'SESSION_ANNULEE'
+    | 'COURS_TERMINEE'
+    | 'EMARGEMENT'
+    | 'EVALUATION'
+    | 'NOTE';
+
+export interface Notification {
+    id: number;
+    type: NotificationType;
+    title: string;
+    message: string;
+    timestamp: Date;
+    isRead: boolean;
+}
+
