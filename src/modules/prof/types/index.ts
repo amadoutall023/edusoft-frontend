@@ -1,12 +1,11 @@
 export interface Professeur {
-    id: number;
-    photo?: string;
+    id: string;
     prenom: string;
     nom: string;
-    classe: string;
-    numero: string;
-    specialite: string;
-    grade: string;
-    email: string;
     username: string;
+    email: string;
+    numero?: string | null;
+    specialite?: string | null;
+    grade?: string | null;
+    modules: string[];
 }

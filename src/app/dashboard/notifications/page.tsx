@@ -1,8 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
-    notificationsData,
     getUnreadCount,
     getNotificationIcon,
     formatTimestamp
@@ -10,17 +9,20 @@ import {
 import { Notification } from '@/modules/auth/types';
 import { Bell, CheckCheck, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
+import { useNotifications } from '@/shared/hooks/useNotifications';
 
 export default function NotificationsPage() {
-    const [notifications, setNotifications] = useState<Notification[]>(notificationsData);
+    const { notifications, isLoading, error, setNotifications, refresh } = useNotifications();
     const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
     const [filter, setFilter] = useState<'all' | 'unread'>('all');
 
-    const unreadCount = getUnreadCount(notifications);
+    const unreadCount = useMemo(() => getUnreadCount(notifications), [notifications]);
 
-    const filteredNotifications = filter === 'unread'
-        ? notifications.filter(n => !n.isRead)
-        : notifications;
+    const filteredNotifications = useMemo(() => {
+        return filter === 'unread'
+            ? notifications.filter(n => !n.isRead)
+            : notifications;
+    }, [filter, notifications]);
 
     const handleMarkAllAsRead = () => {
         setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
@@ -28,14 +30,8 @@ export default function NotificationsPage() {
 
     const handleNotificationClick = (notification: Notification) => {
         setSelectedNotification(notification);
-
-        // Mark as read if not already
         if (!notification.isRead) {
-            setNotifications(prev =>
-                prev.map(n =>
-                    n.id === notification.id ? { ...n, isRead: true } : n
-                )
-            );
+            setNotifications(prev => prev.map(n => n.id === notification.id ? { ...n, isRead: true } : n));
         }
     };
 
@@ -65,7 +61,6 @@ export default function NotificationsPage() {
             background: '#f8fafc',
             padding: '16px'
         }}>
-            {/* Header */}
             <div style={{
                 maxWidth: '900px',
                 margin: '0 auto',
@@ -148,12 +143,11 @@ export default function NotificationsPage() {
                                 }}
                             >
                                 <CheckCheck size={18} />
-                                <span style={{ display: 'inline' }}>Tout lire</span>
+                                <span>Tout lire</span>
                             </button>
                         )}
                     </div>
 
-                    {/* Filter */}
                     <div style={{
                         display: 'flex',
                         gap: '12px',
@@ -200,7 +194,38 @@ export default function NotificationsPage() {
                         flexDirection: 'column',
                         gap: '2px'
                     }}>
-                        {filteredNotifications.length === 0 ? (
+                        {isLoading ? (
+                            <div style={{
+                                padding: '40px',
+                                textAlign: 'center',
+                                color: '#94a3b8'
+                            }}>
+                                Chargement des notifications...
+                            </div>
+                        ) : error ? (
+                            <div style={{
+                                padding: '40px',
+                                textAlign: 'center',
+                                color: '#dc2626',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '12px'
+                            }}>
+                                <span>{error}</span>
+                                <button
+                                    onClick={() => void refresh()}
+                                    style={{
+                                        border: 'none',
+                                        background: 'transparent',
+                                        color: '#5B8DEF',
+                                        fontWeight: 600,
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    Réessayer
+                                </button>
+                            </div>
+                        ) : filteredNotifications.length === 0 ? (
                             <div style={{
                                 padding: '40px',
                                 textAlign: 'center',
@@ -223,14 +248,7 @@ export default function NotificationsPage() {
                                         cursor: 'pointer',
                                         background: notification.isRead ? 'white' : '#f8fafc',
                                         border: selectedNotification?.id === notification.id ? '2px solid #5B8DEF' : '2px solid transparent',
-                                        transition: 'all 0.2s',
-                                        flexDirection: 'row'
-                                    }}
-                                    onMouseEnter={(e: any) => {
-                                        e.currentTarget.style.background = '#f1f5f9';
-                                    }}
-                                    onMouseLeave={(e: any) => {
-                                        e.currentTarget.style.background = notification.isRead ? 'white' : '#f8fafc';
+                                        transition: 'all 0.2s'
                                     }}
                                 >
                                     <div style={{
@@ -259,47 +277,23 @@ export default function NotificationsPage() {
                                             }} />
                                         )}
                                     </div>
-
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div style={{
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'space-between',
-                                            marginBottom: '4px',
-                                            flexWrap: 'wrap',
-                                            gap: '4px'
-                                        }}>
-                                            <span style={{
-                                                fontSize: '13px',
-                                                color: '#5B8DEF',
-                                                fontWeight: '500'
-                                            }}>
-                                                {getTypeLabel(notification.type)}
-                                            </span>
-                                            <span style={{
-                                                fontSize: '12px',
-                                                color: '#94a3b8',
-                                                flexShrink: 0
-                                            }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
+                                            <div>
+                                                <div style={{ fontWeight: notification.isRead ? 500 : 600, color: '#1e293b', marginBottom: '2px' }}>
+                                                    {notification.title}
+                                                </div>
+                                                <div style={{ fontSize: '13px', color: '#64748b' }}>
+                                                    {notification.message}
+                                                </div>
+                                            </div>
+                                            <div style={{ fontSize: '12px', color: '#94a3b8' }}>
                                                 {formatTimestamp(notification.timestamp)}
-                                            </span>
+                                            </div>
                                         </div>
-                                        <h3 style={{
-                                            fontSize: '15px',
-                                            fontWeight: notification.isRead ? '500' : '600',
-                                            color: '#1a202c',
-                                            margin: '0 0 6px 0'
-                                        }}>
-                                            {notification.title}
-                                        </h3>
-                                        <p style={{
-                                            fontSize: '13px',
-                                            color: '#64748b',
-                                            margin: 0,
-                                            lineHeight: '1.4'
-                                        }}>
-                                            {notification.message}
-                                        </p>
+                                        <span style={{ fontSize: '12px', color: '#5B8DEF', fontWeight: 500 }}>
+                                            {getTypeLabel(notification.type)}
+                                        </span>
                                     </div>
                                 </div>
                             ))
@@ -307,24 +301,6 @@ export default function NotificationsPage() {
                     </div>
                 </div>
             </div>
-
-            <style jsx>{`
-                @media (max-width: 480px) {
-                    div[style*="minHeight"] {
-                        padding: 12px !important;
-                    }
-                    div[style*="borderRadius: 16px"] {
-                        padding: 16px !important;
-                    }
-                    h1[style*="fontSize: 24px"] {
-                        font-size: 20px !important;
-                    }
-                    div[style*="gap: 12px"] button span {
-                        display: none;
-                    }
-                }
-            `}</style>
         </div>
     );
 }
-

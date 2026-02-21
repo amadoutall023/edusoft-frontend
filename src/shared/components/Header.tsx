@@ -1,11 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Bell, Menu } from 'lucide-react';
 import { useAuth } from '@/modules/auth/context/AuthContext';
 import NotificationDropdown from './NotificationDropdown';
-import { getUnreadCount } from '@/shared/data/notifications';
 import { useSidebar } from '@/shared/context/SidebarContext';
+import { getActiveYear, getAvailableYears, setActiveYear } from '@/shared/api/activeYearService';
+import { ActiveYearResponse } from '@/shared/api/types';
+import { ApiError } from '@/shared/errors/ApiError';
 
 interface HeaderProps {
     onMenuClick?: () => void;
@@ -13,12 +15,46 @@ interface HeaderProps {
 }
 
 export default function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
-    const { user } = useAuth();
+    const { user, roles } = useAuth();
     const [isNotificationOpen, setIsNotificationOpen] = useState(false);
     const { toggleSidebar, isOpen } = useSidebar();
+    const [availableYears, setAvailableYears] = useState<ActiveYearResponse[]>([]);
+    const [selectedYearId, setSelectedYearId] = useState<string>('');
+    const [isYearLoading, setIsYearLoading] = useState(true);
+    const [isYearSaving, setIsYearSaving] = useState(false);
+    const [yearError, setYearError] = useState<string | null>(null);
 
-    const userName = user ? `${user.prenom} ${user.nom}` : '';
-    const userRole = user ? user.role : '';
+    const userName = user ? `${user.firstName} ${user.lastName}` : '';
+    const userRole = roles.length > 0 ? roles[0].replace('ROLE_', '').replaceAll('_', ' ') : '';
+
+    useEffect(() => {
+        const loadYears = async () => {
+            try {
+                setIsYearLoading(true);
+                const [available, active] = await Promise.all([
+                    getAvailableYears(),
+                    getActiveYear()
+                ]);
+                setAvailableYears(available);
+                if (active?.id) {
+                    setSelectedYearId(active.id);
+                } else if (available.length > 0) {
+                    setSelectedYearId(available[0].id);
+                }
+                setYearError(null);
+            } catch (err) {
+                if (err instanceof ApiError) {
+                    setYearError(err.message);
+                } else {
+                    setYearError('Années scolaires indisponibles');
+                }
+            } finally {
+                setIsYearLoading(false);
+            }
+        };
+
+        loadYears();
+    }, []);
 
     const toggleNotifications = () => {
         setIsNotificationOpen(!isNotificationOpen);
@@ -65,7 +101,6 @@ export default function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
                 <Menu size={24} color="#4a5568" />
             </button>
 
-            {/* Academic Year Selector */}
             <div className="year-selector" style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -78,7 +113,28 @@ export default function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
                     color: '#4a5568',
                     whiteSpace: 'nowrap'
                 }}>Année scolaire :</label>
-                <select style={{
+                <select
+                    value={selectedYearId}
+                    onChange={async (e) => {
+                        const value = e.target.value;
+                        setSelectedYearId(value);
+                        if (!value) return;
+                        try {
+                            setIsYearSaving(true);
+                            await setActiveYear(value);
+                            setYearError(null);
+                        } catch (err) {
+                            if (err instanceof ApiError) {
+                                setYearError(err.message);
+                            } else {
+                                setYearError('Impossible de définir l’année active');
+                            }
+                        } finally {
+                            setIsYearSaving(false);
+                        }
+                    }}
+                    disabled={isYearLoading || availableYears.length === 0}
+                    style={{
                     padding: '10px 16px',
                     borderRadius: '10px',
                     border: '1.5px solid #e2e8f0',
@@ -95,10 +151,21 @@ export default function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
                     onFocus={(e: any) => e.currentTarget.style.borderColor = '#5B8DEF'}
                     onBlur={(e: any) => e.currentTarget.style.borderColor = '#e2e8f0'}
                 >
-                    <option>2025-2026</option>
-                    <option>2024-2025</option>
-                    <option>2023-2024</option>
+                    {availableYears.length === 0 && (
+                        <option value="">{isYearLoading ? 'Chargement...' : 'Aucune année'}</option>
+                    )}
+                    {availableYears.map(year => (
+                        <option key={year.id} value={year.id}>{year.annee}</option>
+                    ))}
                 </select>
+                {yearError && (
+                    <span style={{ fontSize: '12px', color: '#dc2626' }}>
+                        {yearError}
+                    </span>
+                )}
+                {isYearSaving && (
+                    <span style={{ fontSize: '12px', color: '#64748b' }}>Sauvegarde...</span>
+                )}
             </div>
 
             {/* Right Side - Notifications & Profile */}
@@ -185,7 +252,7 @@ export default function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
                         border: '2px solid #e2e8f0',
                         flexShrink: 0
                     }}>
-                        {userName.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                        {(userName || 'User').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                     </div>
                     <div className="profile-info" style={{
                         textAlign: 'left'
@@ -232,4 +299,3 @@ export default function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
         </header>
     );
 }
-

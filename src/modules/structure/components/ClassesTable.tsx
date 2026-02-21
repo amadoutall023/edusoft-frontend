@@ -1,28 +1,55 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Eye, Plus, X, Pencil, Trash2 } from 'lucide-react';
 import SearchInput from '@/shared/components/SearchInput';
 import FilterButton from '@/shared/components/FilterButton';
 import Pagination from '@/shared/components/Pagination';
 import { ClasseData, NiveauData } from '@/modules/structure/types';
-import { filieresData, FiliereData } from '@/modules/structure/data/filieres';
+import { ClassePayload } from '../services/structureService';
+import { ApiError } from '@/shared/errors/ApiError';
+
+interface OptionItem {
+    id: string;
+    libelle: string;
+}
 
 interface ClassesTableProps {
     data: ClasseData[];
     niveauxData?: NiveauData[];
+    filiereOptions: OptionItem[];
+    defaultSchoolId?: string | null;
+    onCreate: (payload: ClassePayload) => Promise<void>;
+    onUpdate: (id: string, payload: ClassePayload) => Promise<void>;
+    onDelete: (id: string) => Promise<void>;
 }
 
-export default function ClassesTable({ data, niveauxData = [] }: ClassesTableProps) {
+export default function ClassesTable({
+    data,
+    niveauxData = [],
+    filiereOptions,
+    defaultSchoolId,
+    onCreate,
+    onUpdate,
+    onDelete
+}: ClassesTableProps) {
     const [currentPage, setCurrentPage] = useState(1);
     const [searchTerm, setSearchTerm] = useState('');
     const [showModal, setShowModal] = useState(false);
+    const [formError, setFormError] = useState<string | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [editingClasseId, setEditingClasseId] = useState<string | null>(null);
     const [newClasse, setNewClasse] = useState({
         libelle: '',
         filiereId: '',
-        niveauId: ''
+        niveauId: '',
+        schoolId: defaultSchoolId ?? ''
     });
     const itemsPerPage = 5;
+
+    React.useEffect(() => {
+        setNewClasse(prev => ({ ...prev, schoolId: defaultSchoolId ?? '' }));
+    }, [defaultSchoolId]);
 
     // Default niveaux if not provided
     const defaultNiveaux: NiveauData[] = niveauxData.length > 0 ? niveauxData : [
@@ -32,12 +59,8 @@ export default function ClassesTable({ data, niveauxData = [] }: ClassesTablePro
         { libelle: 'Quatrième année' },
         { libelle: 'Cinquième année' },
     ];
-
     // Get filiere names for display
-    const getFiliereName = (id: string) => {
-        const filiere = filieresData.find(f => f.id.toString() === id);
-        return filiere ? filiere.nom : id;
-    };
+    const getFiliereName = (id: string) => id;
 
     // Get niveau name for display
     const getNiveauName = (libelle: string) => {
@@ -56,12 +79,69 @@ export default function ClassesTable({ data, niveauxData = [] }: ClassesTablePro
     const startIndex = (currentPage - 1) * itemsPerPage;
     const paginatedData = filteredData.slice(startIndex, startIndex + itemsPerPage);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        // Here you would typically save the data to your backend
-        console.log('Nouvelle classe:', newClasse);
-        setShowModal(false);
-        setNewClasse({ libelle: '', filiereId: '', niveauId: '' });
+        setFormError(null);
+        if (!newClasse.schoolId) {
+            setFormError('Aucune école associée au compte.');
+            return;
+        }
+        try {
+            setIsSubmitting(true);
+            const payload = {
+                libelle: newClasse.libelle,
+                filiereId: newClasse.filiereId,
+                niveauId: newClasse.niveauId,
+                schoolId: newClasse.schoolId
+            };
+            if (editingClasseId) {
+                await onUpdate(editingClasseId, payload);
+            } else {
+                await onCreate(payload);
+            }
+            setShowModal(false);
+            setEditingClasseId(null);
+            setNewClasse({ libelle: '', filiereId: '', niveauId: '', schoolId: defaultSchoolId ?? '' });
+        } catch (err) {
+            if (err instanceof ApiError) {
+                setFormError(err.message);
+            } else {
+                setFormError('Impossible de sauvegarder la classe');
+            }
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const openCreateModal = () => {
+        setEditingClasseId(null);
+        setFormError(null);
+        setNewClasse({ libelle: '', filiereId: '', niveauId: '', schoolId: defaultSchoolId ?? '' });
+        setShowModal(true);
+    };
+
+    const openEditModal = (classe: ClasseData) => {
+        setEditingClasseId(classe.id);
+        setFormError(null);
+        setNewClasse({
+            libelle: classe.libelle,
+            filiereId: classe.filiereId,
+            niveauId: classe.niveauId,
+            schoolId: classe.schoolId || defaultSchoolId || ''
+        });
+        setShowModal(true);
+    };
+
+    const handleDelete = async (classe: ClasseData) => {
+        if (!window.confirm(`Supprimer la classe ${classe.libelle} ?`)) {
+            return;
+        }
+        try {
+            await onDelete(classe.id);
+        } catch (err) {
+            const message = err instanceof ApiError ? err.message : 'Suppression impossible';
+            alert(message);
+        }
     };
 
     return (
@@ -86,7 +166,7 @@ export default function ClassesTable({ data, niveauxData = [] }: ClassesTablePro
                 <div className="actions-wrapper" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                     <FilterButton label="Filtrer" />
                     <button
-                        onClick={() => setShowModal(true)}
+                        onClick={openCreateModal}
                         style={{
                             display: 'flex',
                             alignItems: 'center',
@@ -276,6 +356,7 @@ export default function ClassesTable({ data, niveauxData = [] }: ClassesTablePro
                                                 e.currentTarget.style.background = '#E3F2FD';
                                                 e.currentTarget.querySelector('svg').style.color = '#5B8DEF';
                                             }}
+                                            onClick={() => openEditModal(classe)}
                                         >
                                             <Pencil size={18} color="#5B8DEF" strokeWidth={2.5} />
                                         </button>
@@ -299,6 +380,7 @@ export default function ClassesTable({ data, niveauxData = [] }: ClassesTablePro
                                                 e.currentTarget.style.background = '#E3F2FD';
                                                 e.currentTarget.querySelector('svg').style.color = '#5B8DEF';
                                             }}
+                                            onClick={() => handleDelete(classe)}
                                         >
                                             <Trash2 size={18} color="#5B8DEF" strokeWidth={2.5} />
                                         </button>
@@ -332,7 +414,10 @@ export default function ClassesTable({ data, niveauxData = [] }: ClassesTablePro
                     zIndex: 1000,
                     backdropFilter: 'blur(4px)'
                 }}
-                    onClick={() => setShowModal(false)}
+                    onClick={() => {
+                        setShowModal(false);
+                        setEditingClasseId(null);
+                    }}
                 >
                     <div className="modal-content" style={{
                         background: 'white',
@@ -356,9 +441,12 @@ export default function ClassesTable({ data, niveauxData = [] }: ClassesTablePro
                                 fontWeight: '700',
                                 color: '#1a202c',
                                 margin: 0
-                            }}>Ajouter une classe</h2>
+                            }}>{editingClasseId ? 'Modifier une classe' : 'Ajouter une classe'}</h2>
                             <button
-                                onClick={() => setShowModal(false)}
+                                onClick={() => {
+                                    setShowModal(false);
+                                    setEditingClasseId(null);
+                                }}
                                 style={{
                                     width: '36px',
                                     height: '36px',
@@ -433,9 +521,9 @@ export default function ClassesTable({ data, niveauxData = [] }: ClassesTablePro
                                     onBlur={(e: any) => e.target.style.borderColor = '#e2e8f0'}
                                 >
                                     <option value="">Sélectionner une filière</option>
-                                    {filieresData.map((filiere) => (
+                                    {filiereOptions.map((filiere) => (
                                         <option key={filiere.id} value={filiere.id}>
-                                            {filiere.nom}
+                                            {filiere.libelle}
                                         </option>
                                     ))}
                                 </select>
@@ -470,17 +558,25 @@ export default function ClassesTable({ data, niveauxData = [] }: ClassesTablePro
                                 >
                                     <option value="">Sélectionner un niveau</option>
                                     {defaultNiveaux.map((niveau, index) => (
-                                        <option key={index} value={niveau.libelle}>
+                                        <option key={index} value={niveau.id ?? niveau.libelle}>
                                             {niveau.libelle}
                                         </option>
                                     ))}
                                 </select>
                             </div>
+                            {formError && (
+                                <div style={{ color: '#dc2626', marginBottom: '12px', fontSize: '13px' }}>
+                                    {formError}
+                                </div>
+                            )}
 
                             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
                                 <button
                                     type="button"
-                                    onClick={() => setShowModal(false)}
+                                    onClick={() => {
+                                        setShowModal(false);
+                                        setEditingClasseId(null);
+                                    }}
                                     style={{
                                         padding: '12px 24px',
                                         borderRadius: '10px',
@@ -497,6 +593,7 @@ export default function ClassesTable({ data, niveauxData = [] }: ClassesTablePro
                                 </button>
                                 <button
                                     type="submit"
+                                    disabled={isSubmitting}
                                     style={{
                                         padding: '12px 24px',
                                         borderRadius: '10px',
@@ -507,10 +604,11 @@ export default function ClassesTable({ data, niveauxData = [] }: ClassesTablePro
                                         fontWeight: '600',
                                         cursor: 'pointer',
                                         transition: 'all 0.2s ease',
-                                        boxShadow: '0 4px 12px rgba(91,141,239,0.3)'
+                                        boxShadow: '0 4px 12px rgba(91,141,239,0.3)',
+                                        opacity: isSubmitting ? 0.7 : 1
                                     }}
                                 >
-                                    Enregistrer
+                                    {isSubmitting ? 'Enregistrement...' : 'Enregistrer'}
                                 </button>
                             </div>
                         </form>
@@ -548,4 +646,3 @@ export default function ClassesTable({ data, niveauxData = [] }: ClassesTablePro
         </>
     );
 }
-

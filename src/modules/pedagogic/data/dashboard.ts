@@ -35,25 +35,31 @@ export const statistiques: StatistiqueDashboard[] = [
 
 export const sessionsAVenir: SessionAVenir[] = [
     {
-        id: 1,
+        id: '1',
         cours: 'Typescript',
         niveau: 'L3 - CDSD',
         professeur: 'Prof. Aly TALL',
-        couleur: '#10b981'
+        couleur: '#10b981',
+        dateLabel: 'Aujourd’hui - 08h',
+        heureLabel: '08h - 10h'
     },
     {
-        id: 2,
+        id: '2',
         cours: 'UX Design',
         niveau: 'L1 - CPD',
         professeur: 'Prof. Melba ORLIE',
-        couleur: '#10b981'
+        couleur: '#10b981',
+        dateLabel: 'Demain - 10h',
+        heureLabel: '10h - 12h'
     },
     {
-        id: 3,
+        id: '3',
         cours: 'English for IT',
         niveau: 'L3 - MAIE',
         professeur: 'Prof. Mansour DIALLO',
-        couleur: '#10b981'
+        couleur: '#10b981',
+        dateLabel: '12/03 - 14h',
+        heureLabel: '14h - 16h'
     }
 ];
 
@@ -82,4 +88,3 @@ export const sessionAnnulee: SessionAnnulee = {
     professeur: 'Prof. Amadou SALL',
     date: 'demain'
 };
-

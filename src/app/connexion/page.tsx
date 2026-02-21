@@ -4,9 +4,11 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/modules/auth/context/AuthContext';
 import { Lock, LogIn, AlertCircle } from 'lucide-react';
+import { ApiError } from '@/shared/errors/ApiError';
 
 export default function LoginPage() {
-    const [loginInput, setLoginInput] = useState('');
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const { login } = useAuth();
@@ -17,15 +19,15 @@ export default function LoginPage() {
         setError('');
         setIsSubmitting(true);
 
-        // Simulate network delay
-        await new Promise(resolve => setTimeout(resolve, 500));
-
-        const success = login(loginInput);
-
-        if (success) {
+        try {
+            await login({ email, password });
             router.push('/dashboard');
-        } else {
-            setError('Login invalide. Veuillez vérifier vos identifiants.');
+        } catch (err) {
+            if (err instanceof ApiError) {
+                setError(err.message);
+            } else {
+                setError('Impossible de vous authentifier pour le moment.');
+            }
         }
 
         setIsSubmitting(false);
@@ -71,15 +73,28 @@ export default function LoginPage() {
 
                 {/* Login Form */}
                 <form onSubmit={handleSubmit}>
-                    <div className="mb-5 md:mb-6">
+                    <div className="mb-4 md:mb-5">
                         <label className="block text-sm font-semibold text-[#1a202c] mb-2">
-                            Login
+                            Email professionnel
                         </label>
                         <input
-                            type="text"
-                            value={loginInput}
-                            onChange={(e) => setLoginInput(e.target.value)}
-                            placeholder="Entrez votre login"
+                            type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            placeholder="prenom.nom@ecole.com"
+                            required
+                            className="w-full px-3 py-3 sm:px-4 sm:py-[14px] rounded-xl border border-gray-200 text-sm sm:text-base outline-none transition-all duration-200 font-inherit bg-[#f8fafc] focus:border-[#5B8DEF] focus:bg-white"
+                        />
+                    </div>
+                    <div className="mb-5 md:mb-6">
+                        <label className="block text-sm font-semibold text-[#1a202c] mb-2">
+                            Mot de passe
+                        </label>
+                        <input
+                            type="password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            placeholder="********"
                             required
                             className="w-full px-3 py-3 sm:px-4 sm:py-[14px] rounded-xl border border-gray-200 text-sm sm:text-base outline-none transition-all duration-200 font-inherit bg-[#f8fafc] focus:border-[#5B8DEF] focus:bg-white"
                         />
@@ -107,18 +122,9 @@ export default function LoginPage() {
                     </button>
                 </form>
 
-                {/* Demo credentials hint */}
-                <div className="mt-6 md:mt-7 p-3 md:p-4 bg-[#f8fafc] rounded-xl text-center overflow-x-auto">
-                    <p className="text-xs text-[#64748b] mb-2">
-                        Logins disponibles pour test:
-                    </p>
-                    <div className="flex flex-wrap justify-center gap-1.5 min-w-max">
-                        {['Diarra123p', 'Astouacp', 'Lucien23op', 'Mar998M', 'Kande783O'].map(cred => (
-                            <span key={cred} className="px-2 py-1 bg-white border border-gray-200 rounded-md text-[10px] sm:text-xs text-[#475569] font-mono whitespace-nowrap">
-                                {cred}
-                            </span>
-                        ))}
-                    </div>
+                {/* Helper */}
+                <div className="mt-6 md:mt-7 p-3 md:p-4 bg-[#f8fafc] rounded-xl text-center overflow-x-auto text-xs text-[#64748b]">
+                    Utilisez vos identifiants EduSoft (email + mot de passe) fournis par l&rsquo;administration.
                 </div>
             </div>
 

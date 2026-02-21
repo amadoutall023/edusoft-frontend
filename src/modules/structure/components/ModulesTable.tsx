@@ -1,17 +1,27 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { Eye, Plus, X } from 'lucide-react';
+import { Eye, Plus, X, Pencil, Trash2 } from 'lucide-react';
 import SearchInput from '@/shared/components/SearchInput';
 import Pagination from '@/shared/components/Pagination';
-import { ModuleData } from '../data/modules';
-import { filieresData } from '../data/filieres';
+import { ModuleData } from '../types';
+import { ApiError } from '@/shared/errors/ApiError';
+import { ModulePayload } from '../services/structureService';
+
+interface OptionItem {
+    id: string;
+    libelle: string;
+}
 
 interface ModulesTableProps {
     data: ModuleData[];
+    filiereOptions: OptionItem[];
+    onCreate: (payload: ModulePayload) => Promise<void>;
+    onUpdate: (id: string, payload: ModulePayload) => Promise<void>;
+    onDelete: (id: string) => Promise<void>;
 }
 
-export default function ModulesTable({ data }: ModulesTableProps) {
+export default function ModulesTable({ data, filiereOptions, onCreate, onUpdate, onDelete }: ModulesTableProps) {
     const [currentPage, setCurrentPage] = useState(1);
     const [searchTerm, setSearchTerm] = useState('');
     const [showFilters, setShowFilters] = useState(false);
@@ -21,6 +31,9 @@ export default function ModulesTable({ data }: ModulesTableProps) {
     });
     const [showModal, setShowModal] = useState(false);
     const [newModule, setNewModule] = useState({ nom: '', code: '', credits: 0, filiereId: '' });
+    const [formError, setFormError] = useState<string | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [editingId, setEditingId] = useState<string | null>(null);
     const itemsPerPage = 3;
 
     // Get unique filieres and classes for filters
@@ -51,11 +64,58 @@ export default function ModulesTable({ data }: ModulesTableProps) {
         setCurrentPage(1);
     }, [searchTerm, filters]);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        console.log('Nouveau module:', newModule);
-        setShowModal(false);
+        setFormError(null);
+        try {
+            setIsSubmitting(true);
+            const payload: ModulePayload = {
+                libelle: newModule.nom,
+                filiereId: newModule.filiereId || undefined
+            };
+            if (editingId) {
+                await onUpdate(editingId, payload);
+            } else {
+                await onCreate(payload);
+            }
+            setShowModal(false);
+            setEditingId(null);
+            setNewModule({ nom: '', code: '', credits: 0, filiereId: '' });
+        } catch (err) {
+            if (err instanceof ApiError) {
+                setFormError(err.message);
+            } else {
+                setFormError('Impossible de sauvegarder le module');
+            }
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const openCreate = () => {
+        setEditingId(null);
+        setFormError(null);
         setNewModule({ nom: '', code: '', credits: 0, filiereId: '' });
+        setShowModal(true);
+    };
+
+    const openEdit = (module: ModuleData) => {
+        setEditingId(module.id);
+        setFormError(null);
+        setNewModule({ nom: module.nom, code: module.code, credits: module.credits ?? 0, filiereId: module.filiereId });
+        setShowModal(true);
+    };
+
+    const handleDelete = async (module: ModuleData) => {
+        if (!window.confirm(`Supprimer le module ${module.nom} ?`)) {
+            return;
+        }
+        try {
+            await onDelete(module.id);
+        } catch (err) {
+            const message = err instanceof ApiError ? err.message : 'Suppression impossible';
+            alert(message);
+        }
     };
 
     const handleFilterChange = (key: keyof typeof filters, value: string) => {
@@ -124,7 +184,7 @@ export default function ModulesTable({ data }: ModulesTableProps) {
                         )}
                     </button>
                     <button
-                        onClick={() => setShowModal(true)}
+                        onClick={openCreate}
                         style={{
                             display: 'flex',
                             alignItems: 'center',
@@ -398,29 +458,17 @@ export default function ModulesTable({ data }: ModulesTableProps) {
                                     textAlign: 'center',
                                     borderBottom: '1px solid #f1f5f9'
                                 }}>
-                                    <button style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        width: '36px',
-                                        height: '36px',
-                                        borderRadius: '8px',
-                                        border: 'none',
-                                        background: '#E3F2FD',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.2s ease'
-                                    }}
-                                        onMouseEnter={(e: any) => {
-                                            e.currentTarget.style.background = '#5B8DEF';
-                                            e.currentTarget.querySelector('svg').style.color = 'white';
-                                        }}
-                                        onMouseLeave={(e: any) => {
-                                            e.currentTarget.style.background = '#E3F2FD';
-                                            e.currentTarget.querySelector('svg').style.color = '#5B8DEF';
-                                        }}
-                                    >
-                                        <Eye size={18} color="#5B8DEF" strokeWidth={2.5} />
-                                    </button>
+                                    <div style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}>
+                                        <button style={iconButtonStyle}>
+                                            <Eye size={18} color="#5B8DEF" strokeWidth={2.5} />
+                                        </button>
+                                        <button style={iconButtonStyle} onClick={() => openEdit(module)}>
+                                            <Pencil size={18} color="#5B8DEF" strokeWidth={2.5} />
+                                        </button>
+                                        <button style={iconButtonStyle} onClick={() => handleDelete(module)}>
+                                            <Trash2 size={18} color="#5B8DEF" strokeWidth={2.5} />
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         ))}
@@ -450,7 +498,10 @@ export default function ModulesTable({ data }: ModulesTableProps) {
                     zIndex: 1000,
                     backdropFilter: 'blur(4px)'
                 }}
-                    onClick={() => setShowModal(false)}
+                    onClick={() => {
+                        setShowModal(false);
+                        setEditingId(null);
+                    }}
                 >
                     <div className="modal-content" style={{
                         background: 'white',
@@ -474,9 +525,12 @@ export default function ModulesTable({ data }: ModulesTableProps) {
                                 fontWeight: '700',
                                 color: '#1a202c',
                                 margin: 0
-                            }}>Ajouter un module</h2>
+                            }}>{editingId ? 'Modifier un module' : 'Ajouter un module'}</h2>
                             <button
-                                onClick={() => setShowModal(false)}
+                                onClick={() => {
+                                    setShowModal(false);
+                                    setEditingId(null);
+                                }}
                                 style={{
                                     width: '36px',
                                     height: '36px',
@@ -610,18 +664,25 @@ export default function ModulesTable({ data }: ModulesTableProps) {
                                     onBlur={(e: any) => e.target.style.borderColor = '#e2e8f0'}
                                 >
                                     <option value="">Sélectionner une filière</option>
-                                    {filieresData.map((filiere) => (
-                                        <option key={filiere.id} value={filiere.nom}>
-                                            {filiere.nom}
-                                        </option>
+                                    {filiereOptions.map(filiere => (
+                                        <option key={filiere.id} value={filiere.id}>{filiere.libelle}</option>
                                     ))}
                                 </select>
                             </div>
 
+                            {formError && (
+                                <div style={{ color: '#dc2626', marginBottom: '12px', fontSize: '13px' }}>
+                                    {formError}
+                                </div>
+                            )}
+
                             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
                                 <button
                                     type="button"
-                                    onClick={() => setShowModal(false)}
+                                    onClick={() => {
+                                        setShowModal(false);
+                                        setEditingId(null);
+                                    }}
                                     style={{
                                         padding: '12px 24px',
                                         borderRadius: '10px',
@@ -638,6 +699,7 @@ export default function ModulesTable({ data }: ModulesTableProps) {
                                 </button>
                                 <button
                                     type="submit"
+                                    disabled={isSubmitting}
                                     style={{
                                         padding: '12px 24px',
                                         borderRadius: '10px',
@@ -648,10 +710,11 @@ export default function ModulesTable({ data }: ModulesTableProps) {
                                         fontWeight: '600',
                                         cursor: 'pointer',
                                         transition: 'all 0.2s ease',
-                                        boxShadow: '0 4px 12px rgba(91,141,239,0.3)'
+                                        boxShadow: '0 4px 12px rgba(91,141,239,0.3)',
+                                        opacity: isSubmitting ? 0.7 : 1
                                     }}
                                 >
-                                    Enregistrer
+                                    {isSubmitting ? 'Enregistrement...' : 'Enregistrer'}
                                 </button>
                             </div>
                         </form>
@@ -662,3 +725,15 @@ export default function ModulesTable({ data }: ModulesTableProps) {
     );
 }
 
+const iconButtonStyle: React.CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '36px',
+    height: '36px',
+    borderRadius: '8px',
+    border: 'none',
+    background: '#E3F2FD',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease'
+};

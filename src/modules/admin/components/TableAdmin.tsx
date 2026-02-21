@@ -17,11 +17,16 @@ export default function TableAdmin({ data }: TableAdminProps) {
     const itemsPerPage = 3;
 
     // Filter data based on search term
-    const filteredData = data.filter(item =>
-        item.prenom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.telephone.includes(searchTerm)
+    const filteredData = data.filter(item => {
+        const search = searchTerm.toLowerCase();
+        return (
+            item.prenom.toLowerCase().includes(search) ||
+            item.nom.toLowerCase().includes(search) ||
+            item.role.toLowerCase().includes(search) ||
+            (item.telephone ?? '').includes(search) ||
+            item.email.toLowerCase().includes(search)
+        );
+    }
     );
 
     // Paginate data
@@ -176,7 +181,7 @@ export default function TableAdmin({ data }: TableAdminProps) {
                                     fontSize: '14px',
                                     fontWeight: '500',
                                     borderBottom: '1px solid #f1f5f9'
-                                }}>{membre.telephone}</td>
+                                }}>{membre.telephone ?? '—'}</td>
                                 <td style={{
                                     padding: '16px',
                                     textAlign: 'center',
@@ -248,4 +253,3 @@ export default function TableAdmin({ data }: TableAdminProps) {
         </>
     );
 }
-

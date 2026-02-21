@@ -4,71 +4,136 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Search, Filter, Plus, X, Archive } from 'lucide-react';
 import CoursCard from './CoursCard';
 import Pagination from '@/shared/components/Pagination';
-import { coursData } from '../data/cours';
-import { FiltreCours } from '../types';
-import { filieresData } from '@/modules/structure/data/filieres';
-import { modulesData } from '@/modules/structure/data/modules';
-import { professeursData } from '@/modules/prof/data/professeurs';
+import { Cours, FiltreCours } from '../types';
+import { fetchCourses, createCourse } from '../services/coursService';
+import { CoursResponseDto, ClasseResponseDto, ModuleResponseDto, ProfessorResponseDto } from '@/shared/api/types';
+import { fetchClasses, fetchModules } from '@/modules/structure/services/structureService';
+import { fetchProfessors } from '@/modules/prof/services/professorService';
+import { ApiError } from '@/shared/errors/ApiError';
+
+const mapCoursDto = (cours: CoursResponseDto): Cours => {
+    const total = cours.totalHour ?? 0;
+    const completed = cours.completedHour ?? 0;
+    const planned = cours.plannedHour ?? 0;
+    const progression = total > 0 ? Math.min(100, Math.round((completed / total) * 100)) : 0;
+
+    return {
+        id: cours.id,
+        titre: cours.libelle,
+        niveau: cours.classes?.map(classe => classe.libelle).join(' / ') ?? '—',
+        filiere: cours.module?.libelle ?? undefined,
+        professeur: cours.professor
+            ? `${cours.professor.prenom ?? ''} ${cours.professor.nom ?? ''}`.trim() || 'Non assigné'
+            : 'Non assigné',
+        volumeHoraire: total,
+        heuresPlanifie: planned,
+        heuresFaites: completed,
+        heuresRestantes: Math.max(0, total - completed),
+        progression,
+        classes: cours.classes?.map(classe => classe.libelle) ?? [],
+        module: cours.module?.libelle ?? null
+    };
+};
+
+const INITIAL_COURSE_FORM = {
+    titre: '',
+    moduleId: '',
+    classeId: '',
+    professeurId: '',
+    volumeHoraire: 0,
+    heuresPlanifie: 0
+};
 
 export default function CoursContent() {
+    const [courses, setCourses] = useState<Cours[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [filtres, setFiltres] = useState<FiltreCours>({});
     const [currentPage, setCurrentPage] = useState(1);
     const [showModal, setShowModal] = useState(false);
     const [showArchive, setShowArchive] = useState(false);
-    const [archivedCours, setArchivedCours] = useState<number[]>([]);
-    const [newCours, setNewCours] = useState({
-        titre: '',
-        niveau: '',
-        professeur: '',
-        volumeHoraire: 0,
-        heuresPlanifie: 0,
-        heuresFaites: 0,
-        heuresRestantes: 0,
-        progression: 0
-    });
+    const [archivedCours, setArchivedCours] = useState<string[]>([]);
+    const [newCours, setNewCours] = useState({ ...INITIAL_COURSE_FORM });
+    const [availableClasses, setAvailableClasses] = useState<ClasseResponseDto[]>([]);
+    const [availableModules, setAvailableModules] = useState<ModuleResponseDto[]>([]);
+    const [availableProfessors, setAvailableProfessors] = useState<ProfessorResponseDto[]>([]);
+    const [isCreating, setIsCreating] = useState(false);
     const itemsPerPage = 4;
 
-    const handleArchive = (id: number) => {
-        setArchivedCours([...archivedCours, id]);
+    const handleArchive = (id: string) => {
+        setArchivedCours((prev) => [...prev, id]);
         console.log('Cours archivé:', id);
     };
 
-    const handleUnarchive = (id: number) => {
-        setArchivedCours(archivedCours.filter(c => c !== id));
+    const handleUnarchive = (id: string) => {
+        setArchivedCours((prev) => prev.filter(c => c !== id));
         console.log('Cours désarchivé:', id);
     };
+
+    useEffect(() => {
+        let isMounted = true;
+
+        const loadCourses = async () => {
+            try {
+                setIsLoading(true);
+                const [apiCourses, classes, modules, professors] = await Promise.all([
+                    fetchCourses(),
+                    fetchClasses(200),
+                    fetchModules(200),
+                    fetchProfessors()
+                ]);
+                if (!isMounted) return;
+                setCourses(apiCourses.map(mapCoursDto));
+                setAvailableClasses(classes);
+                setAvailableModules(modules);
+                setAvailableProfessors(professors);
+                setError(null);
+            } catch (err) {
+                if (!isMounted) return;
+                setError(err instanceof ApiError ? err.message : 'Impossible de charger les cours.');
+            } finally {
+                if (isMounted) {
+                    setIsLoading(false);
+                }
+            }
+        };
+
+        void loadCourses();
+
+        return () => {
+            isMounted = false;
+        };
+    }, []);
 
     // Extraire les valeurs uniques pour les filtres
     const niveaux = useMemo(() => {
         const niveauxSet = new Set<string>();
-        coursData.forEach(cours => {
-            cours.niveau.split('/').forEach(n => niveauxSet.add(n.trim()));
+        courses.forEach(cours => {
+            cours.niveau.split('/').map(n => n.trim()).forEach(n => niveauxSet.add(n));
         });
         return Array.from(niveauxSet).sort();
-    }, []);
+    }, [courses]);
 
     const filières = useMemo(() => {
         const filieresSet = new Set<string>();
-        coursData.forEach(cours => {
-            const parts = cours.niveau.split('/');
-            parts.forEach(p => {
-                const match = p.match(/[A-Z]+$/);
-                if (match) filieresSet.add(match[0]);
-            });
+        courses.forEach(cours => {
+            if (cours.filiere) {
+                filieresSet.add(cours.filiere);
+            }
         });
         return Array.from(filieresSet).sort();
-    }, []);
+    }, [courses]);
 
     const professeurs = useMemo(() => {
-        const profsSet = new Set(coursData.map(c => c.professeur));
+        const profsSet = new Set(courses.map(c => c.professeur));
         return Array.from(profsSet).sort();
-    }, []);
+    }, [courses]);
 
     const coursFiltres = useMemo(() => {
         const availableCours = showArchive
-            ? coursData.filter(cours => archivedCours.includes(cours.id))
-            : coursData.filter(cours => !archivedCours.includes(cours.id));
+            ? courses.filter(cours => archivedCours.includes(cours.id))
+            : courses.filter(cours => !archivedCours.includes(cours.id));
 
         return availableCours.filter(cours => {
             if (searchTerm) {
@@ -85,7 +150,7 @@ export default function CoursContent() {
             }
 
             if (filtres.filiere) {
-                if (!cours.niveau.includes(filtres.filiere)) return false;
+                if ((cours.filiere ?? '').toLowerCase() !== filtres.filiere.toLowerCase()) return false;
             }
 
             if (filtres.professeur) {
@@ -94,7 +159,7 @@ export default function CoursContent() {
 
             return true;
         });
-    }, [searchTerm, filtres, archivedCours, showArchive]);
+    }, [searchTerm, filtres, archivedCours, showArchive, courses]);
 
     useEffect(() => {
         setCurrentPage(1);
@@ -109,20 +174,33 @@ export default function CoursContent() {
         setCurrentPage(page);
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        console.log('Nouveau cours:', newCours);
-        setShowModal(false);
-        setNewCours({
-            titre: '',
-            niveau: '',
-            professeur: '',
-            volumeHoraire: 0,
-            heuresPlanifie: 0,
-            heuresFaites: 0,
-            heuresRestantes: 0,
-            progression: 0
-        });
+        if (!newCours.moduleId || !newCours.classeId) {
+            alert('Merci de sélectionner un module et une classe.');
+            return;
+        }
+
+        try {
+            setIsCreating(true);
+            await createCourse({
+                libelle: newCours.titre,
+                totalHour: newCours.volumeHoraire,
+                plannedHour: newCours.heuresPlanifie,
+                moduleId: newCours.moduleId,
+                classIds: [newCours.classeId],
+                professorId: newCours.professeurId || undefined
+            });
+            const refreshed = await fetchCourses();
+            setCourses(refreshed.map(mapCoursDto));
+            setShowModal(false);
+            setNewCours({ ...INITIAL_COURSE_FORM });
+        } catch (err) {
+            const message = err instanceof ApiError ? err.message : 'Impossible de créer le cours.';
+            alert(message);
+        } finally {
+            setIsCreating(false);
+        }
     };
 
     return (
@@ -339,9 +417,21 @@ export default function CoursContent() {
                 </div>
             </div>
 
+            {error && (
+                <div style={{ padding: '16px 40px', color: '#dc2626' }}>
+                    {error}
+                </div>
+            )}
+
+            {isLoading && (
+                <div style={{ padding: '16px 40px', color: '#64748b' }}>
+                    Chargement des cours...
+                </div>
+            )}
+
             {/* Cards Container */}
             <div className="cards-container" style={{ padding: '16px' }}>
-                {coursPagines.length > 0 ? (
+                {!isLoading && coursPagines.length > 0 ? (
                     <div className="cards-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
                         {coursPagines.map(cours => (
                             <CoursCard
@@ -352,7 +442,7 @@ export default function CoursContent() {
                             />
                         ))}
                     </div>
-                ) : (
+                ) : !isLoading ? (
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 20px', color: '#94a3b8' }}>
                         <div style={{ fontSize: '48px', marginBottom: '16px' }}>📚</div>
                         <div style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px', color: '#64748b' }}>
@@ -360,7 +450,7 @@ export default function CoursContent() {
                         </div>
                         <div style={{ fontSize: '14px', color: '#94a3b8' }}>Essayez de modifier vos filtres de recherche</div>
                     </div>
-                )}
+                ) : null}
             </div>
 
             {totalPages > 1 && (
@@ -465,41 +555,10 @@ export default function CoursContent() {
                                     fontWeight: '600',
                                     color: '#4a5568',
                                     marginBottom: '8px'
-                                }}>Filière</label>
-                                <select
-                                    value={newCours.niveau}
-                                    onChange={(e) => setNewCours({ ...newCours, niveau: e.target.value })}
-                                    required
-                                    style={{
-                                        width: '100%',
-                                        padding: '12px 16px',
-                                        borderRadius: '10px',
-                                        border: '1.5px solid #e2e8f0',
-                                        fontSize: '15px',
-                                        outline: 'none',
-                                        transition: 'border-color 0.2s ease',
-                                        fontFamily: 'inherit',
-                                        background: 'white',
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    <option value="">Sélectionner une filière</option>
-                                    {filieresData.map(filiere => (
-                                        <option key={filiere.id} value={filiere.nom}>{filiere.nom}</option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div style={{ marginBottom: '20px' }}>
-                                <label style={{
-                                    display: 'block',
-                                    fontSize: '14px',
-                                    fontWeight: '600',
-                                    color: '#4a5568',
-                                    marginBottom: '8px'
                                 }}>Module</label>
                                 <select
-                                    onChange={(e) => setNewCours({ ...newCours, niveau: e.target.value })}
+                                    value={newCours.moduleId}
+                                    onChange={(e) => setNewCours({ ...newCours, moduleId: e.target.value })}
                                     required
                                     style={{
                                         width: '100%',
@@ -515,8 +574,40 @@ export default function CoursContent() {
                                     }}
                                 >
                                     <option value="">Sélectionner un module</option>
-                                    {modulesData.map(module => (
-                                        <option key={module.id} value={module.nom}>{module.nom}</option>
+                                    {availableModules.map(module => (
+                                        <option key={module.id} value={module.id}>{module.libelle}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div style={{ marginBottom: '20px' }}>
+                                <label style={{
+                                    display: 'block',
+                                    fontSize: '14px',
+                                    fontWeight: '600',
+                                    color: '#4a5568',
+                                    marginBottom: '8px'
+                                }}>Classe</label>
+                                <select
+                                    value={newCours.classeId}
+                                    onChange={(e) => setNewCours({ ...newCours, classeId: e.target.value })}
+                                    required
+                                    style={{
+                                        width: '100%',
+                                        padding: '12px 16px',
+                                        borderRadius: '10px',
+                                        border: '1.5px solid #e2e8f0',
+                                        fontSize: '15px',
+                                        outline: 'none',
+                                        transition: 'border-color 0.2s ease',
+                                        fontFamily: 'inherit',
+                                        background: 'white',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    <option value="">Sélectionner une classe</option>
+                                    {availableClasses.map(classe => (
+                                        <option key={classe.id} value={classe.id}>{classe.libelle}</option>
                                     ))}
                                 </select>
                             </div>
@@ -530,8 +621,8 @@ export default function CoursContent() {
                                     marginBottom: '8px'
                                 }}>Professeur</label>
                                 <select
-                                    value={newCours.professeur}
-                                    onChange={(e) => setNewCours({ ...newCours, professeur: e.target.value })}
+                                    value={newCours.professeurId}
+                                    onChange={(e) => setNewCours({ ...newCours, professeurId: e.target.value })}
                                     required
                                     style={{
                                         width: '100%',
@@ -547,8 +638,10 @@ export default function CoursContent() {
                                     }}
                                 >
                                     <option value="">Sélectionner un professeur</option>
-                                    {professeursData.map(prof => (
-                                        <option key={prof.id} value={`${prof.prenom} ${prof.nom}`}>{prof.prenom} {prof.nom}</option>
+                                    {availableProfessors.map(prof => (
+                                        <option key={prof.professorId} value={prof.professorId}>
+                                            {prof.firstName} {prof.lastName}
+                                        </option>
                                     ))}
                                 </select>
                             </div>
@@ -619,11 +712,9 @@ export default function CoursContent() {
                                     }}>Heures faites</label>
                                     <input
                                         type="number"
-                                        value={newCours.heuresFaites || ''}
-                                        onChange={(e) => setNewCours({ ...newCours, heuresFaites: parseInt(e.target.value) || 0 })}
-                                        placeholder="Ex: 10"
-                                        required
-                                        min="0"
+                                        value={0}
+                                        disabled
+                                        placeholder="Calcul automatique"
                                         style={{
                                             width: '100%',
                                             padding: '12px 16px',
@@ -646,11 +737,9 @@ export default function CoursContent() {
                                     }}>Heures restantes</label>
                                     <input
                                         type="number"
-                                        value={newCours.heuresRestantes || ''}
-                                        onChange={(e) => setNewCours({ ...newCours, heuresRestantes: parseInt(e.target.value) || 0 })}
-                                        placeholder="Ex: 20"
-                                        required
-                                        min="0"
+                                        value={Math.max(0, newCours.volumeHoraire - newCours.heuresPlanifie) || 0}
+                                        disabled
+                                        placeholder="Calcul automatique"
                                         style={{
                                             width: '100%',
                                             padding: '12px 16px',
@@ -685,6 +774,7 @@ export default function CoursContent() {
                                 </button>
                                 <button
                                     type="submit"
+                                    disabled={isCreating}
                                     style={{
                                         padding: '12px 24px',
                                         borderRadius: '10px',
@@ -698,7 +788,7 @@ export default function CoursContent() {
                                         boxShadow: '0 4px 12px rgba(91,141,239,0.3)'
                                     }}
                                 >
-                                    Créer le cours
+                                    {isCreating ? 'Création...' : 'Créer le cours'}
                                 </button>
                             </div>
                         </form>
@@ -733,4 +823,3 @@ export default function CoursContent() {
         </>
     );
 }
-

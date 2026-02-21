@@ -4,12 +4,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Notification } from '@/modules/auth/types';
 import {
-    notificationsData,
     getUnreadCount,
     getNotificationIcon,
     formatTimestamp
 } from '@/shared/data/notifications';
 import { Bell, Check, CheckCheck } from 'lucide-react';
+import { useNotifications } from '@/shared/hooks/useNotifications';
 
 interface NotificationDropdownProps {
     isOpen: boolean;
@@ -18,7 +18,7 @@ interface NotificationDropdownProps {
 
 export default function NotificationDropdown({ isOpen, onClose }: NotificationDropdownProps) {
     const router = useRouter();
-    const [notifications, setNotifications] = useState<Notification[]>(notificationsData);
+    const { notifications, isLoading, error, setNotifications, refresh } = useNotifications();
     const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -133,7 +133,21 @@ export default function NotificationDropdown({ isOpen, onClose }: NotificationDr
 
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto max-h-[400px]">
-                    {selectedNotification ? (
+                    {isLoading ? (
+                        <div className="p-10 text-center text-slate-500 text-sm">
+                            Chargement des notifications...
+                        </div>
+                    ) : error ? (
+                        <div className="p-10 text-center text-slate-500 text-sm flex flex-col gap-2">
+                            <span>{error}</span>
+                            <button
+                                onClick={() => void refresh()}
+                                className="text-[#5B8DEF] text-sm font-semibold"
+                            >
+                                Réessayer
+                            </button>
+                        </div>
+                    ) : selectedNotification ? (
                         <div className="p-5">
                             <div className="flex items-start gap-4 mb-5">
                                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl ${selectedNotification.isRead ? 'bg-slate-100' : 'bg-blue-50'}`}>

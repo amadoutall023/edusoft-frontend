@@ -1,5 +1,5 @@
 export interface ClasseData {
-    id: number;
+    id: string;
     libelle: string;
     filiereId: string;
     niveauId: string;
@@ -7,27 +7,28 @@ export interface ClasseData {
 }
 
 export interface NiveauData {
+    id?: string;
     libelle: string;
 }
 
 export interface FiliereData {
-    id: number;
+    id: string;
     nom: string;
     code: string;
     description?: string;
 }
 
 export interface ModuleData {
-    id: number;
+    id: string;
     nom: string;
     code: string;
     credits?: number;
     filiereId: string;
+    classeId?: string;
 }
 
 export interface SalleData {
-    id: number;
+    id: string;
     nom: string;
     capacite: number;
 }
-

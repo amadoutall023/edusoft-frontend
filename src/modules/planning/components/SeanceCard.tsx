@@ -17,7 +17,9 @@ const couleurClasses = {
 };
 
 export default function SeanceCard({ seance }: SeanceCardProps) {
-    const couleurClass = couleurClasses[seance.couleur as keyof typeof couleurClasses] || couleurClasses.blue;
+    const couleurClass = seance.couleur.startsWith('linear')
+        ? seance.couleur
+        : couleurClasses[seance.couleur as keyof typeof couleurClasses] || couleurClasses.blue;
 
     return (
         <div
@@ -46,4 +48,3 @@ export default function SeanceCard({ seance }: SeanceCardProps) {
         </div>
     );
 }
-

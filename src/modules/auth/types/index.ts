@@ -1,19 +1,29 @@
+import { SchoolInfoResponse } from '@/shared/api/types';
+
 export interface User {
-    id: number;
-    prenom: string;
-    nom: string;
-    role: string;
-    login: string;
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    schoolId?: string | null;
 }
 
 export interface AuthState {
     user: User | null;
+    roles: string[];
+    school: SchoolInfoResponse | null;
     isAuthenticated: boolean;
     isLoading: boolean;
 }
 
+export interface AuthContextShape extends AuthState {
+    login: (credentials: LoginCredentials) => Promise<void>;
+    logout: () => Promise<void>;
+}
+
 export interface LoginCredentials {
-    login: string;
+    email: string;
+    password: string;
 }
 
 // Types de notifications
@@ -34,4 +44,3 @@ export interface Notification {
     timestamp: Date;
     isRead: boolean;
 }
-

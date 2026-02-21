@@ -16,7 +16,7 @@ export default function ProfesseursTable({ data }: ProfesseursTableProps) {
     const [showFilters, setShowFilters] = useState(false);
     const [filters, setFilters] = useState({
         grade: '',
-        classe: '',
+        module: '',
         specialite: ''
     });
     const itemsPerPage = 5;
@@ -27,8 +27,8 @@ export default function ProfesseursTable({ data }: ProfesseursTableProps) {
         [data]
     );
 
-    const uniqueClasses = useMemo(() =>
-        [...new Set(data.map(item => item.classe))].sort(),
+    const uniqueModules = useMemo(() =>
+        [...new Set(data.flatMap(item => item.modules).filter(Boolean))].sort(),
         [data]
     );
 
@@ -48,10 +48,10 @@ export default function ProfesseursTable({ data }: ProfesseursTableProps) {
             item.numero.includes(searchTerm);
 
         const matchesGrade = !filters.grade || item.grade === filters.grade;
-        const matchesClasse = !filters.classe || item.classe === filters.classe;
+        const matchesModule = !filters.module || item.modules.includes(filters.module);
         const matchesSpecialite = !filters.specialite || item.specialite === filters.specialite;
 
-        return matchesSearch && matchesGrade && matchesClasse && matchesSpecialite;
+        return matchesSearch && matchesGrade && matchesModule && matchesSpecialite;
     });
 
     // Reset page when filters change
@@ -69,10 +69,10 @@ export default function ProfesseursTable({ data }: ProfesseursTableProps) {
     };
 
     const clearFilters = () => {
-        setFilters({ grade: '', classe: '', specialite: '' });
+        setFilters({ grade: '', module: '', specialite: '' });
     };
 
-    const hasActiveFilters = filters.grade || filters.classe || filters.specialite;
+    const hasActiveFilters = filters.grade || filters.module || filters.specialite;
 
     return (
         <>
@@ -119,7 +119,7 @@ export default function ProfesseursTable({ data }: ProfesseursTableProps) {
                             fontSize: '12px',
                             fontWeight: '600'
                         }}>
-                            {[filters.grade, filters.classe, filters.specialite].filter(Boolean).length}
+                            {[filters.grade, filters.module, filters.specialite].filter(Boolean).length}
                         </span>
                     )}
                 </button>
@@ -161,10 +161,10 @@ export default function ProfesseursTable({ data }: ProfesseursTableProps) {
                     </div>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <label style={{ fontSize: '12px', fontWeight: '600', color: '#4a5568' }}>Classe</label>
+                        <label style={{ fontSize: '12px', fontWeight: '600', color: '#4a5568' }}>Module</label>
                         <select
-                            value={filters.classe}
-                            onChange={(e) => handleFilterChange('classe', e.target.value)}
+                            value={filters.module}
+                            onChange={(e) => handleFilterChange('module', e.target.value)}
                             style={{
                                 padding: '10px 14px',
                                 borderRadius: '8px',
@@ -177,9 +177,9 @@ export default function ProfesseursTable({ data }: ProfesseursTableProps) {
                                 fontFamily: 'inherit'
                             }}
                         >
-                            <option value="">Toutes les classes</option>
-                            {uniqueClasses.map(classe => (
-                                <option key={classe} value={classe}>{classe}</option>
+                            <option value="">Tous les modules</option>
+                            {uniqueModules.map(module => (
+                                <option key={module} value={module}>{module}</option>
                             ))}
                         </select>
                     </div>
@@ -293,7 +293,7 @@ export default function ProfesseursTable({ data }: ProfesseursTableProps) {
                                 fontSize: '14px',
                                 width: '160px',
                                 borderBottom: '3px solid rgba(255,255,255,0.2)'
-                            }}>Classe(s)</th>
+                            }}>Modules</th>
                             <th style={{
                                 padding: '16px',
                                 textAlign: 'center',
@@ -380,7 +380,7 @@ export default function ProfesseursTable({ data }: ProfesseursTableProps) {
                                         fontSize: '14px',
                                         fontWeight: '500',
                                         borderBottom: '1px solid #f1f5f9'
-                                    }}>{prof.classe}</td>
+                                    }}>{prof.modules.length ? prof.modules.join(', ') : '—'}</td>
                                     <td style={{
                                         padding: '16px',
                                         textAlign: 'center',
@@ -404,7 +404,7 @@ export default function ProfesseursTable({ data }: ProfesseursTableProps) {
                                         fontSize: '14px',
                                         fontWeight: '500',
                                         borderBottom: '1px solid #f1f5f9'
-                                    }}>{prof.numero}</td>
+                                    }}>{prof.numero ?? '—'}</td>
                                     <td style={{
                                         padding: '16px',
                                         textAlign: 'center',
@@ -480,4 +480,3 @@ export default function ProfesseursTable({ data }: ProfesseursTableProps) {
         </>
     );
 }
-

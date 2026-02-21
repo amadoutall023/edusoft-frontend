@@ -13,13 +13,17 @@ interface SidebarProps {
 
 export default function Sidebar({ activeItem }: SidebarProps) {
     const { isOpen, toggleSidebar, closeSidebar } = useSidebar();
-    const { logout, user } = useAuth();
+    const { logout, user, roles } = useAuth();
     const router = useRouter();
 
     const handleLogout = () => {
         logout();
         router.push('/connexion');
     };
+
+    const userName = user ? `${user.firstName} ${user.lastName}` : '';
+    const initials = userName ? userName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() : 'U';
+    const roleLabel = roles.length ? roles[0].replace('ROLE_', '').replaceAll('_', ' ') : 'Utilisateur';
 
     const menuItems = [
         { icon: LayoutGrid, label: 'Tableau de bord', path: '/dashboard' },
@@ -213,7 +217,7 @@ export default function Sidebar({ activeItem }: SidebarProps) {
                                 fontSize: '14px',
                                 fontWeight: '600'
                             }}>
-                                {user.prenom.charAt(0)}{user.nom.charAt(0)}
+                                {initials}
                             </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{
@@ -223,13 +227,13 @@ export default function Sidebar({ activeItem }: SidebarProps) {
                                     overflow: 'hidden',
                                     textOverflow: 'ellipsis'
                                 }}>
-                                    {user.prenom} {user.nom}
+                                    {userName}
                                 </div>
                                 <div style={{
                                     fontSize: '11px',
                                     opacity: 0.8
                                 }}>
-                                    {user.role}
+                                    {roleLabel}
                                 </div>
                             </div>
                         </div>

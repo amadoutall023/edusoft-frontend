@@ -1,85 +1,70 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, AuthState } from '../types';
-import { membresAdministrationData } from '@/modules/admin/data/membres';
+import { AuthContextShape, AuthUser, LoginCredentials } from '../types';
+import { tokenStorage } from '@/shared/api/tokenStorage';
+import { login as loginRequest, logout as logoutRequest } from '@/shared/api/authService';
+import { ApiError } from '@/shared/errors/ApiError';
 
-interface AuthContextType extends AuthState {
-    login: (login: string) => boolean;
-    logout: () => void;
-}
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextShape | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-    const [user, setUser] = useState<User | null>(null);
+    const [user, setUser] = useState<AuthUser | null>(null);
+    const [roles, setRoles] = useState<string[]>([]);
+    const [school, setSchool] = useState<AuthContextShape['school']>(null);
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        // Check for existing session
-        // Add a timeout to prevent infinite loading state
-        const timeoutId = setTimeout(() => {
-            console.warn('Auth loading timeout - forcing isLoading to false');
-            setIsLoading(false);
-        }, 5000); // 5 second timeout fallback
-
-        // Only run on client side
         if (typeof window === 'undefined') {
             setIsLoading(false);
             return;
         }
 
-        try {
-            const savedUser = localStorage.getItem('ecole_ism_user');
-            if (savedUser) {
-                const parsedUser = JSON.parse(savedUser);
-                // Validate that the parsed user has required fields
-                if (parsedUser && parsedUser.id && parsedUser.login) {
-                    setUser(parsedUser);
-                    console.log('User loaded from localStorage:', parsedUser);
-                }
-            }
-        } catch (error) {
-            console.error('Error parsing user from localStorage:', error);
-            // Clear invalid data from localStorage
-            if (typeof window !== 'undefined') {
-                localStorage.removeItem('ecole_ism_user');
-            }
-        } finally {
-            clearTimeout(timeoutId);
-            setIsLoading(false);
+        const session = tokenStorage.getSession();
+        if (session) {
+            setUser(session.user);
+            setRoles(session.roles);
+            setSchool(session.school ?? null);
         }
+
+        setIsLoading(false);
     }, []);
 
-    const login = (loginInput: string): boolean => {
-        // Find user by login
-        const foundMember = membresAdministrationData.find(
-            m => m.login.toLowerCase() === loginInput.toLowerCase()
-        );
-
-        if (foundMember) {
-            const user: User = {
-                id: foundMember.id,
-                prenom: foundMember.prenom,
-                nom: foundMember.nom,
-                role: foundMember.role,
-                login: foundMember.login
-            };
-            setUser(user);
-            localStorage.setItem('ecole_ism_user', JSON.stringify(user));
-            return true;
-        }
-        return false;
+    const login = async (credentials: LoginCredentials) => {
+        const auth = await loginRequest(credentials);
+        const authUser: AuthUser = {
+            id: auth.userId,
+            email: auth.email,
+            firstName: auth.firstName,
+            lastName: auth.lastName,
+            schoolId: auth.ecoleId ?? null
+        };
+        setUser(authUser);
+        setRoles(auth.roles);
+        setSchool(auth.ecole ?? null);
     };
 
-    const logout = () => {
-        setUser(null);
-        localStorage.removeItem('ecole_ism_user');
+    const logout = async () => {
+        try {
+            await logoutRequest();
+        } catch (error) {
+            if (error instanceof ApiError) {
+                console.warn('Erreur lors de la déconnexion:', error.message);
+            } else {
+                console.warn('Erreur inattendue lors de la déconnexion:', error);
+            }
+        } finally {
+            setUser(null);
+            setRoles([]);
+            setSchool(null);
+        }
     };
 
     return (
         <AuthContext.Provider value={{
             user,
+            roles,
+            school,
             isAuthenticated: !!user,
             isLoading,
             login,
@@ -97,4 +82,3 @@ export function useAuth() {
     }
     return context;
 }
-

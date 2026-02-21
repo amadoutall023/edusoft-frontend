@@ -48,6 +48,9 @@ export default function SessionsList({ sessions }: SessionsListProps) {
                         {/* Level */}
                         <div className="text-sm font-medium text-slate-500 mb-2">
                             {session.niveau}
+                            {session.dateLabel && (
+                                <span className="block text-xs text-slate-400 mt-1">{session.dateLabel}</span>
+                            )}
                         </div>
 
                         {/* Professor */}
@@ -55,9 +58,25 @@ export default function SessionsList({ sessions }: SessionsListProps) {
                             <User className="w-3 h-3" />
                             {session.professeur}
                         </div>
+
+                        {session.heureLabel && (
+                            <div className="mt-2 text-xs font-semibold text-slate-500 flex items-center gap-1.5">
+                                <ClockIcon />
+                                {session.heureLabel}
+                            </div>
+                        )}
                     </div>
                 ))}
             </div>
         </div>
+    );
+}
+
+function ClockIcon() {
+    return (
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 6v6l4 2" />
+        </svg>
     );
 }

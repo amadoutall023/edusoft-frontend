@@ -6,11 +6,13 @@ export interface StatistiqueDashboard {
 }
 
 export interface SessionAVenir {
-    id: number;
+    id: string;
     cours: string;
     niveau: string;
     professeur: string;
     couleur: string;
+    dateLabel?: string;
+    heureLabel?: string;
 }
 
 export interface StatutCours {
@@ -33,4 +35,3 @@ export interface SessionAnnulee {
     professeur: string;
     date: string;
 }
-

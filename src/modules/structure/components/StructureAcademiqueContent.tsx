@@ -1,43 +1,56 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useMemo } from 'react';
 import ClassesTable from './ClassesTable';
 import NiveauxTable from './NiveauxTable';
 import FilieresTable from './FilieresTable';
 import ModulesTable from './ModulesTable';
 import SallesTable from './SallesTable';
-import { ClasseData, NiveauData } from '@/modules/structure/types';
+import { ClasseData, FiliereData, ModuleData, NiveauData, SalleData } from '@/modules/structure/types';
 import { structureTabs } from '@/shared/config/structureTabs';
-import { filieresData } from '@/modules/structure/data/filieres';
-import { modulesData } from '@/modules/structure/data/modules';
-import { sallesData } from '@/modules/structure/data/salles';
+import { ClasseResponseDto, FiliereResponseDto, ModuleResponseDto } from '@/shared/api/types';
+import { useStructureData } from '../hooks/useStructureData';
+import { useAuth } from '@/modules/auth/context/AuthContext';
+
+const toClasseData = (classe: ClasseResponseDto): ClasseData => ({
+    id: classe.id,
+    libelle: classe.libelle,
+    filiereId: classe.filiere?.libelle ?? 'Non défini',
+    niveauId: classe.niveau?.libelle ?? 'Non défini',
+    schoolId: classe.school?.nom ?? 'Non défini'
+});
+
+const toFiliereData = (filiere: FiliereResponseDto): FiliereData => ({
+    id: filiere.id,
+    nom: filiere.libelle,
+    code: filiere.libelle.slice(0, 3).toUpperCase(),
+    description: (filiere.modules ?? []).map(module => module.libelle).join(', ') || 'Non renseigné'
+});
+
+const toModuleData = (module: ModuleResponseDto): ModuleData => ({
+    id: module.id,
+    nom: module.libelle,
+    code: module.libelle.slice(0, 3).toUpperCase(),
+    filiereId: module.filiere?.libelle ?? 'Indéfini',
+    credits: module.cours?.length ?? 0,
+    classeId: (module.cours ?? []).map(c => c.libelle).join(', ')
+});
 
 export default function StructureAcademiqueContent() {
-    const [activeTab, setActiveTab] = useState('classes');
+    const [activeTab, setActiveTab] = React.useState('classes');
+    const { user } = useAuth();
+    const structure = useStructureData();
 
-    const classesData: ClasseData[] = [
-        { id: 1, libelle: 'Classe A1', filiereId: 'f1', niveauId: 'n1', schoolId: 's1' },
-        { id: 2, libelle: 'Classe A2', filiereId: 'f1', niveauId: 'n2', schoolId: 's1' },
-        { id: 3, libelle: 'Classe B1', filiereId: 'f2', niveauId: 'n1', schoolId: 's1' },
-        { id: 4, libelle: 'Classe B2', filiereId: 'f2', niveauId: 'n2', schoolId: 's1' },
-        { id: 5, libelle: 'Classe C1', filiereId: 'f3', niveauId: 'n3', schoolId: 's1' },
-        { id: 6, libelle: 'Classe C2', filiereId: 'f3', niveauId: 'n1', schoolId: 's1' },
-        { id: 7, libelle: 'Classe D1', filiereId: 'f1', niveauId: 'n4', schoolId: 's1' },
-        { id: 8, libelle: 'Classe D2', filiereId: 'f2', niveauId: 'n4', schoolId: 's1' },
-        { id: 9, libelle: 'Classe E1', filiereId: 'f4', niveauId: 'n5', schoolId: 's1' },
-    ];
+    const classes = useMemo<ClasseData[]>(() => structure.classes.map(toClasseData), [structure.classes]);
+    const filieres = useMemo<FiliereData[]>(() => structure.filieres.map(toFiliereData), [structure.filieres]);
+    const modules = useMemo<ModuleData[]>(() => structure.modules.map(toModuleData), [structure.modules]);
+    const niveaux = useMemo<NiveauData[]>(() => structure.niveaux.map(n => ({ id: n.id, libelle: n.libelle })), [structure.niveaux]);
+    const salles = useMemo<SalleData[]>(() => structure.salles.map(s => ({ id: s.id, nom: s.libelle, capacite: s.capacity ?? 0 })), [structure.salles]);
 
-    const niveauxData: NiveauData[] = [
-        { libelle: 'Première année' },
-        { libelle: 'Deuxième année' },
-        { libelle: 'Troisième année' },
-        { libelle: 'Quatrième année' },
-        { libelle: 'Cinquième année' },
-    ];
+    const defaultSchoolId = user?.schoolId ?? structure.classes[0]?.school?.id ?? null;
 
     return (
         <>
-            {/* Page Title */}
             <div className="page-title" style={{
                 padding: '32px 40px 24px',
                 borderBottom: '1px solid #e2e8f0'
@@ -51,7 +64,6 @@ export default function StructureAcademiqueContent() {
                 }}>Structure académique</h1>
             </div>
 
-            {/* Tabs Navigation */}
             <div className="tabs-nav" style={{
                 padding: '0 40px',
                 borderBottom: '2px solid #f7fafc',
@@ -83,18 +95,6 @@ export default function StructureAcademiqueContent() {
                                 marginBottom: '-2px',
                                 whiteSpace: 'nowrap'
                             }}
-                            onMouseEnter={(e: any) => {
-                                if (activeTab !== tab.id) {
-                                    e.currentTarget.style.color = '#5B8DEF';
-                                    e.currentTarget.style.background = '#f7fafc';
-                                }
-                            }}
-                            onMouseLeave={(e: any) => {
-                                if (activeTab !== tab.id) {
-                                    e.currentTarget.style.color = '#718096';
-                                    e.currentTarget.style.background = 'transparent';
-                                }
-                            }}
                         >
                             <Icon size={18} strokeWidth={2.5} />
                             <span>{tab.label}</span>
@@ -103,12 +103,66 @@ export default function StructureAcademiqueContent() {
                 })}
             </div>
 
-            {/* Content based on active tab */}
-            {activeTab === 'classes' && <ClassesTable data={classesData} niveauxData={niveauxData} />}
-            {activeTab === 'niveaux' && <NiveauxTable data={niveauxData} />}
-            {activeTab === 'filieres' && <FilieresTable data={filieresData} />}
-            {activeTab === 'modules' && <ModulesTable data={modulesData} />}
-            {activeTab === 'salles' && <SallesTable data={sallesData} />}
+            {structure.isLoading && (
+                <div style={{ padding: '32px 40px', color: '#64748b' }}>
+                    Chargement des données...
+                </div>
+            )}
+
+            {structure.error && !structure.isLoading && (
+                <div style={{ padding: '32px 40px', color: '#dc2626' }}>
+                    {structure.error}
+                </div>
+            )}
+
+            {!structure.isLoading && !structure.error && (
+                <>
+                    {activeTab === 'classes' && (
+                        <ClassesTable
+                            data={classes}
+                            niveauxData={niveaux}
+                            filiereOptions={structure.options.filieres}
+                            defaultSchoolId={defaultSchoolId}
+                            onCreate={structure.actions.createClasse}
+                            onUpdate={structure.actions.updateClasse}
+                            onDelete={structure.actions.deleteClasse}
+                        />
+                    )}
+                    {activeTab === 'niveaux' && (
+                        <NiveauxTable
+                            data={niveaux}
+                            onCreate={structure.actions.createNiveau}
+                            onUpdate={structure.actions.updateNiveau}
+                            onDelete={structure.actions.deleteNiveau}
+                        />
+                    )}
+                    {activeTab === 'filieres' && (
+                        <FilieresTable
+                            data={filieres}
+                            onCreate={structure.actions.createFiliere}
+                            onUpdate={structure.actions.updateFiliere}
+                            onDelete={structure.actions.deleteFiliere}
+                        />
+                    )}
+                    {activeTab === 'modules' && (
+                        <ModulesTable
+                            data={modules}
+                            filiereOptions={structure.options.filieres}
+                            onCreate={structure.actions.createModule}
+                            onUpdate={structure.actions.updateModule}
+                            onDelete={structure.actions.deleteModule}
+                        />
+                    )}
+                    {activeTab === 'salles' && (
+                        <SallesTable
+                            data={salles}
+                            onCreate={structure.actions.createSalle}
+                            onUpdate={structure.actions.updateSalle}
+                            onDelete={structure.actions.deleteSalle}
+                        />
+                    )}
+                </>
+            )}
 
             <style jsx>{`
                 @media (max-width: 768px) {
@@ -126,4 +180,3 @@ export default function StructureAcademiqueContent() {
         </>
     );
 }
-
