@@ -1,39 +1,35 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { Eye, X } from 'lucide-react';
+import { Eye, X, Trash2 } from 'lucide-react';
 import SearchInput from '@/shared/components/SearchInput';
 import Pagination from '@/shared/components/Pagination';
-import { Professeur } from '../types';
+import { ProfessorData } from '../types';
 
 interface ProfesseursTableProps {
-    data: Professeur[];
+    data: ProfessorData[];
+    onDelete?: (professor: ProfessorData) => Promise<void>;
+    onViewDetails?: (professor: ProfessorData) => void;
 }
 
-export default function ProfesseursTable({ data }: ProfesseursTableProps) {
+export default function ProfesseursTable({ data, onDelete, onViewDetails }: ProfesseursTableProps) {
     const [currentPage, setCurrentPage] = useState(1);
     const [searchTerm, setSearchTerm] = useState('');
     const [showFilters, setShowFilters] = useState(false);
     const [filters, setFilters] = useState({
         grade: '',
-        module: '',
         specialite: ''
     });
-    const itemsPerPage = 5;
+    const itemsPerPage = 10;
 
     // Get unique values for filters
     const uniqueGrades = useMemo(() =>
-        [...new Set(data.map(item => item.grade))].sort(),
-        [data]
-    );
-
-    const uniqueModules = useMemo(() =>
-        [...new Set(data.flatMap(item => item.modules).filter(Boolean))].sort(),
+        [...new Set(data.map(item => item.grade).filter(Boolean))].sort() as string[],
         [data]
     );
 
     const uniqueSpecialites = useMemo(() =>
-        [...new Set(data.map(item => item.specialite))].sort(),
+        [...new Set(data.map(item => item.specialite).filter(Boolean))].sort() as string[],
         [data]
     );
 
@@ -42,16 +38,16 @@ export default function ProfesseursTable({ data }: ProfesseursTableProps) {
         const matchesSearch =
             item.prenom.toLowerCase().includes(searchTerm.toLowerCase()) ||
             item.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.classe.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.specialite.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.grade.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.numero.includes(searchTerm);
+            item.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            item.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (item.specialite && item.specialite.toLowerCase().includes(searchTerm.toLowerCase())) ||
+            (item.grade && item.grade.toLowerCase().includes(searchTerm.toLowerCase())) ||
+            (item.telephone && item.telephone.includes(searchTerm));
 
         const matchesGrade = !filters.grade || item.grade === filters.grade;
-        const matchesModule = !filters.module || item.modules.includes(filters.module);
         const matchesSpecialite = !filters.specialite || item.specialite === filters.specialite;
 
-        return matchesSearch && matchesGrade && matchesModule && matchesSpecialite;
+        return matchesSearch && matchesGrade && matchesSpecialite;
     });
 
     // Reset page when filters change
@@ -69,10 +65,10 @@ export default function ProfesseursTable({ data }: ProfesseursTableProps) {
     };
 
     const clearFilters = () => {
-        setFilters({ grade: '', module: '', specialite: '' });
+        setFilters({ grade: '', specialite: '' });
     };
 
-    const hasActiveFilters = filters.grade || filters.module || filters.specialite;
+    const hasActiveFilters = filters.grade || filters.specialite;
 
     return (
         <>
@@ -119,7 +115,7 @@ export default function ProfesseursTable({ data }: ProfesseursTableProps) {
                             fontSize: '12px',
                             fontWeight: '600'
                         }}>
-                            {[filters.grade, filters.module, filters.specialite].filter(Boolean).length}
+                            {[filters.grade, filters.specialite].filter(Boolean).length}
                         </span>
                     )}
                 </button>
@@ -156,30 +152,6 @@ export default function ProfesseursTable({ data }: ProfesseursTableProps) {
                             <option value="">Tous les grades</option>
                             {uniqueGrades.map(grade => (
                                 <option key={grade} value={grade}>{grade}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <label style={{ fontSize: '12px', fontWeight: '600', color: '#4a5568' }}>Module</label>
-                        <select
-                            value={filters.module}
-                            onChange={(e) => handleFilterChange('module', e.target.value)}
-                            style={{
-                                padding: '10px 14px',
-                                borderRadius: '8px',
-                                border: '1.5px solid #e5e7eb',
-                                background: 'white',
-                                fontSize: '14px',
-                                color: '#2d3748',
-                                minWidth: '180px',
-                                cursor: 'pointer',
-                                fontFamily: 'inherit'
-                            }}
-                        >
-                            <option value="">Tous les modules</option>
-                            {uniqueModules.map(module => (
-                                <option key={module} value={module}>{module}</option>
                             ))}
                         </select>
                     </div>
@@ -264,7 +236,7 @@ export default function ProfesseursTable({ data }: ProfesseursTableProps) {
                                 color: 'white',
                                 fontWeight: '600',
                                 fontSize: '14px',
-                                width: '60px',
+                                width: '50px',
                                 borderBottom: '3px solid rgba(255,255,255,0.2)'
                             }}>N°</th>
                             <th style={{
@@ -273,7 +245,7 @@ export default function ProfesseursTable({ data }: ProfesseursTableProps) {
                                 color: 'white',
                                 fontWeight: '600',
                                 fontSize: '14px',
-                                width: '130px',
+                                width: '120px',
                                 borderBottom: '3px solid rgba(255,255,255,0.2)'
                             }}>Prénom</th>
                             <th style={{
@@ -282,7 +254,7 @@ export default function ProfesseursTable({ data }: ProfesseursTableProps) {
                                 color: 'white',
                                 fontWeight: '600',
                                 fontSize: '14px',
-                                width: '130px',
+                                width: '120px',
                                 borderBottom: '3px solid rgba(255,255,255,0.2)'
                             }}>Nom</th>
                             <th style={{
@@ -291,9 +263,18 @@ export default function ProfesseursTable({ data }: ProfesseursTableProps) {
                                 color: 'white',
                                 fontWeight: '600',
                                 fontSize: '14px',
-                                width: '160px',
+                                width: '150px',
                                 borderBottom: '3px solid rgba(255,255,255,0.2)'
-                            }}>Modules</th>
+                            }}>Email</th>
+                            <th style={{
+                                padding: '16px',
+                                textAlign: 'center',
+                                color: 'white',
+                                fontWeight: '600',
+                                fontSize: '14px',
+                                width: '120px',
+                                borderBottom: '3px solid rgba(255,255,255,0.2)'
+                            }}>Téléphone</th>
                             <th style={{
                                 padding: '16px',
                                 textAlign: 'center',
@@ -301,15 +282,6 @@ export default function ProfesseursTable({ data }: ProfesseursTableProps) {
                                 fontWeight: '600',
                                 fontSize: '14px',
                                 width: '140px',
-                                borderBottom: '3px solid rgba(255,255,255,0.2)'
-                            }}>Spécialité</th>
-                            <th style={{
-                                padding: '16px',
-                                textAlign: 'center',
-                                color: 'white',
-                                fontWeight: '600',
-                                fontSize: '14px',
-                                width: '150px',
                                 borderBottom: '3px solid rgba(255,255,255,0.2)'
                             }}>Grade</th>
                             <th style={{
@@ -320,160 +292,170 @@ export default function ProfesseursTable({ data }: ProfesseursTableProps) {
                                 fontSize: '14px',
                                 width: '130px',
                                 borderBottom: '3px solid rgba(255,255,255,0.2)'
-                            }}>Téléphone</th>
+                            }}>Spécialité</th>
                             <th style={{
                                 padding: '16px',
                                 textAlign: 'center',
                                 color: 'white',
                                 fontWeight: '600',
                                 fontSize: '14px',
-                                width: '100px',
+                                width: '120px',
                                 borderBottom: '3px solid rgba(255,255,255,0.2)'
-                            }}>ACTIONS</th>
+                            }}>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {paginatedData.length > 0 ? (
-                            paginatedData.map((prof, index) => (
-                                <tr key={prof.id} style={{
-                                    background: index % 2 === 0 ? 'white' : '#fafbfc',
-                                    transition: 'all 0.2s ease'
-                                }}
-                                    onMouseEnter={(e: any) => {
-                                        e.currentTarget.style.background = '#f0f7ff';
-                                        e.currentTarget.style.transform = 'scale(1.002)';
-                                    }}
-                                    onMouseLeave={(e: any) => {
-                                        e.currentTarget.style.background = index % 2 === 0 ? 'white' : '#fafbfc';
-                                        e.currentTarget.style.transform = 'scale(1)';
-                                    }}
-                                >
-                                    <td style={{
-                                        padding: '16px',
-                                        textAlign: 'center',
-                                        color: '#4a5568',
-                                        fontSize: '14px',
-                                        fontWeight: '500',
-                                        borderBottom: '1px solid #f1f5f9'
-                                    }}>{startIndex + index + 1}</td>
-                                    <td style={{
-                                        padding: '16px',
-                                        textAlign: 'center',
-                                        color: '#2d3748',
-                                        fontSize: '14px',
-                                        fontWeight: '500',
-                                        borderBottom: '1px solid #f1f5f9'
-                                    }}>{prof.prenom}</td>
-                                    <td style={{
-                                        padding: '16px',
-                                        textAlign: 'center',
-                                        color: '#2d3748',
-                                        fontSize: '14px',
-                                        fontWeight: '600',
-                                        borderBottom: '1px solid #f1f5f9',
-                                        textTransform: 'uppercase'
-                                    }}>{prof.nom}</td>
-                                    <td style={{
-                                        padding: '16px',
-                                        textAlign: 'center',
-                                        color: '#5B8DEF',
-                                        fontSize: '14px',
-                                        fontWeight: '500',
-                                        borderBottom: '1px solid #f1f5f9'
-                                    }}>{prof.modules.length ? prof.modules.join(', ') : '—'}</td>
-                                    <td style={{
-                                        padding: '16px',
-                                        textAlign: 'center',
-                                        color: '#4a5568',
-                                        fontSize: '14px',
-                                        fontWeight: '500',
-                                        borderBottom: '1px solid #f1f5f9'
-                                    }}>{prof.specialite}</td>
-                                    <td style={{
-                                        padding: '16px',
-                                        textAlign: 'center',
-                                        color: '#2d3748',
-                                        fontSize: '14px',
-                                        fontWeight: '500',
-                                        borderBottom: '1px solid #f1f5f9'
-                                    }}>{prof.grade}</td>
-                                    <td style={{
-                                        padding: '16px',
-                                        textAlign: 'center',
-                                        color: '#4a5568',
-                                        fontSize: '14px',
-                                        fontWeight: '500',
-                                        borderBottom: '1px solid #f1f5f9'
-                                    }}>{prof.numero ?? '—'}</td>
-                                    <td style={{
-                                        padding: '16px',
-                                        textAlign: 'center',
-                                        borderBottom: '1px solid #f1f5f9'
-                                    }}>
-                                        <button style={{
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            width: '36px',
-                                            height: '36px',
-                                            borderRadius: '8px',
-                                            border: 'none',
-                                            background: '#E3F2FD',
-                                            cursor: 'pointer',
-                                            transition: 'all 0.2s ease'
-                                        }}
-                                            onMouseEnter={(e: any) => {
-                                                e.currentTarget.style.background = '#5B8DEF';
-                                                e.currentTarget.querySelector('svg').style.color = 'white';
-                                            }}
-                                            onMouseLeave={(e: any) => {
-                                                e.currentTarget.style.background = '#E3F2FD';
-                                                e.currentTarget.querySelector('svg').style.color = '#5B8DEF';
-                                            }}
-                                        >
-                                            <Eye size={18} color="#5B8DEF" strokeWidth={2.5} />
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))
-                        ) : (
+                        {paginatedData.length === 0 ? (
                             <tr>
                                 <td colSpan={8} style={{
                                     padding: '40px',
                                     textAlign: 'center',
-                                    color: '#4a5568',
-                                    fontSize: '16px'
+                                    color: '#64748b',
+                                    fontSize: '14px'
                                 }}>
-                                    Aucun professeur ne correspond aux critères de recherche
+                                    Aucun professeur trouvé
                                 </td>
                             </tr>
+                        ) : (
+                            paginatedData.map((professor, index) => (
+                                <tr
+                                    key={professor.id}
+                                    style={{
+                                        background: index % 2 === 0 ? '#ffffff' : '#f8fafc',
+                                        borderBottom: '1px solid #e2e8f0',
+                                        transition: 'background 0.2s ease'
+                                    }}
+                                    onMouseEnter={(e: any) => { e.currentTarget.style.background = '#f1f5f9'; }}
+                                    onMouseLeave={(e: any) => { e.currentTarget.style.background = index % 2 === 0 ? '#ffffff' : '#f8fafc'; }}
+                                >
+                                    <td style={{
+                                        padding: '14px 16px',
+                                        textAlign: 'center',
+                                        fontSize: '14px',
+                                        color: '#64748b'
+                                    }}>
+                                        {startIndex + index + 1}
+                                    </td>
+                                    <td style={{
+                                        padding: '14px 16px',
+                                        textAlign: 'center',
+                                        fontSize: '14px',
+                                        fontWeight: '500',
+                                        color: '#1e293b'
+                                    }}>
+                                        {professor.prenom}
+                                    </td>
+                                    <td style={{
+                                        padding: '14px 16px',
+                                        textAlign: 'center',
+                                        fontSize: '14px',
+                                        fontWeight: '500',
+                                        color: '#1e293b'
+                                    }}>
+                                        {professor.nom}
+                                    </td>
+                                    <td style={{
+                                        padding: '14px 16px',
+                                        textAlign: 'center',
+                                        fontSize: '14px',
+                                        color: '#475569'
+                                    }}>
+                                        {professor.email}
+                                    </td>
+                                    <td style={{
+                                        padding: '14px 16px',
+                                        textAlign: 'center',
+                                        fontSize: '14px',
+                                        color: '#475569'
+                                    }}>
+                                        {professor.telephone || '-'}
+                                    </td>
+                                    <td style={{
+                                        padding: '14px 16px',
+                                        textAlign: 'center',
+                                        fontSize: '14px',
+                                        color: '#475569'
+                                    }}>
+                                        {professor.grade || '-'}
+                                    </td>
+                                    <td style={{
+                                        padding: '14px 16px',
+                                        textAlign: 'center',
+                                        fontSize: '14px',
+                                        color: '#475569'
+                                    }}>
+                                        {professor.specialite || '-'}
+                                    </td>
+                                    <td style={{
+                                        padding: '14px 16px',
+                                        textAlign: 'center'
+                                    }}>
+                                        <div style={{
+                                            display: 'flex',
+                                            justifyContent: 'center',
+                                            gap: '8px'
+                                        }}>
+                                            {onViewDetails && (
+                                                <button
+                                                    onClick={() => onViewDetails(professor)}
+                                                    title="Voir les détails"
+                                                    style={{
+                                                        padding: '8px',
+                                                        background: '#5B8DEF',
+                                                        border: 'none',
+                                                        borderRadius: '8px',
+                                                        cursor: 'pointer',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center'
+                                                    }}
+                                                >
+                                                    <Eye size={16} color="white" />
+                                                </button>
+                                            )}
+                                            {onDelete && (
+                                                <button
+                                                    onClick={() => onDelete(professor)}
+                                                    title="Supprimer"
+                                                    style={{
+                                                        padding: '8px',
+                                                        background: '#ef4444',
+                                                        border: 'none',
+                                                        borderRadius: '8px',
+                                                        cursor: 'pointer',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center'
+                                                    }}
+                                                >
+                                                    <Trash2 size={16} color="white" />
+                                                </button>
+                                            )}
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))
                         )}
                     </tbody>
                 </table>
             </div>
 
             {/* Pagination */}
-            <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={setCurrentPage}
-            />
+            {totalPages > 1 && (
+                <div style={{ padding: '24px 40px' }}>
+                    <Pagination
+                        currentPage={currentPage}
+                        totalPages={totalPages}
+                        onPageChange={setCurrentPage}
+                    />
+                </div>
+            )}
 
             <style jsx>{`
                 @media (max-width: 768px) {
-                    .search-filter-section {
-                        padding: 16px 20px !important;
-                    }
-                    .filter-panel {
-                        padding: 16px 20px !important;
-                    }
-                    .table-container {
-                        padding: 0 20px !important;
-                    }
-                    .results-count {
-                        width: 100%;
-                        margin-left: 0 !important;
-                        margin-top: 12px;
+                    .search-filter-section, .filter-panel, .table-container {
+                        padding-left: 20px !important;
+                        padding-right: 20px !important;
                     }
                 }
             `}</style>

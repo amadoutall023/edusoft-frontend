@@ -71,8 +71,14 @@ export async function httpClient<T>(path: string, options: HttpRequestOptions = 
         }
     }
 
-    if (options.body && !headers.has('Content-Type')) {
-        headers.set('Content-Type', 'application/json');
+    // For FormData, don't set Content-Type - let the browser set it with the boundary
+    // For other bodies, set JSON content type if not already set
+    if (options.body) {
+        if (options.body instanceof FormData) {
+            // Don't set Content-Type for FormData - browser will do it with boundary
+        } else if (!headers.has('Content-Type')) {
+            headers.set('Content-Type', 'application/json');
+        }
     }
 
     const response = await fetch(url, {

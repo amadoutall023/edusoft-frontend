@@ -35,3 +35,30 @@ export async function createCourse(payload: CreateCoursePayload): Promise<CoursR
     }
     return response.data;
 }
+
+export type UpdateCoursePayload = CreateCoursePayload;
+
+export async function updateCourse(id: string, payload: UpdateCoursePayload): Promise<CoursResponseDto> {
+    const response = await httpClient<ApiResponse<CoursResponseDto>>(`${BASE_URL}/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload)
+    });
+    if (!response.data) {
+        throw new Error('Réponse de mise à jour de cours invalide');
+    }
+    return response.data;
+}
+
+export async function deleteCourse(id: string): Promise<void> {
+    await httpClient<ApiResponse<null>>(`${BASE_URL}/${id}`, {
+        method: 'DELETE'
+    });
+}
+
+export async function getCourseById(id: string): Promise<CoursResponseDto> {
+    const response = await httpClient<ApiResponse<CoursResponseDto>>(`${BASE_URL}/${id}`);
+    if (!response.data) {
+        throw new Error('Réponse de cours invalide');
+    }
+    return response.data;
+}

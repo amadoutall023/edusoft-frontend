@@ -13,6 +13,7 @@ import {
     Layers,
     RotateCw
 } from 'lucide-react';
+import Swal from 'sweetalert2';
 import {
     ClasseResponseDto,
     CoursResponseDto,
@@ -606,9 +607,20 @@ export default function PlanningContent() {
     };
 
     const handleDeleteSeance = async (id: string) => {
-        if (!confirm('Supprimer cette séance ?')) {
-            return;
-        }
+        const result = await Swal.fire({
+            title: 'Êtes-vous sûr ?',
+            text: 'Voulez-vous vraiment supprimer cette séance ?',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc2626',
+            cancelButtonColor: '#64748b',
+            confirmButtonText: 'Oui, supprimer',
+            cancelButtonText: 'Annuler',
+            reverseButtons: true
+        });
+
+        if (!result.isConfirmed) return;
+
         try {
             setIsMutating(true);
             await deleteSession(id);
@@ -616,7 +628,11 @@ export default function PlanningContent() {
             await loadSessionsPage(0, false);
         } catch (err) {
             const message = err instanceof ApiError ? err.message : 'Impossible de supprimer la séance.';
-            alert(message);
+            Swal.fire({
+                title: 'Erreur',
+                text: message,
+                icon: 'error'
+            });
         } finally {
             setIsMutating(false);
         }

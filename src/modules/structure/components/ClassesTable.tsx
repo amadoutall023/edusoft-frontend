@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { Eye, Plus, X, Pencil, Trash2 } from 'lucide-react';
+import Swal from 'sweetalert2';
 import SearchInput from '@/shared/components/SearchInput';
 import FilterButton from '@/shared/components/FilterButton';
 import Pagination from '@/shared/components/Pagination';
@@ -18,23 +19,31 @@ interface ClassesTableProps {
     data: ClasseData[];
     niveauxData?: NiveauData[];
     filiereOptions: OptionItem[];
+    currentPage: number;
+    totalPages: number;
+    searchTerm: string;
+    onPageChange: (page: number) => void;
+    onSearchChange: (value: string) => void;
     defaultSchoolId?: string | null;
-    onCreate: (payload: ClassePayload) => Promise<void>;
-    onUpdate: (id: string, payload: ClassePayload) => Promise<void>;
-    onDelete: (id: string) => Promise<void>;
+    onCreate: (payload: ClassePayload) => Promise<unknown>;
+    onUpdate: (id: string, payload: ClassePayload) => Promise<unknown>;
+    onDelete: (id: string) => Promise<unknown>;
 }
 
 export default function ClassesTable({
     data,
     niveauxData = [],
     filiereOptions,
+    currentPage,
+    totalPages,
+    searchTerm,
+    onPageChange,
+    onSearchChange,
     defaultSchoolId,
     onCreate,
     onUpdate,
     onDelete
 }: ClassesTableProps) {
-    const [currentPage, setCurrentPage] = useState(1);
-    const [searchTerm, setSearchTerm] = useState('');
     const [showModal, setShowModal] = useState(false);
     const [formError, setFormError] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -45,7 +54,6 @@ export default function ClassesTable({
         niveauId: '',
         schoolId: defaultSchoolId ?? ''
     });
-    const itemsPerPage = 5;
 
     React.useEffect(() => {
         setNewClasse(prev => ({ ...prev, schoolId: defaultSchoolId ?? '' }));
@@ -60,24 +68,17 @@ export default function ClassesTable({
         { libelle: 'Cinquième année' },
     ];
     // Get filiere names for display
-    const getFiliereName = (id: string) => id;
-
-    // Get niveau name for display
-    const getNiveauName = (libelle: string) => {
-        return libelle;
+    const getFiliereName = (id: string) => {
+        const filiere = filiereOptions.find(option => option.id === id);
+        return filiere?.libelle ?? id;
     };
 
-    // Filter data based on search term
-    const filteredData = data.filter(item =>
-        item.libelle.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.filiereId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.niveauId.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    // Paginate data
-    const totalPages = Math.ceil(filteredData.length / itemsPerPage);
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const paginatedData = filteredData.slice(startIndex, startIndex + itemsPerPage);
+    // Get niveau name for display
+    const getNiveauName = (id: string) => {
+        const niveau = defaultNiveaux.find(option => (option.id ?? option.libelle) === id);
+        return niveau?.libelle ?? id;
+    };
+    const startIndex = (currentPage - 1) * 10;
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -133,14 +134,36 @@ export default function ClassesTable({
     };
 
     const handleDelete = async (classe: ClasseData) => {
-        if (!window.confirm(`Supprimer la classe ${classe.libelle} ?`)) {
-            return;
-        }
+        const result = await Swal.fire({
+            title: 'Êtes-vous sûr ?',
+            text: `Voulez-vous vraiment supprimer la classe "${classe.libelle}" ?`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc2626',
+            cancelButtonColor: '#64748b',
+            confirmButtonText: 'Oui, supprimer',
+            cancelButtonText: 'Annuler',
+            reverseButtons: true
+        });
+
+        if (!result.isConfirmed) return;
+
         try {
             await onDelete(classe.id);
+            Swal.fire({
+                title: 'Supprimé !',
+                text: 'La classe a été supprimée avec succès.',
+                icon: 'success',
+                timer: 2000,
+                showConfirmButton: false
+            });
         } catch (err) {
             const message = err instanceof ApiError ? err.message : 'Suppression impossible';
-            alert(message);
+            Swal.fire({
+                title: 'Erreur',
+                text: message,
+                icon: 'error'
+            });
         }
     };
 
@@ -159,7 +182,7 @@ export default function ClassesTable({
                 <div className="search-wrapper" style={{ flex: '1', minWidth: '200px', maxWidth: '400px' }}>
                     <SearchInput
                         value={searchTerm}
-                        onChange={setSearchTerm}
+                        onChange={onSearchChange}
                         placeholder="Rechercher une classe..."
                     />
                 </div>
@@ -261,7 +284,7 @@ export default function ClassesTable({
                         </tr>
                     </thead>
                     <tbody>
-                        {paginatedData.map((classe, index) => (
+                        {data.map((classe, index) => (
                             <tr key={classe.id} style={{
                                 background: index % 2 === 0 ? 'white' : '#fafbfc',
                                 transition: 'all 0.2s ease'
@@ -306,14 +329,14 @@ export default function ClassesTable({
                                     fontSize: '14px',
                                     fontWeight: '500',
                                     borderBottom: '1px solid #f1f5f9'
-                                }}>{classe.niveauId}</td>
+                                }}>{getNiveauName(classe.niveauId)}</td>
                                 <td style={{
                                     padding: '16px',
                                     textAlign: 'center',
                                     borderBottom: '1px solid #f1f5f9'
                                 }}>
                                     <div style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}>
-                                        <button style={{
+                                        {/* <button style={{
                                             display: 'inline-flex',
                                             alignItems: 'center',
                                             justifyContent: 'center',
@@ -335,7 +358,7 @@ export default function ClassesTable({
                                             }}
                                         >
                                             <Eye size={18} color="#5B8DEF" strokeWidth={2.5} />
-                                        </button>
+                                        </button> */}
                                         <button style={{
                                             display: 'inline-flex',
                                             alignItems: 'center',
@@ -395,8 +418,8 @@ export default function ClassesTable({
             {/* Pagination */}
             <Pagination
                 currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={setCurrentPage}
+                totalPages={Math.max(totalPages, 1)}
+                onPageChange={onPageChange}
             />
 
             {/* Modal for adding new class */}

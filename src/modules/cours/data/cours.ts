@@ -2,7 +2,7 @@ import { Cours } from '../types';
 
 export const coursData: Cours[] = [
     {
-        id: 1,
+        id: '1',
         titre: 'AlgorAlgorithm',
         niveau: 'L1-CPD',
         professeur: 'Mr Aly',
@@ -13,7 +13,7 @@ export const coursData: Cours[] = [
         progression: 91
     },
     {
-        id: 2,
+        id: '2',
         titre: 'Informatique Appliqué',
         niveau: 'L1-GRLS',
         professeur: 'Evral DIMBA',
@@ -24,7 +24,7 @@ export const coursData: Cours[] = [
         progression: 58
     },
     {
-        id: 3,
+        id: '3',
         titre: 'UX-UI Design',
         niveau: 'L1-CPD',
         professeur: 'Melba ORLIE',
@@ -35,7 +35,7 @@ export const coursData: Cours[] = [
         progression: 91
     },
     {
-        id: 4,
+        id: '4',
         titre: 'Marketing Opérationnel',
         niveau: 'L1-CPD/CDSD',
         professeur: 'Mamadou DIAL',
@@ -46,7 +46,7 @@ export const coursData: Cours[] = [
         progression: 25
     },
     {
-        id: 5,
+        id: '5',
         titre: 'Csharp',
         niveau: 'L1-GRLS',
         professeur: 'Baila WANE',
@@ -57,7 +57,7 @@ export const coursData: Cours[] = [
         progression: 75
     },
     {
-        id: 6,
+        id: '6',
         titre: 'Informatique Appliqué',
         niveau: 'L1-GRLS',
         professeur: 'Evral DIMBA',

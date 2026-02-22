@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { Eye, Plus, Pencil, Trash2, X } from 'lucide-react';
+import Swal from 'sweetalert2';
 import SearchInput from '@/shared/components/SearchInput';
 import FilterButton from '@/shared/components/FilterButton';
 import Pagination from '@/shared/components/Pagination';
@@ -10,28 +11,33 @@ import { ApiError } from '@/shared/errors/ApiError';
 
 interface NiveauxTableProps {
     data: NiveauData[];
-    onCreate: (libelle: string) => Promise<void>;
-    onUpdate: (id: string, libelle: string) => Promise<void>;
-    onDelete: (id: string) => Promise<void>;
+    currentPage: number;
+    totalPages: number;
+    searchTerm: string;
+    onPageChange: (page: number) => void;
+    onSearchChange: (value: string) => void;
+    onCreate: (libelle: string) => Promise<unknown>;
+    onUpdate: (id: string, libelle: string) => Promise<unknown>;
+    onDelete: (id: string) => Promise<unknown>;
 }
 
-export default function NiveauxTable({ data, onCreate, onUpdate, onDelete }: NiveauxTableProps) {
-    const [currentPage, setCurrentPage] = useState(1);
-    const [searchTerm, setSearchTerm] = useState('');
+export default function NiveauxTable({
+    data,
+    currentPage,
+    totalPages,
+    searchTerm,
+    onPageChange,
+    onSearchChange,
+    onCreate,
+    onUpdate,
+    onDelete
+}: NiveauxTableProps) {
     const [showModal, setShowModal] = useState(false);
     const [newNiveau, setNewNiveau] = useState({ libelle: '' });
     const [formError, setFormError] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
-    const itemsPerPage = 5;
-
-    const filteredData = data.filter(item =>
-        item.libelle.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    const totalPages = Math.ceil(filteredData.length / itemsPerPage);
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const paginatedData = filteredData.slice(startIndex, startIndex + itemsPerPage);
+    const startIndex = (currentPage - 1) * 10;
 
     const openCreate = () => {
         setEditingId(null);
@@ -50,12 +56,37 @@ export default function NiveauxTable({ data, onCreate, onUpdate, onDelete }: Niv
 
     const handleDelete = async (niveau: NiveauData) => {
         if (!niveau.id) return;
-        if (!window.confirm(`Supprimer le niveau ${niveau.libelle} ?`)) return;
+        
+        const result = await Swal.fire({
+            title: 'Êtes-vous sûr ?',
+            text: `Voulez-vous vraiment supprimer le niveau "${niveau.libelle}" ?`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc2626',
+            cancelButtonColor: '#64748b',
+            confirmButtonText: 'Oui, supprimer',
+            cancelButtonText: 'Annuler',
+            reverseButtons: true
+        });
+
+        if (!result.isConfirmed) return;
+
         try {
             await onDelete(niveau.id);
+            Swal.fire({
+                title: 'Supprimé !',
+                text: 'Le niveau a été supprimé avec succès.',
+                icon: 'success',
+                timer: 2000,
+                showConfirmButton: false
+            });
         } catch (err) {
             const message = err instanceof ApiError ? err.message : 'Suppression impossible';
-            alert(message);
+            Swal.fire({
+                title: 'Erreur',
+                text: message,
+                icon: 'error'
+            });
         }
     };
 
@@ -97,7 +128,7 @@ export default function NiveauxTable({ data, onCreate, onUpdate, onDelete }: Niv
                 <div className="search-wrapper" style={{ flex: '1', minWidth: '200px', maxWidth: '400px' }}>
                     <SearchInput
                         value={searchTerm}
-                        onChange={setSearchTerm}
+                        onChange={onSearchChange}
                         placeholder="Rechercher un niveau..."
                     />
                 </div>
@@ -123,7 +154,7 @@ export default function NiveauxTable({ data, onCreate, onUpdate, onDelete }: Niv
                         </tr>
                     </thead>
                     <tbody>
-                        {paginatedData.map((niveau, index) => (
+                        {data.map((niveau, index) => (
                             <tr key={niveau.id ?? niveau.libelle} style={{
                                 background: index % 2 === 0 ? 'white' : '#fafbfc'
                             }}>
@@ -131,9 +162,9 @@ export default function NiveauxTable({ data, onCreate, onUpdate, onDelete }: Niv
                                 <td style={bodyCellStyle}>{niveau.libelle}</td>
                                 <td style={bodyCellStyle}>
                                     <div style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}>
-                                        <button style={iconButtonStyle}>
+                                        {/* <button style={iconButtonStyle}>
                                             <Eye size={18} color="#5B8DEF" strokeWidth={2.5} />
-                                        </button>
+                                        </button> */}
                                         <button style={iconButtonStyle} onClick={() => openEdit(niveau)}>
                                             <Pencil size={18} color="#5B8DEF" strokeWidth={2.5} />
                                         </button>
@@ -148,7 +179,7 @@ export default function NiveauxTable({ data, onCreate, onUpdate, onDelete }: Niv
                 </table>
             </div>
 
-            <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
+            <Pagination currentPage={currentPage} totalPages={Math.max(totalPages, 1)} onPageChange={onPageChange} />
 
             {showModal && (
                 <div className="modal-overlay" style={modalOverlayStyle} onClick={() => { setShowModal(false); setEditingId(null); }}>

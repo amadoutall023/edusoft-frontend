@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Eye, Plus, X, Pencil, Trash2 } from 'lucide-react';
+import Swal from 'sweetalert2';
 import SearchInput from '@/shared/components/SearchInput';
 import Pagination from '@/shared/components/Pagination';
 import { ModuleData } from '../types';
@@ -16,53 +17,59 @@ interface OptionItem {
 interface ModulesTableProps {
     data: ModuleData[];
     filiereOptions: OptionItem[];
-    onCreate: (payload: ModulePayload) => Promise<void>;
-    onUpdate: (id: string, payload: ModulePayload) => Promise<void>;
-    onDelete: (id: string) => Promise<void>;
+    currentPage: number;
+    totalPages: number;
+    searchTerm: string;
+    selectedFiliereId: string;
+    onPageChange: (page: number) => void;
+    onSearchChange: (value: string) => void;
+    onFiliereFilterChange: (filiereId: string) => void;
+    onCreate: (payload: ModulePayload) => Promise<unknown>;
+    onUpdate: (id: string, payload: ModulePayload) => Promise<unknown>;
+    onDelete: (id: string) => Promise<unknown>;
 }
 
-export default function ModulesTable({ data, filiereOptions, onCreate, onUpdate, onDelete }: ModulesTableProps) {
-    const [currentPage, setCurrentPage] = useState(1);
-    const [searchTerm, setSearchTerm] = useState('');
+export default function ModulesTable({
+    data,
+    filiereOptions,
+    currentPage,
+    totalPages,
+    searchTerm,
+    selectedFiliereId,
+    onPageChange,
+    onSearchChange,
+    onFiliereFilterChange,
+    onCreate,
+    onUpdate,
+    onDelete
+}: ModulesTableProps) {
     const [showFilters, setShowFilters] = useState(false);
     const [filters, setFilters] = useState({
-        filiereId: '',
-        classeId: ''
+        filiereId: selectedFiliereId
     });
     const [showModal, setShowModal] = useState(false);
-    const [newModule, setNewModule] = useState({ nom: '', code: '', credits: 0, filiereId: '' });
+    const [showDetailsModal, setShowDetailsModal] = useState(false);
+    const [selectedModule, setSelectedModule] = useState<ModuleData | null>(null);
+    const [newModule, setNewModule] = useState({ nom: '', credits: 0, filiereId: '' });
     const [formError, setFormError] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
-    const itemsPerPage = 3;
+    useEffect(() => {
+        setFilters(prev => ({ ...prev, filiereId: selectedFiliereId }));
+    }, [selectedFiliereId]);
 
     // Get unique filieres and classes for filters
-    const uniqueFilieres = useMemo(() =>
-        [...new Set(data.map(item => item.filiereId))].sort(),
-        [data]
+    const uniqueFilieres = useMemo(
+        () => filiereOptions.map(option => ({ id: option.id, label: option.libelle })),
+        [filiereOptions]
     );
 
-    const uniqueClasses = useMemo(() =>
-        [...new Set(data.map(item => item.classeId).filter(Boolean))].sort(),
-        [data]
-    );
+    // Server-side filtering and pagination
+    const filteredData = data;
 
-    // Filter data based on search term and filters
-    const filteredData = data.filter(item => {
-        const matchesSearch =
-            item.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.code.toLowerCase().includes(searchTerm.toLowerCase());
-
-        const matchesFiliere = !filters.filiereId || item.filiereId === filters.filiereId;
-        const matchesClasse = !filters.classeId || item.classeId === filters.classeId;
-
-        return matchesSearch && matchesFiliere && matchesClasse;
-    });
-
-    // Reset page when filters change
-    React.useEffect(() => {
-        setCurrentPage(1);
-    }, [searchTerm, filters]);
+    useEffect(() => {
+        onFiliereFilterChange(filters.filiereId);
+    }, [filters.filiereId, onFiliereFilterChange]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -80,7 +87,7 @@ export default function ModulesTable({ data, filiereOptions, onCreate, onUpdate,
             }
             setShowModal(false);
             setEditingId(null);
-            setNewModule({ nom: '', code: '', credits: 0, filiereId: '' });
+            setNewModule({ nom: '', credits: 0, filiereId: '' });
         } catch (err) {
             if (err instanceof ApiError) {
                 setFormError(err.message);
@@ -95,27 +102,54 @@ export default function ModulesTable({ data, filiereOptions, onCreate, onUpdate,
     const openCreate = () => {
         setEditingId(null);
         setFormError(null);
-        setNewModule({ nom: '', code: '', credits: 0, filiereId: '' });
+        setNewModule({ nom: '', credits: 0, filiereId: '' });
         setShowModal(true);
     };
 
     const openEdit = (module: ModuleData) => {
         setEditingId(module.id);
         setFormError(null);
-        setNewModule({ nom: module.nom, code: module.code, credits: module.credits ?? 0, filiereId: module.filiereId });
+        setNewModule({ nom: module.nom, credits: module.credits ?? 0, filiereId: module.filiereId });
         setShowModal(true);
     };
 
     const handleDelete = async (module: ModuleData) => {
-        if (!window.confirm(`Supprimer le module ${module.nom} ?`)) {
-            return;
-        }
+        const result = await Swal.fire({
+            title: 'Êtes-vous sûr ?',
+            text: `Voulez-vous vraiment supprimer le module "${module.nom}" ?`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc2626',
+            cancelButtonColor: '#64748b',
+            confirmButtonText: 'Oui, supprimer',
+            cancelButtonText: 'Annuler',
+            reverseButtons: true
+        });
+
+        if (!result.isConfirmed) return;
+
         try {
             await onDelete(module.id);
+            Swal.fire({
+                title: 'Supprimé !',
+                text: 'Le module a été supprimé avec succès.',
+                icon: 'success',
+                timer: 2000,
+                showConfirmButton: false
+            });
         } catch (err) {
             const message = err instanceof ApiError ? err.message : 'Suppression impossible';
-            alert(message);
+            Swal.fire({
+                title: 'Erreur',
+                text: message,
+                icon: 'error'
+            });
         }
+    };
+
+    const handleViewDetails = (module: ModuleData) => {
+        setSelectedModule(module);
+        setShowDetailsModal(true);
     };
 
     const handleFilterChange = (key: keyof typeof filters, value: string) => {
@@ -123,15 +157,13 @@ export default function ModulesTable({ data, filiereOptions, onCreate, onUpdate,
     };
 
     const clearFilters = () => {
-        setFilters({ filiereId: '', classeId: '' });
+        setFilters({ filiereId: '' });
     };
 
-    const hasActiveFilters = filters.filiereId || filters.classeId;
+    const hasActiveFilters = !!filters.filiereId;
 
     // Paginate data
-    const totalPages = Math.ceil(filteredData.length / itemsPerPage);
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const paginatedData = filteredData.slice(startIndex, startIndex + itemsPerPage);
+    const startIndex = (currentPage - 1) * 10;
 
     return (
         <>
@@ -147,7 +179,7 @@ export default function ModulesTable({ data, filiereOptions, onCreate, onUpdate,
             }}>
                 <SearchInput
                     value={searchTerm}
-                    onChange={setSearchTerm}
+                    onChange={(value) => onSearchChange(value)}
                     placeholder="Rechercher un module..."
                 />
                 <div style={{ display: 'flex', gap: '12px' }}>
@@ -179,7 +211,7 @@ export default function ModulesTable({ data, filiereOptions, onCreate, onUpdate,
                                 fontSize: '12px',
                                 fontWeight: '600'
                             }}>
-                                {(filters.filiereId ? 1 : 0) + (filters.classeId ? 1 : 0)}
+                                {(filters.filiereId ? 1 : 0)}
                             </span>
                         )}
                     </button>
@@ -231,7 +263,10 @@ export default function ModulesTable({ data, filiereOptions, onCreate, onUpdate,
                         <label style={{ fontSize: '12px', fontWeight: '600', color: '#4a5568' }}>Filière</label>
                         <select
                             value={filters.filiereId}
-                            onChange={(e) => handleFilterChange('filiereId', e.target.value)}
+                            onChange={(e) => {
+                                handleFilterChange('filiereId', e.target.value);
+                                onPageChange(1);
+                            }}
                             style={{
                                 padding: '10px 14px',
                                 borderRadius: '8px',
@@ -245,32 +280,8 @@ export default function ModulesTable({ data, filiereOptions, onCreate, onUpdate,
                             }}
                         >
                             <option value="">Toutes les filières</option>
-                            {uniqueFilieres.map(filiereId => (
-                                <option key={filiereId} value={filiereId}>{filiereId}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <label style={{ fontSize: '12px', fontWeight: '600', color: '#4a5568' }}>Classe</label>
-                        <select
-                            value={filters.classeId}
-                            onChange={(e) => handleFilterChange('classeId', e.target.value)}
-                            style={{
-                                padding: '10px 14px',
-                                borderRadius: '8px',
-                                border: '1.5px solid #e5e7eb',
-                                background: 'white',
-                                fontSize: '14px',
-                                color: '#2d3748',
-                                minWidth: '180px',
-                                cursor: 'pointer',
-                                fontFamily: 'inherit'
-                            }}
-                        >
-                            <option value="">Toutes les classes</option>
-                            {uniqueClasses.map(classeId => (
-                                <option key={classeId} value={classeId}>{classeId}</option>
+                            {uniqueFilieres.map(filiere => (
+                                <option key={filiere.id} value={filiere.id}>{filiere.label}</option>
                             ))}
                         </select>
                     </div>
@@ -391,7 +402,7 @@ export default function ModulesTable({ data, filiereOptions, onCreate, onUpdate,
                         </tr>
                     </thead>
                     <tbody>
-                        {paginatedData.map((module, index) => (
+                        {filteredData.map((module, index) => (
                             <tr key={module.id} style={{
                                 background: index % 2 === 0 ? 'white' : '#fafbfc',
                                 transition: 'all 0.2s ease'
@@ -436,7 +447,7 @@ export default function ModulesTable({ data, filiereOptions, onCreate, onUpdate,
                                     fontSize: '14px',
                                     fontWeight: '500',
                                     borderBottom: '1px solid #f1f5f9'
-                                }}>{module.filiereId}</td>
+                                }}>{module.filiereLabel ?? module.filiereId}</td>
                                 <td style={{
                                     padding: '16px',
                                     textAlign: 'center',
@@ -459,9 +470,9 @@ export default function ModulesTable({ data, filiereOptions, onCreate, onUpdate,
                                     borderBottom: '1px solid #f1f5f9'
                                 }}>
                                     <div style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}>
-                                        <button style={iconButtonStyle}>
+                                        {/* <button style={iconButtonStyle} onClick={() => handleViewDetails(module)}>
                                             <Eye size={18} color="#5B8DEF" strokeWidth={2.5} />
-                                        </button>
+                                        </button> */}
                                         <button style={iconButtonStyle} onClick={() => openEdit(module)}>
                                             <Pencil size={18} color="#5B8DEF" strokeWidth={2.5} />
                                         </button>
@@ -479,8 +490,8 @@ export default function ModulesTable({ data, filiereOptions, onCreate, onUpdate,
             {/* Pagination */}
             <Pagination
                 currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={setCurrentPage}
+                totalPages={Math.max(totalPages, 1)}
+                onPageChange={onPageChange}
             />
 
             {/* Modal for adding new module */}
@@ -561,35 +572,6 @@ export default function ModulesTable({ data, filiereOptions, onCreate, onUpdate,
                                     value={newModule.nom}
                                     onChange={(e) => setNewModule({ ...newModule, nom: e.target.value })}
                                     placeholder="Ex: Programmation Web"
-                                    required
-                                    style={{
-                                        width: '100%',
-                                        padding: '12px 16px',
-                                        borderRadius: '10px',
-                                        border: '1.5px solid #e2e8f0',
-                                        fontSize: '15px',
-                                        outline: 'none',
-                                        transition: 'border-color 0.2s ease',
-                                        fontFamily: 'inherit'
-                                    }}
-                                    onFocus={(e: any) => e.target.style.borderColor = '#5B8DEF'}
-                                    onBlur={(e: any) => e.target.style.borderColor = '#e2e8f0'}
-                                />
-                            </div>
-
-                            <div style={{ marginBottom: '20px' }}>
-                                <label style={{
-                                    display: 'block',
-                                    fontSize: '14px',
-                                    fontWeight: '600',
-                                    color: '#4a5568',
-                                    marginBottom: '8px'
-                                }}>Code</label>
-                                <input
-                                    type="text"
-                                    value={newModule.code}
-                                    onChange={(e) => setNewModule({ ...newModule, code: e.target.value })}
-                                    placeholder="Ex: WEB101"
                                     required
                                     style={{
                                         width: '100%',
@@ -718,6 +700,192 @@ export default function ModulesTable({ data, filiereOptions, onCreate, onUpdate,
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal for viewing module details */}
+            {showDetailsModal && selectedModule && (
+                <div className="modal-overlay" style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(0,0,0,0.5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 1000,
+                    backdropFilter: 'blur(4px)'
+                }}
+                    onClick={() => setShowDetailsModal(false)}
+                >
+                    <div style={{
+                        background: 'white',
+                        borderRadius: '20px',
+                        padding: '32px',
+                        width: '90%',
+                        maxWidth: '500px',
+                        boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+                        animation: 'slideIn 0.3s ease'
+                    }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            marginBottom: '24px'
+                        }}>
+                            <h2 style={{
+                                fontSize: '22px',
+                                fontWeight: '700',
+                                color: '#1a202c',
+                                margin: 0
+                            }}>
+                                Détails du module
+                            </h2>
+                            <button
+                                onClick={() => setShowDetailsModal(false)}
+                                style={{
+                                    border: 'none',
+                                    background: 'transparent',
+                                    cursor: 'pointer',
+                                    padding: '4px'
+                                }}
+                            >
+                                <X size={24} color="#94a3b8" />
+                            </button>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                            <div style={{
+                                padding: '16px',
+                                background: '#f8fafc',
+                                borderRadius: '12px',
+                                border: '1px solid #e2e8f0'
+                            }}>
+                                <label style={{
+                                    fontSize: '12px',
+                                    fontWeight: '600',
+                                    color: '#64748b',
+                                    display: 'block',
+                                    marginBottom: '4px'
+                                }}>Nom du module</label>
+                                <p style={{
+                                    fontSize: '16px',
+                                    fontWeight: '600',
+                                    color: '#1a202c',
+                                    margin: 0
+                                }}>{selectedModule.nom}</p>
+                            </div>
+
+                            <div style={{
+                                padding: '16px',
+                                background: '#f8fafc',
+                                borderRadius: '12px',
+                                border: '1px solid #e2e8f0'
+                            }}>
+                                <label style={{
+                                    fontSize: '12px',
+                                    fontWeight: '600',
+                                    color: '#64748b',
+                                    display: 'block',
+                                    marginBottom: '4px'
+                                }}>Code</label>
+                                <p style={{
+                                    fontSize: '16px',
+                                    fontWeight: '600',
+                                    color: '#5B8DEF',
+                                    margin: 0
+                                }}>{selectedModule.code}</p>
+                            </div>
+
+                            <div style={{
+                                padding: '16px',
+                                background: '#f8fafc',
+                                borderRadius: '12px',
+                                border: '1px solid #e2e8f0'
+                            }}>
+                                <label style={{
+                                    fontSize: '12px',
+                                    fontWeight: '600',
+                                    color: '#64748b',
+                                    display: 'block',
+                                    marginBottom: '4px'
+                                }}>Filière</label>
+                                <p style={{
+                                    fontSize: '16px',
+                                    fontWeight: '500',
+                                    color: '#1a202c',
+                                    margin: 0
+                                }}>{selectedModule.filiereLabel || 'Non défini'}</p>
+                            </div>
+
+                            <div style={{
+                                padding: '16px',
+                                background: '#f8fafc',
+                                borderRadius: '12px',
+                                border: '1px solid #e2e8f0'
+                            }}>
+                                <label style={{
+                                    fontSize: '12px',
+                                    fontWeight: '600',
+                                    color: '#64748b',
+                                    display: 'block',
+                                    marginBottom: '4px'
+                                }}>Crédits</label>
+                                <p style={{
+                                    fontSize: '16px',
+                                    fontWeight: '500',
+                                    color: '#1a202c',
+                                    margin: 0
+                                }}>{selectedModule.credits ?? 0}</p>
+                            </div>
+
+                            {selectedModule.classeId && (
+                                <div style={{
+                                    padding: '16px',
+                                    background: '#f8fafc',
+                                    borderRadius: '12px',
+                                    border: '1px solid #e2e8f0'
+                                }}>
+                                    <label style={{
+                                        fontSize: '12px',
+                                        fontWeight: '600',
+                                        color: '#64748b',
+                                        display: 'block',
+                                        marginBottom: '4px'
+                                    }}>Classe</label>
+                                    <p style={{
+                                        fontSize: '16px',
+                                        fontWeight: '500',
+                                        color: '#1a202c',
+                                        margin: 0
+                                    }}>{selectedModule.classeId}</p>
+                                </div>
+                            )}
+                        </div>
+
+                        <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'flex-end' }}>
+                            <button
+                                onClick={() => setShowDetailsModal(false)}
+                                style={{
+                                    padding: '12px 24px',
+                                    borderRadius: '10px',
+                                    border: 'none',
+                                    background: 'linear-gradient(135deg, #5B8DEF 0%, #4169B8 100%)',
+                                    color: 'white',
+                                    fontSize: '14px',
+                                    fontWeight: '600',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s ease'
+                                }}
+                            >
+                                Fermer
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

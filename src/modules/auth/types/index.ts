@@ -8,6 +8,9 @@ export interface User {
     schoolId?: string | null;
 }
 
+// Alias pour User
+export type AuthUser = User;
+
 export interface AuthState {
     user: User | null;
     roles: string[];

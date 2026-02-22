@@ -5,7 +5,7 @@ import { Search, Filter, Plus, X, Archive } from 'lucide-react';
 import CoursCard from './CoursCard';
 import Pagination from '@/shared/components/Pagination';
 import { Cours, FiltreCours } from '../types';
-import { fetchCourses, createCourse } from '../services/coursService';
+import { fetchCourses, createCourse, updateCourse, deleteCourse } from '../services/coursService';
 import { CoursResponseDto, ClasseResponseDto, ModuleResponseDto, ProfessorResponseDto } from '@/shared/api/types';
 import { fetchClasses, fetchModules } from '@/modules/structure/services/structureService';
 import { fetchProfessors } from '@/modules/prof/services/professorService';
@@ -23,7 +23,7 @@ const mapCoursDto = (cours: CoursResponseDto): Cours => {
         niveau: cours.classes?.map(classe => classe.libelle).join(' / ') ?? '—',
         filiere: cours.module?.libelle ?? undefined,
         professeur: cours.professor
-            ? `${cours.professor.prenom ?? ''} ${cours.professor.nom ?? ''}`.trim() || 'Non assigné'
+            ? `${cours.professor.firstName ?? ''} ${cours.professor.lastName ?? ''}`.trim() || 'Non assigné'
             : 'Non assigné',
         volumeHoraire: total,
         heuresPlanifie: planned,
@@ -40,8 +40,7 @@ const INITIAL_COURSE_FORM = {
     moduleId: '',
     classeId: '',
     professeurId: '',
-    volumeHoraire: 0,
-    heuresPlanifie: 0
+    volumeHoraire: 0
 };
 
 export default function CoursContent() {
@@ -59,7 +58,38 @@ export default function CoursContent() {
     const [availableModules, setAvailableModules] = useState<ModuleResponseDto[]>([]);
     const [availableProfessors, setAvailableProfessors] = useState<ProfessorResponseDto[]>([]);
     const [isCreating, setIsCreating] = useState(false);
+    const [editingCours, setEditingCours] = useState<Cours | null>(null);
     const itemsPerPage = 4;
+
+    const handleEdit = (cours: Cours) => {
+        // Trouver l'ID du module à partir du libellé
+        const foundModule = availableModules.find(m => m.libelle === cours.module);
+        // Trouver l'ID de la première classe
+        const foundClasse = availableClasses.find(c => cours.classes?.includes(c.libelle));
+        
+        setEditingCours(cours);
+        setNewCours({
+            titre: cours.titre,
+            moduleId: foundModule?.id || '',
+            classeId: foundClasse?.id || '',
+            professeurId: '',
+            volumeHoraire: cours.volumeHoraire
+        });
+        setShowModal(true);
+    };
+
+    const handleDelete = async (id: string) => {
+        try {
+            setIsLoading(true);
+            await deleteCourse(id);
+            setCourses(prev => prev.filter(c => c.id !== id));
+        } catch (err) {
+            const message = err instanceof ApiError ? err.message : 'Impossible de supprimer le cours.';
+            alert(message);
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     const handleArchive = (id: string) => {
         setArchivedCours((prev) => [...prev, id]);
@@ -183,20 +213,36 @@ export default function CoursContent() {
 
         try {
             setIsCreating(true);
-            await createCourse({
-                libelle: newCours.titre,
-                totalHour: newCours.volumeHoraire,
-                plannedHour: newCours.heuresPlanifie,
-                moduleId: newCours.moduleId,
-                classIds: [newCours.classeId],
-                professorId: newCours.professeurId || undefined
-            });
+            
+            if (editingCours) {
+                // Mode modification
+                await updateCourse(editingCours.id, {
+                    libelle: newCours.titre,
+                    totalHour: newCours.volumeHoraire,
+                    plannedHour: newCours.volumeHoraire, // Les heures planifiées sont gérées via les sessions
+                    moduleId: newCours.moduleId,
+                    classIds: [newCours.classeId],
+                    professorId: newCours.professeurId || undefined
+                });
+            } else {
+                // Mode création - plannedHour initialisé à 0
+                await createCourse({
+                    libelle: newCours.titre,
+                    totalHour: newCours.volumeHoraire,
+                    plannedHour: 0, // Initialisé à 0, sera mis à jour via les sessions
+                    moduleId: newCours.moduleId,
+                    classIds: [newCours.classeId],
+                    professorId: newCours.professeurId || undefined
+                });
+            }
+            
             const refreshed = await fetchCourses();
             setCourses(refreshed.map(mapCoursDto));
             setShowModal(false);
             setNewCours({ ...INITIAL_COURSE_FORM });
+            setEditingCours(null);
         } catch (err) {
-            const message = err instanceof ApiError ? err.message : 'Impossible de créer le cours.';
+            const message = err instanceof ApiError ? err.message : (editingCours ? 'Impossible de modifier le cours.' : 'Impossible de créer le cours.');
             alert(message);
         } finally {
             setIsCreating(false);
@@ -438,6 +484,8 @@ export default function CoursContent() {
                                 key={cours.id}
                                 cours={cours}
                                 onArchive={showArchive ? handleUnarchive : handleArchive}
+                                onEdit={handleEdit}
+                                onDelete={handleDelete}
                                 isArchiveView={showArchive}
                             />
                         ))}
@@ -461,7 +509,7 @@ export default function CoursContent() {
                 />
             )}
 
-            {/* Modal for adding new cours */}
+            {/* Modal for adding/editing cours */}
             {showModal && (
                 <div style={{
                     position: 'fixed',
@@ -475,7 +523,11 @@ export default function CoursContent() {
                     justifyContent: 'center',
                     zIndex: 9999
                 }}
-                    onClick={() => setShowModal(false)}
+                    onClick={() => {
+                        setShowModal(false);
+                        setEditingCours(null);
+                        setNewCours({ ...INITIAL_COURSE_FORM });
+                    }}
                 >
                     <div style={{
                         background: 'white',
@@ -501,9 +553,13 @@ export default function CoursContent() {
                                 fontWeight: '700',
                                 color: '#1a202c',
                                 margin: 0
-                            }}>Créer un cours</h2>
+                            }}>{editingCours ? 'Modifier le cours' : 'Créer un cours'}</h2>
                             <button
-                                onClick={() => setShowModal(false)}
+                                onClick={() => {
+                                    setShowModal(false);
+                                    setEditingCours(null);
+                                    setNewCours({ ...INITIAL_COURSE_FORM });
+                                }}
                                 style={{
                                     width: '36px',
                                     height: '36px',
@@ -674,90 +730,14 @@ export default function CoursContent() {
                                 />
                             </div>
 
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '24px' }}>
-                                <div>
-                                    <label style={{
-                                        display: 'block',
-                                        fontSize: '14px',
-                                        fontWeight: '600',
-                                        color: '#4a5568',
-                                        marginBottom: '8px'
-                                    }}>Heures planifiées</label>
-                                    <input
-                                        type="number"
-                                        value={newCours.heuresPlanifie || ''}
-                                        onChange={(e) => setNewCours({ ...newCours, heuresPlanifie: parseInt(e.target.value) || 0 })}
-                                        placeholder="Ex: 20"
-                                        required
-                                        min="0"
-                                        style={{
-                                            width: '100%',
-                                            padding: '12px 16px',
-                                            borderRadius: '10px',
-                                            border: '1.5px solid #e2e8f0',
-                                            fontSize: '15px',
-                                            outline: 'none',
-                                            transition: 'border-color 0.2s ease',
-                                            fontFamily: 'inherit'
-                                        }}
-                                    />
-                                </div>
-                                <div>
-                                    <label style={{
-                                        display: 'block',
-                                        fontSize: '14px',
-                                        fontWeight: '600',
-                                        color: '#4a5568',
-                                        marginBottom: '8px'
-                                    }}>Heures faites</label>
-                                    <input
-                                        type="number"
-                                        value={0}
-                                        disabled
-                                        placeholder="Calcul automatique"
-                                        style={{
-                                            width: '100%',
-                                            padding: '12px 16px',
-                                            borderRadius: '10px',
-                                            border: '1.5px solid #e2e8f0',
-                                            fontSize: '15px',
-                                            outline: 'none',
-                                            transition: 'border-color 0.2s ease',
-                                            fontFamily: 'inherit'
-                                        }}
-                                    />
-                                </div>
-                                <div>
-                                    <label style={{
-                                        display: 'block',
-                                        fontSize: '14px',
-                                        fontWeight: '600',
-                                        color: '#4a5568',
-                                        marginBottom: '8px'
-                                    }}>Heures restantes</label>
-                                    <input
-                                        type="number"
-                                        value={Math.max(0, newCours.volumeHoraire - newCours.heuresPlanifie) || 0}
-                                        disabled
-                                        placeholder="Calcul automatique"
-                                        style={{
-                                            width: '100%',
-                                            padding: '12px 16px',
-                                            borderRadius: '10px',
-                                            border: '1.5px solid #e2e8f0',
-                                            fontSize: '15px',
-                                            outline: 'none',
-                                            transition: 'border-color 0.2s ease',
-                                            fontFamily: 'inherit'
-                                        }}
-                                    />
-                                </div>
-                            </div>
-
                             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
                                 <button
                                     type="button"
-                                    onClick={() => setShowModal(false)}
+                                    onClick={() => {
+                                        setShowModal(false);
+                                        setEditingCours(null);
+                                        setNewCours({ ...INITIAL_COURSE_FORM });
+                                    }}
                                     style={{
                                         padding: '12px 24px',
                                         borderRadius: '10px',
@@ -783,12 +763,13 @@ export default function CoursContent() {
                                         color: 'white',
                                         fontSize: '14px',
                                         fontWeight: '600',
-                                        cursor: 'pointer',
+                                        cursor: isCreating ? 'not-allowed' : 'pointer',
                                         transition: 'all 0.2s ease',
-                                        boxShadow: '0 4px 12px rgba(91,141,239,0.3)'
+                                        boxShadow: '0 4px 12px rgba(91,141,239,0.3)',
+                                        opacity: isCreating ? 0.7 : 1
                                     }}
                                 >
-                                    {isCreating ? 'Création...' : 'Créer le cours'}
+                                    {isCreating ? (editingCours ? 'Mise à jour...' : 'Création...') : (editingCours ? 'Mettre à jour' : 'Créer le cours')}
                                 </button>
                             </div>
                         </form>

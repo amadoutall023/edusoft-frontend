@@ -1,39 +1,48 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { User, Play, Archive, Pencil, Trash2, X, Eye, Clock, Calendar, Search, Check } from 'lucide-react';
+import { User, Play, Archive, Pencil, Trash2, X, Eye, Clock, Calendar, Search, Check, Users, ClipboardList } from 'lucide-react';
 import { Cours } from '../types';
-import { fetchSessions } from '@/modules/planning/services/sessionService';
-import { SessionResponseDto } from '@/shared/api/types';
+import { fetchSessions, createSession, updateSession } from '@/modules/planning/services/sessionService';
+import { SessionResponseDto, SessionMode, SessionType, SessionStatus } from '@/shared/api/types';
+import EmargementPanel from './EmargementPanel';
 
-interface SessionData {
-    codeSession: string;
+interface SessionFormData {
     date: string;
-    heureDebut: string;
-    heureFin: string;
-    type: 'en_ligne' | 'presentiel';
+    startHour: string;
+    endHour: string;
+    modeSession: SessionMode;
+    typeSession: SessionType;
+    libelle: string;
 }
 
 interface CoursCardProps {
     cours: Cours;
     onArchive?: (id: string) => void;
+    onEdit?: (cours: Cours) => void;
+    onDelete?: (id: string) => void;
     isArchiveView?: boolean;
 }
 
-export default function CoursCard({ cours, onArchive, isArchiveView }: CoursCardProps) {
+export default function CoursCard({ cours, onArchive, onEdit, onDelete, isArchiveView }: CoursCardProps) {
     const [showModal, setShowModal] = useState(false);
     const [showSessionsModal, setShowSessionsModal] = useState(false);
     const [sessionSearchTerm, setSessionSearchTerm] = useState('');
-    const [newSession, setNewSession] = useState<SessionData>({
-        codeSession: '',
+    const [newSession, setNewSession] = useState<SessionFormData>({
         date: '',
-        heureDebut: '',
-        heureFin: '',
-        type: 'presentiel'
+        startHour: '',
+        endHour: '',
+        modeSession: 'PRESENTIEL',
+        typeSession: 'AUTRE',
+        libelle: ''
     });
     const [sessions, setSessions] = useState<SessionResponseDto[]>([]);
     const [sessionsLoading, setSessionsLoading] = useState(false);
     const [sessionsError, setSessionsError] = useState<string | null>(null);
+
+    
+    const [showEmargementPanel, setShowEmargementPanel] = useState(false);
+    const [selectedSessionForEmargement, setSelectedSessionForEmargement] = useState<SessionResponseDto | null>(null);
 
     useEffect(() => {
         const load = async () => {
@@ -43,16 +52,16 @@ export default function CoursCard({ cours, onArchive, isArchiveView }: CoursCard
                 setSessions(data ?? []);
                 setSessionsError(null);
             } catch (err) {
+                console.error('Erreur chargement sessions:', err);
                 setSessionsError('Impossible de charger les sessions.');
             } finally {
                 setSessionsLoading(false);
             }
         };
 
-        if (showSessionsModal) {
-            void load();
-        }
-    }, [cours.id, showSessionsModal]);
+        // Charger les sessions dès le montage du composant
+        load();
+    }, [cours.id]);
 
     const filteredSessions = useMemo(() => {
         return sessions.filter(session =>
@@ -61,9 +70,78 @@ export default function CoursCard({ cours, onArchive, isArchiveView }: CoursCard
         );
     }, [sessions, sessionSearchTerm]);
 
+    // Calculer les heures depuis les sessions
+    const { heuresPlanifie, heuresFaites, heuresRestantes } = useMemo(() => {
+        // Calculer le total des heures planifiées (toutes les sessions sauf TERMINEE et ANNULEE)
+        const totalPlanned = sessions.reduce((acc, session) => {
+            if (session.status !== 'TERMINEE' && session.status !== 'ANNULE') {
+                const duration = session.duration ?? 0;
+                return acc + (duration / 60);
+            }
+            return acc;
+        }, 0);
+
+        // Calculer le total des heures terminées
+        const totalCompleted = sessions.reduce((acc, session) => {
+            if (session.status === 'TERMINEE') {
+                const duration = session.duration ?? 0;
+                console.log('Session completed:', session.id, 'duration:', duration);
+                return acc + (duration / 60);
+            }
+            return acc;
+        }, 0);
+
+        const remaining = Math.max(0, totalPlanned - totalCompleted);
+
+        console.log('Heures calculées - Planifiées:', totalPlanned, 'Terminées:', totalCompleted, 'Restantes:', remaining);
+
+        return {
+            heuresPlanifie: Math.round(totalPlanned * 10) / 10,
+            heuresFaites: Math.round(totalCompleted * 10) / 10,
+            heuresRestantes: Math.round(remaining * 10) / 10
+        };
+    }, [sessions]);
+
     const handleArchive = () => {
         if (onArchive) {
             onArchive(cours.id);
+        }
+    };
+
+ 
+    const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+   
+    const handleSessionStatusChange = async (sessionId: string, newStatus: SessionStatus) => {
+        try {
+            setActionLoading(sessionId);
+            const session = sessions.find(s => s.id === sessionId);
+            if (!session) return;
+
+         
+            const sessionData = {
+                date: session.date,
+                startHour: session.startHour,
+                endHour: session.endHour,
+                modeSession: session.modeSession,
+                typeSession: session.typeSession,
+                status: newStatus,
+                libelle: session.libelle,
+                coursId: cours.id,
+                sessionSummary: session.sessionSummary
+            };
+
+            const updatedSession = await updateSession(sessionId, sessionData);
+            
+            // Mettre à jour la liste des sessions
+            setSessions(prev => prev.map(s => 
+                s.id === sessionId ? updatedSession : s
+            ));
+        } catch (err) {
+            console.error('Erreur lors de la mise à jour du statut:', err);
+            alert('Erreur lors de la mise à jour du statut de la session.');
+        } finally {
+            setActionLoading(null);
         }
     };
 
@@ -74,17 +152,51 @@ export default function CoursCard({ cours, onArchive, isArchiveView }: CoursCard
         return '#ef4444';
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const [isCreatingSession, setIsCreatingSession] = useState(false);
+
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        console.log('Nouvelle session (à implémenter):', { cours: cours.titre, ...newSession });
-        setShowModal(false);
-        setNewSession({
-            codeSession: '',
-            date: '',
-            heureDebut: '',
-            heureFin: '',
-            type: 'presentiel'
-        });
+        
+        if (!newSession.date || !newSession.startHour || !newSession.endHour) {
+            alert('Veuillez remplir tous les champs obligatoires.');
+            return;
+        }
+
+        try {
+            setIsCreatingSession(true);
+            
+            const sessionData = {
+                date: newSession.date,
+                startHour: newSession.startHour,
+                endHour: newSession.endHour,
+                modeSession: newSession.modeSession,
+                typeSession: newSession.typeSession,
+                libelle: newSession.libelle || `Session - ${cours.titre}`,
+                coursId: cours.id,
+                status: 'PROGRAMME' as const
+            };
+            
+            await createSession(sessionData);
+            
+            const { data } = await fetchSessions({ coursId: cours.id, size: 50 });
+            setSessions(data ?? []);
+            
+            setShowModal(false);
+            setNewSession({
+                date: '',
+                startHour: '',
+                endHour: '',
+                modeSession: 'PRESENTIEL',
+                typeSession: 'AUTRE',
+                libelle: ''
+            });
+            alert('Session créée avec succès!');
+        } catch (err) {
+            console.error('Erreur lors de la création de la session:', err);
+            alert('Impossible de créer la session. Veuillez réessayer.');
+        } finally {
+            setIsCreatingSession(false);
+        }
     };
 
     const progressColor = getProgressColor(cours.progression);
@@ -116,6 +228,66 @@ export default function CoursCard({ cours, onArchive, isArchiveView }: CoursCard
                 </div>
 
                 <div style={{ display: 'flex', gap: '6px' }}>
+                    {onEdit && (
+                        <button
+                            title="Modifier"
+                            onClick={() => onEdit(cours)}
+                            style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: '32px',
+                                height: '32px',
+                                borderRadius: '6px',
+                                border: 'none',
+                                background: '#E3F2FD',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease'
+                            }}
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.background = '#5B8DEF';
+                                e.currentTarget.querySelector('svg')!.style.color = 'white';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.background = '#E3F2FD';
+                                e.currentTarget.querySelector('svg')!.style.color = '#5B8DEF';
+                            }}
+                        >
+                            <Pencil size={16} color="#5B8DEF" strokeWidth={2.5} />
+                        </button>
+                    )}
+                    {onDelete && (
+                        <button
+                            title="Supprimer"
+                            onClick={() => {
+                                if (confirm('Êtes-vous sûr de vouloir supprimer ce cours ?')) {
+                                    onDelete(cours.id);
+                                }
+                            }}
+                            style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: '32px',
+                                height: '32px',
+                                borderRadius: '6px',
+                                border: 'none',
+                                background: '#FFEBEE',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease'
+                            }}
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.background = '#e53e3e';
+                                e.currentTarget.querySelector('svg')!.style.color = 'white';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.background = '#FFEBEE';
+                                e.currentTarget.querySelector('svg')!.style.color = '#e53e3e';
+                            }}
+                        >
+                            <Trash2 size={16} color="#e53e3e" strokeWidth={2.5} />
+                        </button>
+                    )}
                     <button
                         title="Voir les sessions"
                         onClick={() => setShowSessionsModal(true)}
@@ -238,15 +410,15 @@ export default function CoursCard({ cours, onArchive, isArchiveView }: CoursCard
             }}>
                 <div>
                     <div style={{ color: '#94a3b8' }}>Planifié</div>
-                    <div style={{ fontWeight: '600', color: '#1e293b' }}>{cours.heuresPlanifie} h</div>
+                    <div style={{ fontWeight: '600', color: '#1e293b' }}>{heuresPlanifie} h <span style={{fontSize: '10px', color: '#ccc'}}>({sessions.length} sessions)</span></div>
                 </div>
                 <div>
                     <div style={{ color: '#94a3b8' }}>Réalisé</div>
-                    <div style={{ fontWeight: '600', color: '#1e293b' }}>{cours.heuresFaites} h</div>
+                    <div style={{ fontWeight: '600', color: '#1e293b' }}>{heuresFaites} h</div>
                 </div>
                 <div>
                     <div style={{ color: '#94a3b8' }}>Restant</div>
-                    <div style={{ fontWeight: '600', color: cours.heuresRestantes === 0 ? '#10b981' : '#1e293b' }}>{cours.heuresRestantes} h</div>
+                    <div style={{ fontWeight: '600', color: heuresRestantes === 0 ? '#10b981' : '#1e293b' }}>{heuresRestantes} h</div>
                 </div>
             </div>
 
@@ -257,10 +429,10 @@ export default function CoursCard({ cours, onArchive, isArchiveView }: CoursCard
                         <ModalHeader title="Créer une session" onClose={() => setShowModal(false)} />
                         <form onSubmit={handleSubmit}>
                             <ModalInputRow
-                                label="Code session"
-                                value={newSession.codeSession}
-                                onChange={(value) => setNewSession({ ...newSession, codeSession: value })}
-                                placeholder="Ex: SES-001"
+                                label="Libellé"
+                                value={newSession.libelle}
+                                onChange={(value) => setNewSession({ ...newSession, libelle: value })}
+                                placeholder={`Session - ${cours.titre}`}
                             />
                             <ModalInputRow
                                 label="Date"
@@ -272,30 +444,45 @@ export default function CoursCard({ cours, onArchive, isArchiveView }: CoursCard
                                 <ModalInputRow
                                     label="Début"
                                     type="time"
-                                    value={newSession.heureDebut}
-                                    onChange={(value) => setNewSession({ ...newSession, heureDebut: value })}
+                                    value={newSession.startHour}
+                                    onChange={(value) => setNewSession({ ...newSession, startHour: value })}
                                 />
                                 <ModalInputRow
                                     label="Fin"
                                     type="time"
-                                    value={newSession.heureFin}
-                                    onChange={(value) => setNewSession({ ...newSession, heureFin: value })}
+                                    value={newSession.endHour}
+                                    onChange={(value) => setNewSession({ ...newSession, endHour: value })}
                                 />
                             </div>
                             <div style={{ marginBottom: '20px' }}>
                                 <label style={modalLabelStyle}>Mode</label>
                                 <select
-                                    value={newSession.type}
-                                    onChange={(e) => setNewSession({ ...newSession, type: e.target.value as SessionData['type'] })}
+                                    value={newSession.modeSession}
+                                    onChange={(e) => setNewSession({ ...newSession, modeSession: e.target.value as SessionMode })}
                                     style={modalSelectStyle}
                                 >
-                                    <option value="presentiel">Présentiel</option>
-                                    <option value="en_ligne">En ligne</option>
+                                    <option value="PRESENTIEL">Présentiel</option>
+                                    <option value="EN_LIGNE">En ligne</option>
+                                    <option value="HYBRIDE">Hybride</option>
+                                </select>
+                            </div>
+                            <div style={{ marginBottom: '20px' }}>
+                                <label style={modalLabelStyle}>Type</label>
+                                <select
+                                    value={newSession.typeSession}
+                                    onChange={(e) => setNewSession({ ...newSession, typeSession: e.target.value as SessionType })}
+                                    style={modalSelectStyle}
+                                >
+                                    <option value="AUTRE">Autre</option>
+                                    <option value="COURS">Cours</option>
+                                    <option value="EVALUATION">Évaluation</option>
                                 </select>
                             </div>
                             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
                                 <button type="button" onClick={() => setShowModal(false)} style={modalSecondaryButton}>Annuler</button>
-                                <button type="submit" style={modalPrimaryButton}>Enregistrer</button>
+                                <button type="submit" disabled={isCreatingSession} style={{...modalPrimaryButton, opacity: isCreatingSession ? 0.7 : 1}}>
+                                    {isCreatingSession ? 'Création...' : 'Créer la session'}
+                                </button>
                             </div>
                         </form>
                     </div>
@@ -336,12 +523,22 @@ export default function CoursCard({ cours, onArchive, isArchiveView }: CoursCard
                             )}
                             {!sessionsLoading && !sessionsError && filteredSessions.map(session => {
                                 const isTerminee = session.status === 'TERMINEE';
+                                const isAnnule = session.status === 'ANNULE';
+                                const isProgramme = session.status === 'PROGRAMME' || session.status === 'EN_COURS';
+                                
+                                // Convertir les minutes en heures pour l'affichage
+                                const displayDuration = session.duration ? Math.floor(session.duration / 60) : 0;
+                                const remainingMinutes = session.duration ? session.duration % 60 : 0;
+                                const durationText = displayDuration > 0 
+                                    ? `${displayDuration}h${remainingMinutes > 0 ? remainingMinutes + 'min' : ''}` 
+                                    : (remainingMinutes > 0 ? `${remainingMinutes}min` : '');
+                                
                                 return (
                                     <div key={session.id} style={{
                                         padding: '14px',
                                         border: '1px solid #e2e8f0',
                                         borderRadius: '10px',
-                                        background: isTerminee ? '#f0fdf4' : 'white'
+                                        background: isTerminee ? '#f0fdf4' : isAnnule ? '#fef2f2' : 'white'
                                     }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
                                             <div>
@@ -366,35 +563,142 @@ export default function CoursCard({ cours, onArchive, isArchiveView }: CoursCard
                                                     {session.modeSession === 'PRESENTIEL' ? 'Présentiel' : session.modeSession === 'EN_LIGNE' ? 'En ligne' : 'Hybride'}
                                                 </div>
                                             </div>
-                                            <button disabled style={{
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                width: '28px',
-                                                height: '28px',
-                                                borderRadius: '6px',
-                                                border: 'none',
-                                                background: '#FFEBEE'
-                                            }}>
-                                                <Trash2 size={14} color="#e53e3e" />
-                                            </button>
                                         </div>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', color: '#4a5568' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                 <Clock size={14} />
                                                 <span>{session.startHour} - {session.endHour}</span>
+                                                {session.duration && <span style={{ fontSize: '11px', color: '#9ca3af' }}>({durationText})</span>}
                                             </div>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                 <Calendar size={14} />
                                                 <span>{session.date}</span>
                                             </div>
                                         </div>
+                                        
+                                        {/* Afficher les étudiants s'ils sont disponibles */}
+                                        {session.students && session.students.length > 0 && (
+                                            <div style={{ marginTop: '10px', padding: '10px', background: '#f8fafc', borderRadius: '8px' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: '600', color: '#475569', marginBottom: '6px' }}>
+                                                    <Users size={14} />
+                                                    {session.students.length} étudiant(s) - Émargement
+                                                </div>
+                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                                                    {session.students.slice(0, 5).map(student => (
+                                                        <span key={student.id} style={{
+                                                            display: 'inline-flex',
+                                                            padding: '2px 6px',
+                                                            borderRadius: '4px',
+                                                            fontSize: '10px',
+                                                            background: '#e2e8f0',
+                                                            color: '#475569'
+                                                        }}>
+                                                            {student.prenom} {student.nom}
+                                                        </span>
+                                                    ))}
+                                                    {session.students.length > 5 && (
+                                                        <span style={{ fontSize: '10px', color: '#64748b' }}>
+                                                            +{session.students.length - 5} autres
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                        
+                                        {/* Boutons Terminer/Annuler */}
+                                        {isProgramme && (
+                                            <div style={{ display: 'flex', gap: '8px', marginTop: '12px', paddingTop: '10px', borderTop: '1px solid #e2e8f0' }}>
+                                                <button
+                                                    onClick={() => handleSessionStatusChange(session.id, 'TERMINEE')}
+                                                    disabled={actionLoading === session.id}
+                                                    style={{
+                                                        flex: 1,
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        gap: '6px',
+                                                        padding: '8px 12px',
+                                                        borderRadius: '6px',
+                                                        border: 'none',
+                                                        background: '#10b981',
+                                                        color: 'white',
+                                                        fontSize: '12px',
+                                                        fontWeight: '500',
+                                                        cursor: actionLoading === session.id ? 'not-allowed' : 'pointer',
+                                                        opacity: actionLoading === session.id ? 0.7 : 1
+                                                    }}
+                                                >
+                                                    <Check size={14} />
+                                                    {actionLoading === session.id ? '...' : 'Terminer'}
+                                                </button>
+                                                <button
+                                                    onClick={() => handleSessionStatusChange(session.id, 'ANNULE')}
+                                                    disabled={actionLoading === session.id}
+                                                    style={{
+                                                        flex: 1,
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        gap: '6px',
+                                                        padding: '8px 12px',
+                                                        borderRadius: '6px',
+                                                        border: 'none',
+                                                        background: '#f59e0b',
+                                                        color: 'white',
+                                                        fontSize: '12px',
+                                                        fontWeight: '500',
+                                                        cursor: actionLoading === session.id ? 'not-allowed' : 'pointer',
+                                                        opacity: actionLoading === session.id ? 0.7 : 1
+                                                    }}
+                                                >
+                                                    <X size={14} />
+                                                    {actionLoading === session.id ? '...' : 'Annuler'}
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        setSelectedSessionForEmargement(session);
+                                                        setShowEmargementPanel(true);
+                                                    }}
+                                                    style={{
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        gap: '6px',
+                                                        padding: '8px 12px',
+                                                        borderRadius: '6px',
+                                                        border: 'none',
+                                                        background: '#6366f1',
+                                                        color: 'white',
+                                                        fontSize: '12px',
+                                                        fontWeight: '500',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    <ClipboardList size={14} />
+                                                    Émargement
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             })}
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Panneau d'émargement - affiché conditionally */}
+            {showEmargementPanel && selectedSessionForEmargement && (
+                <EmargementPanel
+                    sessionId={selectedSessionForEmargement!.id}
+                    professorId={selectedSessionForEmargement!.professor?.id ?? ''}
+                    onClose={() => {
+                        setShowEmargementPanel(false);
+                        setSelectedSessionForEmargement(null);
+                    }}
+                    sessionDate={selectedSessionForEmargement!.date}
+                    sessionHeureDebut={selectedSessionForEmargement!.startHour}
+                />
             )}
         </div>
     );

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import ClassesTable from './ClassesTable';
 import NiveauxTable from './NiveauxTable';
 import FilieresTable from './FilieresTable';
@@ -15,9 +15,12 @@ import { useAuth } from '@/modules/auth/context/AuthContext';
 const toClasseData = (classe: ClasseResponseDto): ClasseData => ({
     id: classe.id,
     libelle: classe.libelle,
-    filiereId: classe.filiere?.libelle ?? 'Non défini',
-    niveauId: classe.niveau?.libelle ?? 'Non défini',
-    schoolId: classe.school?.nom ?? 'Non défini'
+    filiereId: classe.filiere?.id ?? '',
+    niveauId: classe.niveau?.id ?? '',
+    schoolId: classe.school?.id ?? '',
+    filiereLabel: classe.filiere?.libelle ?? 'Non défini',
+    niveauLabel: classe.niveau?.libelle ?? 'Non défini',
+    schoolLabel: classe.school?.nom ?? 'Non défini'
 });
 
 const toFiliereData = (filiere: FiliereResponseDto): FiliereData => ({
@@ -31,7 +34,8 @@ const toModuleData = (module: ModuleResponseDto): ModuleData => ({
     id: module.id,
     nom: module.libelle,
     code: module.libelle.slice(0, 3).toUpperCase(),
-    filiereId: module.filiere?.libelle ?? 'Indéfini',
+    filiereId: module.filiere?.id ?? '',
+    filiereLabel: module.filiere?.libelle ?? 'Indéfini',
     credits: module.cours?.length ?? 0,
     classeId: (module.cours ?? []).map(c => c.libelle).join(', ')
 });
@@ -39,7 +43,7 @@ const toModuleData = (module: ModuleResponseDto): ModuleData => ({
 export default function StructureAcademiqueContent() {
     const [activeTab, setActiveTab] = React.useState('classes');
     const { user } = useAuth();
-    const structure = useStructureData();
+    const structure = useStructureData(activeTab);
 
     const classes = useMemo<ClasseData[]>(() => structure.classes.map(toClasseData), [structure.classes]);
     const filieres = useMemo<FiliereData[]>(() => structure.filieres.map(toFiliereData), [structure.filieres]);
@@ -48,6 +52,61 @@ export default function StructureAcademiqueContent() {
     const salles = useMemo<SalleData[]>(() => structure.salles.map(s => ({ id: s.id, nom: s.libelle, capacite: s.capacity ?? 0 })), [structure.salles]);
 
     const defaultSchoolId = user?.schoolId ?? structure.classes[0]?.school?.id ?? null;
+
+    const handleClassesPageChange = useCallback(
+        (page: number) => structure.setQuery.classes(prev => ({ ...prev, page: page - 1 })),
+        [structure.setQuery.classes]
+    );
+    const handleClassesSearchChange = useCallback(
+        (q: string) => structure.setQuery.classes(prev => ({ ...prev, q, page: 0 })),
+        [structure.setQuery.classes]
+    );
+
+    const handleNiveauxPageChange = useCallback(
+        (page: number) => structure.setQuery.niveaux(prev => ({ ...prev, page: page - 1 })),
+        [structure.setQuery.niveaux]
+    );
+    const handleNiveauxSearchChange = useCallback(
+        (q: string) => structure.setQuery.niveaux(prev => ({ ...prev, q, page: 0 })),
+        [structure.setQuery.niveaux]
+    );
+
+    const handleFilieresPageChange = useCallback(
+        (page: number) => structure.setQuery.filieres(prev => ({ ...prev, page: page - 1 })),
+        [structure.setQuery.filieres]
+    );
+    const handleFilieresSearchChange = useCallback(
+        (q: string) => structure.setQuery.filieres(prev => ({ ...prev, q, page: 0 })),
+        [structure.setQuery.filieres]
+    );
+
+    const handleModulesPageChange = useCallback(
+        (page: number) => structure.setQuery.modules(prev => ({ ...prev, page: page - 1 })),
+        [structure.setQuery.modules]
+    );
+    const handleModulesSearchChange = useCallback(
+        (q: string) => structure.setQuery.modules(prev => ({ ...prev, q, page: 0 })),
+        [structure.setQuery.modules]
+    );
+    const handleModulesFiliereFilterChange = useCallback(
+        (filiereId: string) => {
+            structure.setQuery.modules(prev => ({
+                ...prev,
+                filiereId: filiereId || undefined,
+                page: 0
+            }));
+        },
+        [structure.setQuery.modules]
+    );
+
+    const handleSallesPageChange = useCallback(
+        (page: number) => structure.setQuery.salles(prev => ({ ...prev, page: page - 1 })),
+        [structure.setQuery.salles]
+    );
+    const handleSallesSearchChange = useCallback(
+        (q: string) => structure.setQuery.salles(prev => ({ ...prev, q, page: 0 })),
+        [structure.setQuery.salles]
+    );
 
     return (
         <>
@@ -122,6 +181,11 @@ export default function StructureAcademiqueContent() {
                             data={classes}
                             niveauxData={niveaux}
                             filiereOptions={structure.options.filieres}
+                            currentPage={(structure.query.classes.page ?? 0) + 1}
+                            totalPages={structure.meta.classes?.totalPages ?? 1}
+                            searchTerm={structure.query.classes.q ?? ''}
+                            onPageChange={handleClassesPageChange}
+                            onSearchChange={handleClassesSearchChange}
                             defaultSchoolId={defaultSchoolId}
                             onCreate={structure.actions.createClasse}
                             onUpdate={structure.actions.updateClasse}
@@ -131,6 +195,11 @@ export default function StructureAcademiqueContent() {
                     {activeTab === 'niveaux' && (
                         <NiveauxTable
                             data={niveaux}
+                            currentPage={(structure.query.niveaux.page ?? 0) + 1}
+                            totalPages={structure.meta.niveaux?.totalPages ?? 1}
+                            searchTerm={structure.query.niveaux.q ?? ''}
+                            onPageChange={handleNiveauxPageChange}
+                            onSearchChange={handleNiveauxSearchChange}
                             onCreate={structure.actions.createNiveau}
                             onUpdate={structure.actions.updateNiveau}
                             onDelete={structure.actions.deleteNiveau}
@@ -139,6 +208,11 @@ export default function StructureAcademiqueContent() {
                     {activeTab === 'filieres' && (
                         <FilieresTable
                             data={filieres}
+                            currentPage={(structure.query.filieres.page ?? 0) + 1}
+                            totalPages={structure.meta.filieres?.totalPages ?? 1}
+                            searchTerm={structure.query.filieres.q ?? ''}
+                            onPageChange={handleFilieresPageChange}
+                            onSearchChange={handleFilieresSearchChange}
                             onCreate={structure.actions.createFiliere}
                             onUpdate={structure.actions.updateFiliere}
                             onDelete={structure.actions.deleteFiliere}
@@ -148,6 +222,13 @@ export default function StructureAcademiqueContent() {
                         <ModulesTable
                             data={modules}
                             filiereOptions={structure.options.filieres}
+                            currentPage={(structure.query.modules.page ?? 0) + 1}
+                            totalPages={structure.meta.modules?.totalPages ?? 1}
+                            searchTerm={structure.query.modules.q ?? ''}
+                            selectedFiliereId={structure.query.modules.filiereId ?? ''}
+                            onPageChange={handleModulesPageChange}
+                            onSearchChange={handleModulesSearchChange}
+                            onFiliereFilterChange={handleModulesFiliereFilterChange}
                             onCreate={structure.actions.createModule}
                             onUpdate={structure.actions.updateModule}
                             onDelete={structure.actions.deleteModule}
@@ -156,6 +237,11 @@ export default function StructureAcademiqueContent() {
                     {activeTab === 'salles' && (
                         <SallesTable
                             data={salles}
+                            currentPage={(structure.query.salles.page ?? 0) + 1}
+                            totalPages={structure.meta.salles?.totalPages ?? 1}
+                            searchTerm={structure.query.salles.q ?? ''}
+                            onPageChange={handleSallesPageChange}
+                            onSearchChange={handleSallesSearchChange}
                             onCreate={structure.actions.createSalle}
                             onUpdate={structure.actions.updateSalle}
                             onDelete={structure.actions.deleteSalle}

@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { Eye, Plus, X , Pencil, Trash2} from 'lucide-react';
+import Swal from 'sweetalert2';
 import SearchInput from '@/shared/components/SearchInput';
 import FilterButton from '@/shared/components/FilterButton';
 import Pagination from '@/shared/components/Pagination';
@@ -11,25 +12,33 @@ import { SallePayload } from '../services/structureService';
 
 interface SallesTableProps {
     data: SalleData[];
-    onCreate: (payload: SallePayload) => Promise<void>;
-    onUpdate: (id: string, payload: SallePayload) => Promise<void>;
-    onDelete: (id: string) => Promise<void>;
+    currentPage: number;
+    totalPages: number;
+    searchTerm: string;
+    onPageChange: (page: number) => void;
+    onSearchChange: (value: string) => void;
+    onCreate: (payload: SallePayload) => Promise<unknown>;
+    onUpdate: (id: string, payload: SallePayload) => Promise<unknown>;
+    onDelete: (id: string) => Promise<unknown>;
 }
 
-export default function SallesTable({ data, onCreate, onUpdate, onDelete }: SallesTableProps) {
-    const [currentPage, setCurrentPage] = useState(1);
-    const [searchTerm, setSearchTerm] = useState('');
+export default function SallesTable({
+    data,
+    currentPage,
+    totalPages,
+    searchTerm,
+    onPageChange,
+    onSearchChange,
+    onCreate,
+    onUpdate,
+    onDelete
+}: SallesTableProps) {
     const [showModal, setShowModal] = useState(false);
     const [newSalle, setNewSalle] = useState({ nom: '', capacite: 0 });
     const [formError, setFormError] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
-    const itemsPerPage = 3;
-
-    // Filter data based on search term
-    const filteredData = data.filter(item =>
-        item.nom.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const startIndex = (currentPage - 1) * 10;
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -71,7 +80,18 @@ export default function SallesTable({ data, onCreate, onUpdate, onDelete }: Sall
     };
 
     const handleDelete = async (salle: SalleData) => {
-        if (!window.confirm(`Supprimer la salle ${salle.nom} ?`)) return;
+        const result = await Swal.fire({
+            title: 'Êtes-vous sûr ?',
+            text: `Voulez-vous vraiment supprimer la salle "${salle.nom}" ?`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Oui, supprimer',
+            cancelButtonText: 'Annuler',
+        });
+
+        if (!result.isConfirmed) return;
         try {
             await onDelete(salle.id);
         } catch (err) {
@@ -79,11 +99,6 @@ export default function SallesTable({ data, onCreate, onUpdate, onDelete }: Sall
             alert(message);
         }
     };
-
-    // Paginate data
-    const totalPages = Math.ceil(filteredData.length / itemsPerPage);
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const paginatedData = filteredData.slice(startIndex, startIndex + itemsPerPage);
 
     return (
         <>
@@ -99,7 +114,7 @@ export default function SallesTable({ data, onCreate, onUpdate, onDelete }: Sall
             }}>
                 <SearchInput
                     value={searchTerm}
-                    onChange={setSearchTerm}
+                    onChange={onSearchChange}
                     placeholder="Rechercher une salle..."
                 />
                 <div style={{ display: 'flex', gap: '12px' }}>
@@ -191,7 +206,7 @@ export default function SallesTable({ data, onCreate, onUpdate, onDelete }: Sall
                         </tr>
                     </thead>
                     <tbody>
-                        {paginatedData.map((salle, index) => (
+                        {data.map((salle, index) => (
                             <tr key={salle.id} style={{
                                 background: index % 2 === 0 ? 'white' : '#fafbfc',
                                 transition: 'all 0.2s ease'
@@ -235,9 +250,9 @@ export default function SallesTable({ data, onCreate, onUpdate, onDelete }: Sall
                                     borderBottom: '1px solid #f1f5f9'
                                 }}>
                                 <div style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}>
-                                    <button style={iconButtonStyle}>
+                                    {/* <button style={iconButtonStyle}>
                                         <Eye size={18} color="#5B8DEF" strokeWidth={2.5} />
-                                    </button>
+                                    </button> */}
                                     <button style={iconButtonStyle} onClick={() => openEdit(salle)}>
                                         <Pencil size={18} color="#5B8DEF" strokeWidth={2.5} />
                                     </button>
@@ -255,8 +270,8 @@ export default function SallesTable({ data, onCreate, onUpdate, onDelete }: Sall
             {/* Pagination */}
             <Pagination
                 currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={setCurrentPage}
+                totalPages={Math.max(totalPages, 1)}
+                onPageChange={onPageChange}
             />
 
             {/* Modal for adding new salle */}

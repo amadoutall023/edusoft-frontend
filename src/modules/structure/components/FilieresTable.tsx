@@ -1,76 +1,90 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { Eye, Plus, X, Pencil, Trash2 } from 'lucide-react';
+import Swal from 'sweetalert2';
 import SearchInput from '@/shared/components/SearchInput';
-import FilterButton from '@/shared/components/FilterButton';
 import Pagination from '@/shared/components/Pagination';
 import { FiliereData } from '../types';
 import { ApiError } from '@/shared/errors/ApiError';
 
 interface FilieresTableProps {
     data: FiliereData[];
-    onCreate: (libelle: string) => Promise<void>;
-    onUpdate: (id: string, libelle: string) => Promise<void>;
-    onDelete: (id: string) => Promise<void>;
+    currentPage: number;
+    totalPages: number;
+    searchTerm: string;
+    onPageChange: (page: number) => void;
+    onSearchChange: (value: string) => void;
+    onCreate: (libelle: string) => Promise<unknown>;
+    onUpdate: (id: string, libelle: string) => Promise<unknown>;
+    onDelete: (id: string) => Promise<unknown>;
 }
 
-export default function FilieresTable({ data, onCreate, onUpdate, onDelete }: FilieresTableProps) {
-    const [currentPage, setCurrentPage] = useState(1);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [showFilters, setShowFilters] = useState(false);
-    const [filters, setFilters] = useState({ code: '' });
+export default function FilieresTable({
+    data,
+    currentPage,
+    totalPages,
+    searchTerm,
+    onPageChange,
+    onSearchChange,
+    onCreate,
+    onUpdate,
+    onDelete
+}: FilieresTableProps) {
     const [showModal, setShowModal] = useState(false);
     const [formError, setFormError] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
-    const [newFiliere, setNewFiliere] = useState({ nom: '', code: '', description: '' });
-    const itemsPerPage = 3;
+    const [newFiliere, setNewFiliere] = useState({ nom: '', description: '' });
 
-    const uniqueCodes = useMemo(
-        () => [...new Set(data.map(item => item.code).filter(Boolean))].sort(),
-        [data]
-    );
-
-    const filteredData = data.filter(item => {
-        const matchSearch =
-            item.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (item.description ?? '').toLowerCase().includes(searchTerm.toLowerCase());
-        const matchCode = !filters.code || item.code === filters.code;
-        return matchSearch && matchCode;
-    });
-
-    React.useEffect(() => {
-        setCurrentPage(1);
-    }, [searchTerm, filters]);
-
-    const totalPages = Math.ceil(filteredData.length / itemsPerPage);
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const paginatedData = filteredData.slice(startIndex, startIndex + itemsPerPage);
+    const filteredData = data;
+    const startIndex = (currentPage - 1) * 10;
 
     const openCreate = () => {
         setEditingId(null);
         setFormError(null);
-        setNewFiliere({ nom: '', code: '', description: '' });
+        setNewFiliere({ nom: '', description: '' });
         setShowModal(true);
     };
 
     const openEdit = (filiere: FiliereData) => {
         setEditingId(filiere.id);
         setFormError(null);
-        setNewFiliere({ nom: filiere.nom, code: filiere.code, description: filiere.description ?? '' });
+        setNewFiliere({ nom: filiere.nom, description: filiere.description ?? '' });
         setShowModal(true);
     };
 
     const handleDelete = async (filiere: FiliereData) => {
-        if (!window.confirm(`Supprimer la filière ${filiere.nom} ?`)) {
-            return;
-        }
+        const result = await Swal.fire({
+            title: 'Êtes-vous sûr ?',
+            text: `Voulez-vous vraiment supprimer la filière "${filiere.nom}" ?`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc2626',
+            cancelButtonColor: '#64748b',
+            confirmButtonText: 'Oui, supprimer',
+            cancelButtonText: 'Annuler',
+            reverseButtons: true
+        });
+
+        if (!result.isConfirmed) return;
+
         try {
             await onDelete(filiere.id);
+            Swal.fire({
+                title: 'Supprimé !',
+                text: 'La filière a été supprimée avec succès.',
+                icon: 'success',
+                timer: 2000,
+                showConfirmButton: false
+            });
         } catch (err) {
             const message = err instanceof ApiError ? err.message : 'Suppression impossible';
-            alert(message);
+            Swal.fire({
+                title: 'Erreur',
+                text: message,
+                icon: 'error'
+            });
         }
     };
 
@@ -86,7 +100,7 @@ export default function FilieresTable({ data, onCreate, onUpdate, onDelete }: Fi
             }
             setShowModal(false);
             setEditingId(null);
-            setNewFiliere({ nom: '', code: '', description: '' });
+            setNewFiliere({ nom: '', description: '' });
         } catch (err) {
             if (err instanceof ApiError) {
                 setFormError(err.message);
@@ -97,8 +111,6 @@ export default function FilieresTable({ data, onCreate, onUpdate, onDelete }: Fi
             setIsSubmitting(false);
         }
     };
-
-    const hasActiveFilters = !!filters.code;
 
     return (
         <>
@@ -113,11 +125,10 @@ export default function FilieresTable({ data, onCreate, onUpdate, onDelete }: Fi
             }}>
                 <SearchInput
                     value={searchTerm}
-                    onChange={setSearchTerm}
+                    onChange={onSearchChange}
                     placeholder="Rechercher une filière..."
                 />
                 <div style={{ display: 'flex', gap: '12px' }}>
-                    <FilterButton label="Filtrer" onClick={() => setShowFilters(!showFilters)} />
                     <button
                         onClick={openCreate}
                         style={{
@@ -142,47 +153,6 @@ export default function FilieresTable({ data, onCreate, onUpdate, onDelete }: Fi
                 </div>
             </div>
 
-            {showFilters && (
-                <div style={{
-                    padding: '20px 40px',
-                    background: '#f0f7ff',
-                    borderBottom: '1px solid #e2e8f0',
-                    display: 'flex',
-                    gap: '20px',
-                    flexWrap: 'wrap'
-                }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <label style={{ fontSize: '12px', fontWeight: '600', color: '#4a5568' }}>Code</label>
-                        <select
-                            value={filters.code}
-                            onChange={(e) => setFilters({ code: e.target.value })}
-                            style={{
-                                padding: '10px 14px',
-                                borderRadius: '8px',
-                                border: '1.5px solid #e5e7eb',
-                                background: 'white'
-                            }}
-                        >
-                            <option value="">Tous les codes</option>
-                            {uniqueCodes.map(code => (
-                                <option key={code} value={code}>{code}</option>
-                            ))}
-                        </select>
-                    </div>
-                    {hasActiveFilters && (
-                        <button onClick={() => setFilters({ code: '' })} style={{
-                            border: 'none',
-                            background: 'transparent',
-                            color: '#5B8DEF',
-                            fontWeight: 600,
-                            cursor: 'pointer'
-                        }}>
-                            Réinitialiser
-                        </button>
-                    )}
-                </div>
-            )}
-
             <div className="table-container" style={{ overflowX: 'auto', padding: '0 40px' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '700px' }}>
                     <thead>
@@ -195,7 +165,7 @@ export default function FilieresTable({ data, onCreate, onUpdate, onDelete }: Fi
                         </tr>
                     </thead>
                     <tbody>
-                        {paginatedData.map((filiere, index) => (
+                        {filteredData.map((filiere, index) => (
                             <tr key={filiere.id} style={{ background: index % 2 === 0 ? 'white' : '#fafbfc' }}>
                                 <td style={{ padding: '16px', textAlign: 'center' }}>{startIndex + index + 1}</td>
                                 <td style={{ padding: '16px', textAlign: 'center' }}>{filiere.nom}</td>
@@ -203,9 +173,9 @@ export default function FilieresTable({ data, onCreate, onUpdate, onDelete }: Fi
                                 <td style={{ padding: '16px', textAlign: 'center' }}>{filiere.description ?? 'Non renseigné'}</td>
                                 <td style={{ padding: '16px', textAlign: 'center' }}>
                                     <div style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}>
-                                        <button style={iconButtonStyle}>
+                                        {/* <button style={iconButtonStyle}>
                                             <Eye size={18} color="#5B8DEF" strokeWidth={2.5} />
-                                        </button>
+                                        </button> */}
                                         <button style={iconButtonStyle} onClick={() => openEdit(filiere)}>
                                             <Pencil size={18} color="#5B8DEF" strokeWidth={2.5} />
                                         </button>
@@ -220,7 +190,7 @@ export default function FilieresTable({ data, onCreate, onUpdate, onDelete }: Fi
                 </table>
             </div>
 
-            <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
+            <Pagination currentPage={currentPage} totalPages={Math.max(totalPages, 1)} onPageChange={onPageChange} />
 
             {showModal && (
                 <div className="modal-overlay" style={{
@@ -248,15 +218,6 @@ export default function FilieresTable({ data, onCreate, onUpdate, onDelete }: Fi
                                     value={newFiliere.nom}
                                     onChange={(e) => setNewFiliere(prev => ({ ...prev, nom: e.target.value }))}
                                     required
-                                    style={inputStyle}
-                                />
-                            </div>
-                            <div style={{ marginBottom: '20px' }}>
-                                <label style={labelStyle}>Code</label>
-                                <input
-                                    type="text"
-                                    value={newFiliere.code}
-                                    onChange={(e) => setNewFiliere(prev => ({ ...prev, code: e.target.value }))}
                                     style={inputStyle}
                                 />
                             </div>

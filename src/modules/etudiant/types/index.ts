@@ -6,7 +6,7 @@ export interface Etudiant {
     email?: string | null;
     phone?: string | null;
     dateOfBirth?: string | null;
-    lieuNaissance?: string | null;
+    lieuNaissace?: string | null;
     nationalite?: string | null;
     address?: string | null;
     gender?: string | null;
@@ -14,11 +14,50 @@ export interface Etudiant {
     classeInfo?: ClasseInfo | null;
     anneeInscription?: number | null;
     qrToken?: string | null;
+    qrCodeImage?: string | null; 
+    createdAt?: string | null;
+    updatedAt?: string | null;
 }
 
 export interface ClasseInfo {
     id?: string | null;
     libelle?: string | null;
-    filiere?: string | null;
-    niveau?: string | null;
+    filiere?: FiliereInfo | null;
+    niveau?: NiveauInfo | null;
+}
+
+export interface FiliereInfo {
+    id: string;
+    libelle: string;
+}
+
+export interface NiveauInfo {
+    id: string;
+    libelle: string;
+}
+
+
+export interface EtudiantFormData {
+    username: string;
+    email: string;
+    password: string;
+    firstName: string;
+    lastName: string;
+    dateOfBirth: string;
+    lieuNaissace?: string;
+    nationalite?: string;
+    address?: string;
+    phone?: string;
+    gender?: string;
+    classeId?: string;
+    typeInscription?: string;
+    observations?: string;
+}
+
+// Pour les filtres
+export interface EtudiantFilters {
+    classe?: string;
+    anneeInscription?: number;
+    gender?: string;
+    search?: string;
 }

@@ -4,6 +4,9 @@ export interface ClasseData {
     filiereId: string;
     niveauId: string;
     schoolId: string;
+    filiereLabel?: string;
+    niveauLabel?: string;
+    schoolLabel?: string;
 }
 
 export interface NiveauData {
@@ -24,6 +27,7 @@ export interface ModuleData {
     code: string;
     credits?: number;
     filiereId: string;
+    filiereLabel?: string;
     classeId?: string;
 }
 

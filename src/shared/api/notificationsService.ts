@@ -2,7 +2,7 @@ import { ApiResponse, CoursResponseDto, SessionResponseDto, StudentResponseDto }
 import { httpClient } from '@/shared/api/httpClient';
 import { Notification } from '@/modules/auth/types';
 
-const STUDENTS_ENDPOINT = '/api/v1/students/my-school';
+const STUDENTS_ENDPOINT = '/api/v1/students/list';
 const COURSES_ENDPOINT = '/api/v1/cours?page=0&size=200';
 const SESSIONS_ENDPOINT = '/api/v1/sessions?page=0&size=200';
 

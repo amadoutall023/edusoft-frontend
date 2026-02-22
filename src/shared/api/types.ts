@@ -8,6 +8,8 @@ export interface Metadata {
 }
 
 export interface ApiResponse<T> {
+    success?: boolean;
+    message?: string;
     data: T;
     meta?: Metadata | null;
 }
@@ -102,6 +104,7 @@ export interface StudentResponseDto {
     classe?: ClasseInfoDto | null;
     anneeInscription?: number | null;
     qrToken?: string | null;
+    qrCodeImage?: string | null;  // QR code image en base64
     createdAt?: string | null;
     updatedAt?: string | null;
 }
@@ -219,7 +222,7 @@ export interface ProfessorModuleDto {
 
 export type SessionMode = 'PRESENTIEL' | 'EN_LIGNE' | 'HYBRIDE';
 export type SessionType = 'COURS' | 'EVALUATION' | 'AUTRE';
-export type SessionStatus = 'PROGRAMME' | 'EN_COURS' | 'TERMINEE';
+export type SessionStatus = 'PROGRAMME' | 'EN_COURS' | 'TERMINEE' | 'ANNULE';
 export interface SessionRequestDto {
     date: string;
     startHour: string;
