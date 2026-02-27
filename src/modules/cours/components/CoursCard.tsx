@@ -2,10 +2,10 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { User, Play, Archive, Pencil, Trash2, X, Eye, Clock, Calendar, Search, Check, Users, ClipboardList } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { Cours } from '../types';
 import { fetchSessions, createSession, updateSession } from '@/modules/planning/services/sessionService';
 import { SessionResponseDto, SessionMode, SessionType, SessionStatus } from '@/shared/api/types';
-import EmargementPanel from './EmargementPanel';
 
 interface SessionFormData {
     date: string;
@@ -18,13 +18,16 @@ interface SessionFormData {
 
 interface CoursCardProps {
     cours: Cours;
+    showActions?: boolean;
+    showCreateSession?: boolean;
     onArchive?: (id: string) => void;
     onEdit?: (cours: Cours) => void;
     onDelete?: (id: string) => void;
     isArchiveView?: boolean;
 }
 
-export default function CoursCard({ cours, onArchive, onEdit, onDelete, isArchiveView }: CoursCardProps) {
+export default function CoursCard({ cours, showActions = true, showCreateSession, onArchive, onEdit, onDelete, isArchiveView }: CoursCardProps) {
+    const router = useRouter();
     const [showModal, setShowModal] = useState(false);
     const [showSessionsModal, setShowSessionsModal] = useState(false);
     const [sessionSearchTerm, setSessionSearchTerm] = useState('');
@@ -40,15 +43,13 @@ export default function CoursCard({ cours, onArchive, onEdit, onDelete, isArchiv
     const [sessionsLoading, setSessionsLoading] = useState(false);
     const [sessionsError, setSessionsError] = useState<string | null>(null);
 
-    
-    const [showEmargementPanel, setShowEmargementPanel] = useState(false);
-    const [selectedSessionForEmargement, setSelectedSessionForEmargement] = useState<SessionResponseDto | null>(null);
 
     useEffect(() => {
         const load = async () => {
             try {
                 setSessionsLoading(true);
                 const { data } = await fetchSessions({ coursId: cours.id, size: 50 });
+                console.log('Sessions loaded:', JSON.stringify(data, null, 2));
                 setSessions(data ?? []);
                 setSessionsError(null);
             } catch (err) {
@@ -108,17 +109,17 @@ export default function CoursCard({ cours, onArchive, onEdit, onDelete, isArchiv
         }
     };
 
- 
+
     const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-   
+
     const handleSessionStatusChange = async (sessionId: string, newStatus: SessionStatus) => {
         try {
             setActionLoading(sessionId);
             const session = sessions.find(s => s.id === sessionId);
             if (!session) return;
 
-         
+
             const sessionData = {
                 date: session.date,
                 startHour: session.startHour,
@@ -128,13 +129,15 @@ export default function CoursCard({ cours, onArchive, onEdit, onDelete, isArchiv
                 status: newStatus,
                 libelle: session.libelle,
                 coursId: cours.id,
+                professorId: cours.professorId || null,
+                moduleId: cours.moduleId || null,
                 sessionSummary: session.sessionSummary
             };
 
             const updatedSession = await updateSession(sessionId, sessionData);
-            
+
             // Mettre à jour la liste des sessions
-            setSessions(prev => prev.map(s => 
+            setSessions(prev => prev.map(s =>
                 s.id === sessionId ? updatedSession : s
             ));
         } catch (err) {
@@ -156,7 +159,7 @@ export default function CoursCard({ cours, onArchive, onEdit, onDelete, isArchiv
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        
+
         if (!newSession.date || !newSession.startHour || !newSession.endHour) {
             alert('Veuillez remplir tous les champs obligatoires.');
             return;
@@ -164,7 +167,7 @@ export default function CoursCard({ cours, onArchive, onEdit, onDelete, isArchiv
 
         try {
             setIsCreatingSession(true);
-            
+
             const sessionData = {
                 date: newSession.date,
                 startHour: newSession.startHour,
@@ -173,14 +176,18 @@ export default function CoursCard({ cours, onArchive, onEdit, onDelete, isArchiv
                 typeSession: newSession.typeSession,
                 libelle: newSession.libelle || `Session - ${cours.titre}`,
                 coursId: cours.id,
+                professorId: cours.professorId || null,
+                moduleId: cours.moduleId || null,
                 status: 'PROGRAMME' as const
             };
-            
+
+            console.log('Creating session with professorId:', cours.professorId, 'from course:', cours);
+
             await createSession(sessionData);
-            
+
             const { data } = await fetchSessions({ coursId: cours.id, size: 50 });
             setSessions(data ?? []);
-            
+
             setShowModal(false);
             setNewSession({
                 date: '',
@@ -202,38 +209,146 @@ export default function CoursCard({ cours, onArchive, onEdit, onDelete, isArchiv
     const progressColor = getProgressColor(cours.progression);
 
     return (
-        <div style={{
-            background: 'white',
-            borderRadius: '10px',
-            padding: '14px',
-            boxShadow: '0 2px 6px rgba(0,0,0,0.06)',
-            border: '1px solid #f1f5f9',
-            transition: 'all 0.2s ease'
-        }}>
+        <>
+            <style>{`
+                @media (max-width: 768px) {
+                    .session-modal {
+                        max-width: 100% !important;
+                        margin: 10px !important;
+                    }
+                    .session-card {
+                        padding: 10px !important;
+                    }
+                    .session-time {
+                        flex-direction: column !important;
+                        align-items: flex-start !important;
+                        gap: 4px !important;
+                    }
+                    .session-actions {
+                        flex-direction: column !important;
+                    }
+                    .session-actions button {
+                        width: 100% !important;
+                    }
+                }
+            `}</style>
             <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'flex-start',
-                marginBottom: '10px'
+                background: 'white',
+                borderRadius: '10px',
+                padding: '14px',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.06)',
+                border: '1px solid #f1f5f9',
+                transition: 'all 0.2s ease'
             }}>
-                <div style={{ flex: 1 }}>
-                    <h3 style={{
-                        fontSize: '14px',
-                        fontWeight: '600',
-                        color: '#1a202c',
-                        marginBottom: '4px',
-                        lineHeight: '1.3'
-                    }}>{cours.titre}</h3>
-                    <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '500' }}>{cours.niveau}</div>
-                </div>
+                <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'flex-start',
+                    marginBottom: '10px'
+                }}>
+                    <div style={{ flex: 1 }}>
+                        <h3 style={{
+                            fontSize: '14px',
+                            fontWeight: '600',
+                            color: '#1a202c',
+                            marginBottom: '4px',
+                            lineHeight: '1.3'
+                        }}>{cours.titre}</h3>
+                        <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '500' }}>{cours.niveau}</div>
+                    </div>
 
-                <div style={{ display: 'flex', gap: '6px' }}>
-                    {onEdit && (
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                        {showActions && onEdit && (
+                            <button
+                                title="Modifier"
+                                onClick={() => onEdit(cours)}
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    width: '32px',
+                                    height: '32px',
+                                    borderRadius: '6px',
+                                    border: 'none',
+                                    background: '#E3F2FD',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s ease'
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.background = '#5B8DEF';
+                                    e.currentTarget.querySelector('svg')!.style.color = 'white';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.background = '#E3F2FD';
+                                    e.currentTarget.querySelector('svg')!.style.color = '#5B8DEF';
+                                }}
+                            >
+                                <Pencil size={16} color="#5B8DEF" strokeWidth={2.5} />
+                            </button>
+                        )}
+                        {showActions && onDelete && (
+                            <button
+                                title="Supprimer"
+                                onClick={() => {
+                                    if (confirm('Êtes-vous sûr de vouloir supprimer ce cours ?')) {
+                                        onDelete(cours.id);
+                                    }
+                                }}
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    width: '32px',
+                                    height: '32px',
+                                    borderRadius: '6px',
+                                    border: 'none',
+                                    background: '#FFEBEE',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s ease'
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.background = '#e53e3e';
+                                    e.currentTarget.querySelector('svg')!.style.color = 'white';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.background = '#FFEBEE';
+                                    e.currentTarget.querySelector('svg')!.style.color = '#e53e3e';
+                                }}
+                            >
+                                <Trash2 size={16} color="#e53e3e" strokeWidth={2.5} />
+                            </button>
+                        )}
                         <button
-                            title="Modifier"
-                            onClick={() => onEdit(cours)}
+                            title="Voir les sessions"
+                            onClick={() => setShowSessionsModal(true)}
                             style={{
                                 display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: '32px',
+                                height: '32px',
+                                borderRadius: '6px',
+                                border: 'none',
+                                background: '#E8F5E9',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease'
+                            }}
+                            onMouseEnter={(e: any) => {
+                                e.currentTarget.style.background = '#4CAF50';
+                                e.currentTarget.querySelector('svg').style.color = 'white';
+                            }}
+                            onMouseLeave={(e: any) => {
+                                e.currentTarget.style.background = '#E8F5E9';
+                                e.currentTarget.querySelector('svg').style.color = '#4CAF50';
+                            }}
+                        >
+                            <Eye size={16} color="#4CAF50" strokeWidth={2.5} />
+                        </button>
+                        <button
+                            title="Créer session du cours"
+                            onClick={() => setShowModal(true)}
+                            style={{
+                                display: (showActions || showCreateSession) ? 'inline-flex' : 'none',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 width: '32px',
@@ -244,420 +359,339 @@ export default function CoursCard({ cours, onArchive, onEdit, onDelete, isArchiv
                                 cursor: 'pointer',
                                 transition: 'all 0.2s ease'
                             }}
-                            onMouseEnter={(e) => {
+                            onMouseEnter={(e: any) => {
                                 e.currentTarget.style.background = '#5B8DEF';
-                                e.currentTarget.querySelector('svg')!.style.color = 'white';
+                                e.currentTarget.querySelector('svg').style.color = 'white';
                             }}
-                            onMouseLeave={(e) => {
+                            onMouseLeave={(e: any) => {
                                 e.currentTarget.style.background = '#E3F2FD';
-                                e.currentTarget.querySelector('svg')!.style.color = '#5B8DEF';
+                                e.currentTarget.querySelector('svg').style.color = '#5B8DEF';
                             }}
                         >
-                            <Pencil size={16} color="#5B8DEF" strokeWidth={2.5} />
+                            <Play size={16} color="#5B8DEF" strokeWidth={2.5} />
                         </button>
-                    )}
-                    {onDelete && (
-                        <button
-                            title="Supprimer"
-                            onClick={() => {
-                                if (confirm('Êtes-vous sûr de vouloir supprimer ce cours ?')) {
-                                    onDelete(cours.id);
-                                }
-                            }}
-                            style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                width: '32px',
-                                height: '32px',
-                                borderRadius: '6px',
-                                border: 'none',
-                                background: '#FFEBEE',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s ease'
-                            }}
-                            onMouseEnter={(e) => {
-                                e.currentTarget.style.background = '#e53e3e';
-                                e.currentTarget.querySelector('svg')!.style.color = 'white';
-                            }}
-                            onMouseLeave={(e) => {
-                                e.currentTarget.style.background = '#FFEBEE';
-                                e.currentTarget.querySelector('svg')!.style.color = '#e53e3e';
-                            }}
-                        >
-                            <Trash2 size={16} color="#e53e3e" strokeWidth={2.5} />
-                        </button>
-                    )}
-                    <button
-                        title="Voir les sessions"
-                        onClick={() => setShowSessionsModal(true)}
-                        style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '6px',
-                            border: 'none',
-                            background: '#E8F5E9',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s ease'
-                        }}
-                        onMouseEnter={(e: any) => {
-                            e.currentTarget.style.background = '#4CAF50';
-                            e.currentTarget.querySelector('svg').style.color = 'white';
-                        }}
-                        onMouseLeave={(e: any) => {
-                            e.currentTarget.style.background = '#E8F5E9';
-                            e.currentTarget.querySelector('svg').style.color = '#4CAF50';
-                        }}
-                    >
-                        <Eye size={16} color="#4CAF50" strokeWidth={2.5} />
-                    </button>
-                    <button
-                        title="Créer session du cours"
-                        onClick={() => setShowModal(true)}
-                        style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '6px',
-                            border: 'none',
-                            background: '#E3F2FD',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s ease'
-                        }}
-                        onMouseEnter={(e: any) => {
-                            e.currentTarget.style.background = '#5B8DEF';
-                            e.currentTarget.querySelector('svg').style.color = 'white';
-                        }}
-                        onMouseLeave={(e: any) => {
-                            e.currentTarget.style.background = '#E3F2FD';
-                            e.currentTarget.querySelector('svg').style.color = '#5B8DEF';
-                        }}
-                    >
-                        <Play size={16} color="#5B8DEF" strokeWidth={2.5} />
-                    </button>
-                    <button
-                        title={isArchiveView ? 'Désarchiver' : 'Archiver'}
-                        onClick={handleArchive}
-                        style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '6px',
-                            border: 'none',
-                            background: isArchiveView ? '#E8F5E9' : '#FFF3E0',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s ease'
-                        }}
-                        onMouseEnter={(e: any) => {
-                            e.currentTarget.style.background = isArchiveView ? '#4CAF50' : '#FF9800';
-                            e.currentTarget.querySelector('svg').style.color = 'white';
-                        }}
-                        onMouseLeave={(e: any) => {
-                            e.currentTarget.style.background = isArchiveView ? '#E8F5E9' : '#FFF3E0';
-                            e.currentTarget.querySelector('svg').style.color = isArchiveView ? '#4CAF50' : '#FF9800';
-                        }}
-                    >
-                        {isArchiveView ? (
-                            <Check size={16} color="#4CAF50" strokeWidth={2.5} />
-                        ) : (
-                            <Archive size={16} color="#FF9800" strokeWidth={2.5} />
+                        {showActions && onArchive && (
+                            <button
+                                title={isArchiveView ? 'Désarchiver' : 'Archiver'}
+                                onClick={handleArchive}
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    width: '32px',
+                                    height: '32px',
+                                    borderRadius: '6px',
+                                    border: 'none',
+                                    background: isArchiveView ? '#E8F5E9' : '#FFF3E0',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s ease'
+                                }}
+                                onMouseEnter={(e: any) => {
+                                    e.currentTarget.style.background = isArchiveView ? '#4CAF50' : '#FF9800';
+                                    e.currentTarget.querySelector('svg').style.color = 'white';
+                                }}
+                                onMouseLeave={(e: any) => {
+                                    e.currentTarget.style.background = isArchiveView ? '#E8F5E9' : '#FFF3E0';
+                                    e.currentTarget.querySelector('svg').style.color = isArchiveView ? '#4CAF50' : '#FF9800';
+                                }}
+                            >
+                                {isArchiveView ? (
+                                    <Check size={16} color="#4CAF50" strokeWidth={2.5} />
+                                ) : (
+                                    <Archive size={16} color="#FF9800" strokeWidth={2.5} />
+                                )}
+                            </button>
                         )}
-                    </button>
+                    </div>
                 </div>
-            </div>
 
-            <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                marginBottom: '14px'
-            }}>
-                <div>
-                    <div style={{ fontSize: '13px', color: '#94a3b8' }}>Volume horaire</div>
-                    <div style={{ fontSize: '18px', fontWeight: '700', color: '#1e293b' }}>{cours.volumeHoraire} h</div>
-                </div>
-                <div style={{ width: '60%' }}>
-                    <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '4px' }}>Progression</div>
-                    <div style={{
-                        height: '8px',
-                        borderRadius: '999px',
-                        background: '#e2e8f0',
-                        overflow: 'hidden'
-                    }}>
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: '14px'
+                }}>
+                    <div>
+                        <div style={{ fontSize: '13px', color: '#94a3b8' }}>Volume horaire</div>
+                        <div style={{ fontSize: '18px', fontWeight: '700', color: '#1e293b' }}>{cours.volumeHoraire} h</div>
+                    </div>
+                    <div style={{ width: '60%' }}>
+                        <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '4px' }}>Progression</div>
                         <div style={{
-                            height: '100%',
-                            width: `${cours.progression}%`,
-                            background: progressColor,
-                            transition: 'width 0.3s ease'
-                        }} />
-                    </div>
-                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>{cours.progression}% effectué</div>
-                </div>
-            </div>
-
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: '8px',
-                fontSize: '12px'
-            }}>
-                <div>
-                    <div style={{ color: '#94a3b8' }}>Planifié</div>
-                    <div style={{ fontWeight: '600', color: '#1e293b' }}>{heuresPlanifie} h <span style={{fontSize: '10px', color: '#ccc'}}>({sessions.length} sessions)</span></div>
-                </div>
-                <div>
-                    <div style={{ color: '#94a3b8' }}>Réalisé</div>
-                    <div style={{ fontWeight: '600', color: '#1e293b' }}>{heuresFaites} h</div>
-                </div>
-                <div>
-                    <div style={{ color: '#94a3b8' }}>Restant</div>
-                    <div style={{ fontWeight: '600', color: heuresRestantes === 0 ? '#10b981' : '#1e293b' }}>{heuresRestantes} h</div>
-                </div>
-            </div>
-
-            {/* Modals retain original structure */}
-            {showModal && (
-                <div className="modal-overlay" style={modalOverlayStyle} onClick={() => setShowModal(false)}>
-                    <div className="modal-content" style={modalContentStyle} onClick={(e) => e.stopPropagation()}>
-                        <ModalHeader title="Créer une session" onClose={() => setShowModal(false)} />
-                        <form onSubmit={handleSubmit}>
-                            <ModalInputRow
-                                label="Libellé"
-                                value={newSession.libelle}
-                                onChange={(value) => setNewSession({ ...newSession, libelle: value })}
-                                placeholder={`Session - ${cours.titre}`}
-                            />
-                            <ModalInputRow
-                                label="Date"
-                                type="date"
-                                value={newSession.date}
-                                onChange={(value) => setNewSession({ ...newSession, date: value })}
-                            />
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
-                                <ModalInputRow
-                                    label="Début"
-                                    type="time"
-                                    value={newSession.startHour}
-                                    onChange={(value) => setNewSession({ ...newSession, startHour: value })}
-                                />
-                                <ModalInputRow
-                                    label="Fin"
-                                    type="time"
-                                    value={newSession.endHour}
-                                    onChange={(value) => setNewSession({ ...newSession, endHour: value })}
-                                />
-                            </div>
-                            <div style={{ marginBottom: '20px' }}>
-                                <label style={modalLabelStyle}>Mode</label>
-                                <select
-                                    value={newSession.modeSession}
-                                    onChange={(e) => setNewSession({ ...newSession, modeSession: e.target.value as SessionMode })}
-                                    style={modalSelectStyle}
-                                >
-                                    <option value="PRESENTIEL">Présentiel</option>
-                                    <option value="EN_LIGNE">En ligne</option>
-                                    <option value="HYBRIDE">Hybride</option>
-                                </select>
-                            </div>
-                            <div style={{ marginBottom: '20px' }}>
-                                <label style={modalLabelStyle}>Type</label>
-                                <select
-                                    value={newSession.typeSession}
-                                    onChange={(e) => setNewSession({ ...newSession, typeSession: e.target.value as SessionType })}
-                                    style={modalSelectStyle}
-                                >
-                                    <option value="AUTRE">Autre</option>
-                                    <option value="COURS">Cours</option>
-                                    <option value="EVALUATION">Évaluation</option>
-                                </select>
-                            </div>
-                            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-                                <button type="button" onClick={() => setShowModal(false)} style={modalSecondaryButton}>Annuler</button>
-                                <button type="submit" disabled={isCreatingSession} style={{...modalPrimaryButton, opacity: isCreatingSession ? 0.7 : 1}}>
-                                    {isCreatingSession ? 'Création...' : 'Créer la session'}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-
-            {showSessionsModal && (
-                <div className="modal-overlay" style={modalOverlayStyle} onClick={() => setShowSessionsModal(false)}>
-                    <div className="modal-content" style={{ ...modalContentStyle, maxWidth: '550px' }} onClick={(e) => e.stopPropagation()}>
-                        <ModalHeader title="Sessions du cours" subtitle={cours.titre} onClose={() => setShowSessionsModal(false)} />
-                        <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-                            <Badge>{filteredSessions.length} sessions</Badge>
-                            <div style={{ position: 'relative', flex: 1 }}>
-                                <Search size={14} color="#9ca3af" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
-                                <input
-                                    type="text"
-                                    placeholder="Rechercher..."
-                                    value={sessionSearchTerm}
-                                    onChange={(e) => setSessionSearchTerm(e.target.value)}
-                                    style={{
-                                        width: '100%',
-                                        padding: '6px 10px 6px 32px',
-                                        borderRadius: '6px',
-                                        border: '1px solid #e2e8f0',
-                                        fontSize: '12px',
-                                        outline: 'none',
-                                        fontFamily: 'inherit'
-                                    }}
-                                />
-                            </div>
+                            height: '8px',
+                            borderRadius: '999px',
+                            background: '#e2e8f0',
+                            overflow: 'hidden'
+                        }}>
+                            <div style={{
+                                height: '100%',
+                                width: `${cours.progression}%`,
+                                background: progressColor,
+                                transition: 'width 0.3s ease'
+                            }} />
                         </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                            {sessionsLoading && (
-                                <div style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>Chargement des sessions...</div>
-                            )}
-                            {sessionsError && !sessionsLoading && (
-                                <div style={{ padding: '20px', textAlign: 'center', color: '#dc2626' }}>{sessionsError}</div>
-                            )}
-                            {!sessionsLoading && !sessionsError && filteredSessions.map(session => {
-                                const isTerminee = session.status === 'TERMINEE';
-                                const isAnnule = session.status === 'ANNULE';
-                                const isProgramme = session.status === 'PROGRAMME' || session.status === 'EN_COURS';
-                                
-                                // Convertir les minutes en heures pour l'affichage
-                                const displayDuration = session.duration ? Math.floor(session.duration / 60) : 0;
-                                const remainingMinutes = session.duration ? session.duration % 60 : 0;
-                                const durationText = displayDuration > 0 
-                                    ? `${displayDuration}h${remainingMinutes > 0 ? remainingMinutes + 'min' : ''}` 
-                                    : (remainingMinutes > 0 ? `${remainingMinutes}min` : '');
-                                
-                                return (
-                                    <div key={session.id} style={{
-                                        padding: '14px',
-                                        border: '1px solid #e2e8f0',
-                                        borderRadius: '10px',
-                                        background: isTerminee ? '#f0fdf4' : isAnnule ? '#fef2f2' : 'white'
-                                    }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                                            <div>
-                                                <div style={{ fontSize: '14px', fontWeight: '600', color: '#1a202c', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                    {session.codeSession ?? session.libelle}
-                                                    {isTerminee && (
-                                                        <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: '500', background: '#10b981', color: 'white' }}>
-                                                            <Check size={10} style={{ marginRight: '2px' }} /> Terminé
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <div style={{
-                                                    display: 'inline-flex',
-                                                    padding: '3px 8px',
-                                                    borderRadius: '4px',
-                                                    fontSize: '11px',
-                                                    fontWeight: '500',
-                                                    marginTop: '4px',
-                                                    background: session.modeSession === 'PRESENTIEL' ? '#E3F2FD' : '#FFF3E0',
-                                                    color: session.modeSession === 'PRESENTIEL' ? '#5B8DEF' : '#FF9800'
-                                                }}>
-                                                    {session.modeSession === 'PRESENTIEL' ? 'Présentiel' : session.modeSession === 'EN_LIGNE' ? 'En ligne' : 'Hybride'}
+                        <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>{cours.progression}% effectué</div>
+                    </div>
+                </div>
+
+                <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(3, 1fr)',
+                    gap: '8px',
+                    fontSize: '12px'
+                }}>
+                    <div>
+                        <div style={{ color: '#94a3b8' }}>Planifié</div>
+                        <div style={{ fontWeight: '600', color: '#1e293b' }}>{heuresPlanifie} h <span style={{ fontSize: '10px', color: '#ccc' }}>({sessions.length} sessions)</span></div>
+                    </div>
+                    <div>
+                        <div style={{ color: '#94a3b8' }}>Réalisé</div>
+                        <div style={{ fontWeight: '600', color: '#1e293b' }}>{heuresFaites} h</div>
+                    </div>
+                    <div>
+                        <div style={{ color: '#94a3b8' }}>Restant</div>
+                        <div style={{ fontWeight: '600', color: heuresRestantes === 0 ? '#10b981' : '#1e293b' }}>{heuresRestantes} h</div>
+                    </div>
+                </div>
+
+                {/* Modals retain original structure */}
+                {showModal && (
+                    <div className="modal-overlay" style={modalOverlayStyle} onClick={() => setShowModal(false)}>
+                        <div className="modal-content" style={modalContentStyle} onClick={(e) => e.stopPropagation()}>
+                            <ModalHeader title="Créer une session" onClose={() => setShowModal(false)} />
+                            <form onSubmit={handleSubmit}>
+                                <ModalInputRow
+                                    label="Libellé"
+                                    value={newSession.libelle}
+                                    onChange={(value) => setNewSession({ ...newSession, libelle: value })}
+                                    placeholder={`Session - ${cours.titre}`}
+                                />
+                                <ModalInputRow
+                                    label="Date"
+                                    type="date"
+                                    value={newSession.date}
+                                    onChange={(value) => setNewSession({ ...newSession, date: value })}
+                                />
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+                                    <ModalInputRow
+                                        label="Début"
+                                        type="time"
+                                        value={newSession.startHour}
+                                        onChange={(value) => setNewSession({ ...newSession, startHour: value })}
+                                    />
+                                    <ModalInputRow
+                                        label="Fin"
+                                        type="time"
+                                        value={newSession.endHour}
+                                        onChange={(value) => setNewSession({ ...newSession, endHour: value })}
+                                    />
+                                </div>
+                                <div style={{ marginBottom: '20px' }}>
+                                    <label style={modalLabelStyle}>Mode</label>
+                                    <select
+                                        value={newSession.modeSession}
+                                        onChange={(e) => setNewSession({ ...newSession, modeSession: e.target.value as SessionMode })}
+                                        style={modalSelectStyle}
+                                    >
+                                        <option value="PRESENTIEL">Présentiel</option>
+                                        <option value="EN_LIGNE">En ligne</option>
+                                        <option value="HYBRIDE">Hybride</option>
+                                    </select>
+                                </div>
+                                <div style={{ marginBottom: '20px' }}>
+                                    <label style={modalLabelStyle}>Type</label>
+                                    <select
+                                        value={newSession.typeSession}
+                                        onChange={(e) => setNewSession({ ...newSession, typeSession: e.target.value as SessionType })}
+                                        style={modalSelectStyle}
+                                    >
+                                        <option value="AUTRE">Autre</option>
+                                        <option value="COURS">Cours</option>
+                                        <option value="EVALUATION">Évaluation</option>
+                                    </select>
+                                </div>
+                                <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                                    <button type="button" onClick={() => setShowModal(false)} style={modalSecondaryButton}>Annuler</button>
+                                    <button type="submit" disabled={isCreatingSession} style={{ ...modalPrimaryButton, opacity: isCreatingSession ? 0.7 : 1 }}>
+                                        {isCreatingSession ? 'Création...' : 'Créer la session'}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )}
+
+                {showSessionsModal && (
+                    <div className="modal-overlay" style={modalOverlayStyle} onClick={() => setShowSessionsModal(false)}>
+                        <div className="modal-content" style={{ ...modalContentStyle, maxWidth: '550px' }} onClick={(e) => e.stopPropagation()}>
+                            <ModalHeader title="Sessions du cours" subtitle={cours.titre} onClose={() => setShowSessionsModal(false)} />
+                            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                                <Badge>{filteredSessions.length} sessions</Badge>
+                                <div style={{ position: 'relative', flex: 1 }}>
+                                    <Search size={14} color="#9ca3af" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
+                                    <input
+                                        type="text"
+                                        placeholder="Rechercher..."
+                                        value={sessionSearchTerm}
+                                        onChange={(e) => setSessionSearchTerm(e.target.value)}
+                                        style={{
+                                            width: '100%',
+                                            padding: '6px 10px 6px 32px',
+                                            borderRadius: '6px',
+                                            border: '1px solid #e2e8f0',
+                                            fontSize: '12px',
+                                            outline: 'none',
+                                            fontFamily: 'inherit'
+                                        }}
+                                    />
+                                </div>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                {sessionsLoading && (
+                                    <div style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>Chargement des sessions...</div>
+                                )}
+                                {sessionsError && !sessionsLoading && (
+                                    <div style={{ padding: '20px', textAlign: 'center', color: '#dc2626' }}>{sessionsError}</div>
+                                )}
+                                {!sessionsLoading && !sessionsError && filteredSessions.map(session => {
+                                    const isTerminee = session.status === 'TERMINEE';
+                                    const isAnnule = session.status === 'ANNULE';
+                                    const isProgramme = session.status === 'PROGRAMME' || session.status === 'EN_COURS';
+
+                                    // Convertir les minutes en heures pour l'affichage
+                                    const displayDuration = session.duration ? Math.floor(session.duration / 60) : 0;
+                                    const remainingMinutes = session.duration ? session.duration % 60 : 0;
+                                    const durationText = displayDuration > 0
+                                        ? `${displayDuration}h${remainingMinutes > 0 ? remainingMinutes + 'min' : ''}`
+                                        : (remainingMinutes > 0 ? `${remainingMinutes}min` : '');
+
+                                    return (
+                                        <div key={session.id} style={{
+                                            padding: '14px',
+                                            border: '1px solid #e2e8f0',
+                                            borderRadius: '10px',
+                                            background: isTerminee ? '#f0fdf4' : isAnnule ? '#fef2f2' : 'white'
+                                        }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                                                <div>
+                                                    <div style={{ fontSize: '14px', fontWeight: '600', color: '#1a202c', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        {session.codeSession ?? session.libelle}
+                                                        {isTerminee && (
+                                                            <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 8px', borderRadius: '4px', fontSize: '10px', fontWeight: '500', background: '#10b981', color: 'white' }}>
+                                                                <Check size={10} style={{ marginRight: '2px' }} /> Terminé
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div style={{
+                                                        display: 'inline-flex',
+                                                        padding: '3px 8px',
+                                                        borderRadius: '4px',
+                                                        fontSize: '11px',
+                                                        fontWeight: '500',
+                                                        marginTop: '4px',
+                                                        background: session.modeSession === 'PRESENTIEL' ? '#E3F2FD' : '#FFF3E0',
+                                                        color: session.modeSession === 'PRESENTIEL' ? '#5B8DEF' : '#FF9800'
+                                                    }}>
+                                                        {session.modeSession === 'PRESENTIEL' ? 'Présentiel' : session.modeSession === 'EN_LIGNE' ? 'En ligne' : 'Hybride'}
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', color: '#4a5568' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                <Clock size={14} />
-                                                <span>{session.startHour} - {session.endHour}</span>
-                                                {session.duration && <span style={{ fontSize: '11px', color: '#9ca3af' }}>({durationText})</span>}
-                                            </div>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                <Calendar size={14} />
-                                                <span>{session.date}</span>
-                                            </div>
-                                        </div>
-                                        
-                                        {/* Afficher les étudiants s'ils sont disponibles */}
-                                        {session.students && session.students.length > 0 && (
-                                            <div style={{ marginTop: '10px', padding: '10px', background: '#f8fafc', borderRadius: '8px' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: '600', color: '#475569', marginBottom: '6px' }}>
-                                                    <Users size={14} />
-                                                    {session.students.length} étudiant(s) - Émargement
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', color: '#4a5568' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <Clock size={14} />
+                                                    <span>{session.startHour} - {session.endHour}</span>
+                                                    {session.duration && <span style={{ fontSize: '11px', color: '#9ca3af' }}>({durationText})</span>}
                                                 </div>
-                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                                                    {session.students.slice(0, 5).map(student => (
-                                                        <span key={student.id} style={{
-                                                            display: 'inline-flex',
-                                                            padding: '2px 6px',
-                                                            borderRadius: '4px',
-                                                            fontSize: '10px',
-                                                            background: '#e2e8f0',
-                                                            color: '#475569'
-                                                        }}>
-                                                            {student.prenom} {student.nom}
-                                                        </span>
-                                                    ))}
-                                                    {session.students.length > 5 && (
-                                                        <span style={{ fontSize: '10px', color: '#64748b' }}>
-                                                            +{session.students.length - 5} autres
-                                                        </span>
-                                                    )}
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <Calendar size={14} />
+                                                    <span>{session.date}</span>
                                                 </div>
                                             </div>
-                                        )}
-                                        
-                                        {/* Boutons Terminer/Annuler */}
-                                        {isProgramme && (
+
+                                            {/* Afficher les étudiants s'ils sont disponibles */}
+                                            {session.students && session.students.length > 0 && (
+                                                <div style={{ marginTop: '10px', padding: '10px', background: '#f8fafc', borderRadius: '8px' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: '600', color: '#475569', marginBottom: '6px' }}>
+                                                        <Users size={14} />
+                                                        {session.students.length} étudiant(s) - Émargement
+                                                    </div>
+                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                                                        {session.students.slice(0, 5).map(student => (
+                                                            <span key={student.id} style={{
+                                                                display: 'inline-flex',
+                                                                padding: '2px 6px',
+                                                                borderRadius: '4px',
+                                                                fontSize: '10px',
+                                                                background: '#e2e8f0',
+                                                                color: '#475569'
+                                                            }}>
+                                                                {student.prenom} {student.nom}
+                                                            </span>
+                                                        ))}
+                                                        {session.students.length > 5 && (
+                                                            <span style={{ fontSize: '10px', color: '#64748b' }}>
+                                                                +{session.students.length - 5} autres
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Boutons Terminer/Annuler et Émargement */}
                                             <div style={{ display: 'flex', gap: '8px', marginTop: '12px', paddingTop: '10px', borderTop: '1px solid #e2e8f0' }}>
-                                                <button
-                                                    onClick={() => handleSessionStatusChange(session.id, 'TERMINEE')}
-                                                    disabled={actionLoading === session.id}
-                                                    style={{
-                                                        flex: 1,
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        gap: '6px',
-                                                        padding: '8px 12px',
-                                                        borderRadius: '6px',
-                                                        border: 'none',
-                                                        background: '#10b981',
-                                                        color: 'white',
-                                                        fontSize: '12px',
-                                                        fontWeight: '500',
-                                                        cursor: actionLoading === session.id ? 'not-allowed' : 'pointer',
-                                                        opacity: actionLoading === session.id ? 0.7 : 1
-                                                    }}
-                                                >
-                                                    <Check size={14} />
-                                                    {actionLoading === session.id ? '...' : 'Terminer'}
-                                                </button>
-                                                <button
-                                                    onClick={() => handleSessionStatusChange(session.id, 'ANNULE')}
-                                                    disabled={actionLoading === session.id}
-                                                    style={{
-                                                        flex: 1,
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        gap: '6px',
-                                                        padding: '8px 12px',
-                                                        borderRadius: '6px',
-                                                        border: 'none',
-                                                        background: '#f59e0b',
-                                                        color: 'white',
-                                                        fontSize: '12px',
-                                                        fontWeight: '500',
-                                                        cursor: actionLoading === session.id ? 'not-allowed' : 'pointer',
-                                                        opacity: actionLoading === session.id ? 0.7 : 1
-                                                    }}
-                                                >
-                                                    <X size={14} />
-                                                    {actionLoading === session.id ? '...' : 'Annuler'}
-                                                </button>
+                                                {isProgramme && (
+                                                    <>
+                                                        <button
+                                                            onClick={() => handleSessionStatusChange(session.id, 'TERMINEE')}
+                                                            disabled={actionLoading === session.id}
+                                                            style={{
+                                                                flex: 1,
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                gap: '6px',
+                                                                padding: '8px 12px',
+                                                                borderRadius: '6px',
+                                                                border: 'none',
+                                                                background: '#10b981',
+                                                                color: 'white',
+                                                                fontSize: '12px',
+                                                                fontWeight: '500',
+                                                                cursor: actionLoading === session.id ? 'not-allowed' : 'pointer',
+                                                                opacity: actionLoading === session.id ? 0.7 : 1
+                                                            }}
+                                                        >
+                                                            <Check size={14} />
+                                                            {actionLoading === session.id ? '...' : 'Terminer'}
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleSessionStatusChange(session.id, 'ANNULE')}
+                                                            disabled={actionLoading === session.id}
+                                                            style={{
+                                                                flex: 1,
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                gap: '6px',
+                                                                padding: '8px 12px',
+                                                                borderRadius: '6px',
+                                                                border: 'none',
+                                                                background: '#f59e0b',
+                                                                color: 'white',
+                                                                fontSize: '12px',
+                                                                fontWeight: '500',
+                                                                cursor: actionLoading === session.id ? 'not-allowed' : 'pointer',
+                                                                opacity: actionLoading === session.id ? 0.7 : 1
+                                                            }}
+                                                        >
+                                                            <X size={14} />
+                                                            {actionLoading === session.id ? '...' : 'Annuler'}
+                                                        </button>
+                                                    </>
+                                                )}
                                                 <button
                                                     onClick={() => {
-                                                        setSelectedSessionForEmargement(session);
-                                                        setShowEmargementPanel(true);
+                                                        router.push(`/dashboard/emargement/${session.id}`);
                                                     }}
                                                     style={{
                                                         display: 'inline-flex',
@@ -671,36 +705,25 @@ export default function CoursCard({ cours, onArchive, onEdit, onDelete, isArchiv
                                                         color: 'white',
                                                         fontSize: '12px',
                                                         fontWeight: '500',
-                                                        cursor: 'pointer'
+                                                        cursor: 'pointer',
+                                                        flex: isProgramme ? undefined : 1
                                                     }}
                                                 >
                                                     <ClipboardList size={14} />
-                                                    Émargement
+                                                    {isTerminee ? 'Voir émargement' : 'Émargement'}
                                                 </button>
                                             </div>
-                                        )}
-                                    </div>
-                                );
-                            })}
+                                        </div>
+                                    );
+                                })}
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )}
 
-            {/* Panneau d'émargement - affiché conditionally */}
-            {showEmargementPanel && selectedSessionForEmargement && (
-                <EmargementPanel
-                    sessionId={selectedSessionForEmargement!.id}
-                    professorId={selectedSessionForEmargement!.professor?.id ?? ''}
-                    onClose={() => {
-                        setShowEmargementPanel(false);
-                        setSelectedSessionForEmargement(null);
-                    }}
-                    sessionDate={selectedSessionForEmargement!.date}
-                    sessionHeureDebut={selectedSessionForEmargement!.startHour}
-                />
-            )}
-        </div>
+                {/* Panneau d'émargement - affiché sur une page dédiée */}
+            </div>
+        </>
     );
 }
 
@@ -748,7 +771,8 @@ const modalSelectStyle: React.CSSProperties = {
     transition: 'border-color 0.2s ease',
     fontFamily: 'inherit',
     background: 'white',
-    cursor: 'pointer'
+    cursor: 'pointer',
+    color: '#1a202c'
 };
 
 const modalSecondaryButton: React.CSSProperties = {
@@ -847,9 +871,12 @@ function ModalInputRow({ label, value, onChange, placeholder, type = 'text' }: M
                     fontSize: '15px',
                     outline: 'none',
                     transition: 'border-color 0.2s ease',
-                    fontFamily: 'inherit'
+                    fontFamily: 'inherit',
+                    color: '#1a202c',
+                    background: 'white'
                 }}
             />
         </div>
     );
 }
+

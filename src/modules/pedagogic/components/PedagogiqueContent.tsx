@@ -56,7 +56,7 @@ export default function PedagogiqueContent() {
 
                 setStats([
                     { titre: 'Nombre de classes', valeur: classesRes.length, icon: '📚', couleur: '#5B8DEF' },
-                    { titre: "Nombre d'élèves", valeur: studentsRes.length, icon: '🎓', couleur: '#10b981' },
+                    { titre: "Nombre d'élèves", valeur: studentsRes.totalElements || studentsRes.content?.length || 0, icon: '🎓', couleur: '#10b981' },
                     { titre: 'Nombre de filières', valeur: filieresRes.length, icon: '📋', couleur: '#f59e0b' },
                     { titre: 'Professeurs actifs', valeur: professorsRes.length, icon: '👨‍🏫', couleur: '#8b5cf6' }
                 ]);

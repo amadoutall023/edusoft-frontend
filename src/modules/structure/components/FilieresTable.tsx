@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Eye, Plus, X, Pencil, Trash2 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import SearchInput from '@/shared/components/SearchInput';
 import Pagination from '@/shared/components/Pagination';
+import TableCard from '@/shared/components/TableCard';
 import { FiliereData } from '../types';
 import { ApiError } from '@/shared/errors/ApiError';
 
@@ -36,6 +37,16 @@ export default function FilieresTable({
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [newFiliere, setNewFiliere] = useState({ nom: '', description: '' });
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        const checkMobile = () => {
+            setIsMobile(window.innerWidth <= 768);
+        };
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
 
     const filteredData = data;
     const startIndex = (currentPage - 1) * 10;
@@ -114,6 +125,7 @@ export default function FilieresTable({
 
     return (
         <>
+            <Styles />
             <div className="search-filter-section" style={{
                 padding: '24px 40px',
                 display: 'flex',
@@ -153,8 +165,10 @@ export default function FilieresTable({
                 </div>
             </div>
 
+            {/* Table - Desktop only */}
+            {!isMobile && (
             <div className="table-container" style={{ overflowX: 'auto', padding: '0 40px' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '700px' }}>
+                <table className="desktop-table" style={{ width: '100%', borderCollapse: 'collapse', minWidth: '700px' }}>
                     <thead>
                         <tr style={{ background: 'linear-gradient(135deg, #5B8DEF 0%, #4A7ACC 100%)' }}>
                             <th style={{ padding: '16px', color: 'white', textAlign: 'center' }}>N°</th>
@@ -167,15 +181,12 @@ export default function FilieresTable({
                     <tbody>
                         {filteredData.map((filiere, index) => (
                             <tr key={filiere.id} style={{ background: index % 2 === 0 ? 'white' : '#fafbfc' }}>
-                                <td style={{ padding: '16px', textAlign: 'center' }}>{startIndex + index + 1}</td>
-                                <td style={{ padding: '16px', textAlign: 'center' }}>{filiere.nom}</td>
-                                <td style={{ padding: '16px', textAlign: 'center' }}>{filiere.code}</td>
-                                <td style={{ padding: '16px', textAlign: 'center' }}>{filiere.description ?? 'Non renseigné'}</td>
+                                <td style={{ padding: '16px', textAlign: 'center', color: 'black' }}>{startIndex + index + 1}</td>
+                                <td style={{ padding: '16px', textAlign: 'center', color: 'black' }}>{filiere.nom}</td>
+                                <td style={{ padding: '16px', textAlign: 'center', color: 'black' }}>{filiere.code}</td>
+                                <td style={{ padding: '16px', textAlign: 'center', color: 'black' }}>{filiere.description ?? 'Non renseigné'}</td>
                                 <td style={{ padding: '16px', textAlign: 'center' }}>
                                     <div style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}>
-                                        {/* <button style={iconButtonStyle}>
-                                            <Eye size={18} color="#5B8DEF" strokeWidth={2.5} />
-                                        </button> */}
                                         <button style={iconButtonStyle} onClick={() => openEdit(filiere)}>
                                             <Pencil size={18} color="#5B8DEF" strokeWidth={2.5} />
                                         </button>
@@ -189,6 +200,44 @@ export default function FilieresTable({
                     </tbody>
                 </table>
             </div>
+            )}
+
+            {/* Cards - Mobile only */}
+            {isMobile && (
+            <div
+                className="mobile-cards"
+                style={{
+                    padding: '16px',
+                    overflowX: 'hidden',
+                    maxWidth: '100vw',
+                    width: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center'
+                }}
+            >
+                {filteredData.map((filiere, index) => (
+                    <div key={filiere.id} style={{ width: '100%', maxWidth: '420px' }}>
+                        <TableCard
+                            index={index}
+                            variant="classe"
+                            fields={[
+                                { label: 'Nom', value: filiere.nom, highlight: true },
+                                { label: 'Code', value: filiere.code },
+                                { label: 'Description', value: filiere.description || 'Non renseigné' }
+                            ]}
+                            onEdit={() => openEdit(filiere)}
+                            onDelete={() => handleDelete(filiere)}
+                        />
+                    </div>
+                ))}
+                {filteredData.length === 0 && (
+                    <div style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
+                        Aucune filière trouvée
+                    </div>
+                )}
+            </div>
+            )}
 
             <Pagination currentPage={currentPage} totalPages={Math.max(totalPages, 1)} onPageChange={onPageChange} />
 
@@ -315,3 +364,36 @@ const submitButtonStyle = (disabled: boolean): React.CSSProperties => ({
     opacity: disabled ? 0.7 : 1,
     boxShadow: '0 4px 12px rgba(91,141,239,0.3)'
 });
+
+const Styles = () => (
+    <style jsx>{`
+        /* Desktop: hide mobile cards */
+        @media (min-width: 769px) {
+            div.mobile-cards {
+                display: none !important;
+            }
+        }
+
+        /* Mobile: hide table, show cards */
+        @media (max-width: 768px) {
+            div.search-filter-section {
+                padding: 16px !important;
+            }
+            div.table-container {
+                display: none !important;
+            }
+            table.desktop-table {
+                display: none !important;
+            }
+            div.mobile-cards {
+                display: flex !important;
+                flex-direction: column !important;
+                align-items: center !important;
+                padding: 16px !important;
+                overflow-x: hidden !important;
+                width: 100% !important;
+                max-width: 100vw !important;
+            }
+        }
+    `}</style>
+);

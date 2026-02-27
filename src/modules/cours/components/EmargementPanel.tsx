@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { 
-  getPresencesEtudiantsByType, 
+import {
+  getPresencesEtudiantsByType,
   getPresenceProfesseurByType,
   hemargerProfesseur,
   initialiserPresencesEtudiants,
@@ -12,6 +12,7 @@ import {
   HemargeType,
   PresenceStatus
 } from '../services/presenceService';
+import { tokenStorage } from '@/shared/api/tokenStorage';
 
 interface EmargementPanelProps {
   sessionId: string;
@@ -75,12 +76,17 @@ export default function EmargementPanel({
       setPresences(newPresences);
     } catch (error) {
       console.error('Erreur lors de l\'initialisation:', error);
+      alert('Impossible d\'initialiser les présences. Vérifiez que la session a une classe associée.');
     } finally {
       setInitializing(false);
     }
   };
 
   const handleHemargerProfesseur = async () => {
+    if (!professorId) {
+      alert('Aucun professeur assigné à cette session');
+      return;
+    }
     setSaving(true);
     try {
       const presence = await hemargerProfesseur(sessionId, professorId, hemargeType);
@@ -200,8 +206,48 @@ export default function EmargementPanel({
 
   return (
     <div style={containerStyle}>
+      <style>{`
+        @media (max-width: 768px) {
+          .emargement-stats {
+            grid-template-columns: repeat(3, 1fr) !important;
+          }
+          .emargement-header {
+            flex-direction: column;
+            gap: 12px;
+            align-items: flex-start !important;
+          }
+          .emargement-controls {
+            flex-direction: column;
+            align-items: stretch !important;
+          }
+          .emargement-actions {
+            flex-wrap: wrap;
+          }
+          /* Masquer le tableau sur mobile et afficher les cartes */
+          .emargement-table {
+            display: none !important;
+          }
+          .emargement-cards {
+            display: flex !important;
+          }
+        }
+        @media (min-width: 769px) {
+          /* Masquer les cartes sur desktop et afficher le tableau */
+          .emargement-cards {
+            display: none !important;
+          }
+          .emargement-table {
+            display: block !important;
+          }
+        }
+        @media (max-width: 480px) {
+          .emargement-stats {
+            grid-template-columns: repeat(2, 1fr) !important;
+          }
+        }
+      `}</style>
       {/* Header */}
-      <div style={headerStyle}>
+      <div className="emargement-header" style={headerStyle}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <span style={{ fontSize: '18px' }}>📋</span>
           <div>
@@ -226,8 +272,8 @@ export default function EmargementPanel({
       </div>
 
       {/* Controls */}
-      <div style={{ 
-        padding: '12px 16px', 
+      <div className="emargement-controls" style={{
+        padding: '12px 16px',
         borderBottom: '1px solid #e2e8f0',
         display: 'flex',
         alignItems: 'center',
@@ -278,11 +324,11 @@ export default function EmargementPanel({
       <div style={{ padding: '16px' }}>
         {loading ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px' }}>
-            <div style={{ 
-              width: '24px', 
-              height: '24px', 
-              border: '2px solid #e2e8f0', 
-              borderTopColor: '#2563eb', 
+            <div style={{
+              width: '24px',
+              height: '24px',
+              border: '2px solid #e2e8f0',
+              borderTopColor: '#2563eb',
               borderRadius: '50%',
               animation: 'spin 0.8s linear infinite'
             }}></div>
@@ -315,10 +361,10 @@ export default function EmargementPanel({
         ) : (
           <>
             {/* Stats */}
-            <div style={{ 
-              display: 'grid', 
-              gridTemplateColumns: 'repeat(5, 1fr)', 
-              gap: '8px', 
+            <div className="emargement-stats" style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(5, 1fr)',
+              gap: '8px',
               marginBottom: '16px'
             }}>
               <div style={{ backgroundColor: '#d1fae5', padding: '10px', borderRadius: '8px', textAlign: 'center' }}>
@@ -344,7 +390,7 @@ export default function EmargementPanel({
             </div>
 
             {/* Actions */}
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+            <div className="emargement-actions" style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
               <button
                 onClick={handleMarquerTousPresents}
                 disabled={saving || stats.absents === 0}
@@ -377,10 +423,10 @@ export default function EmargementPanel({
               </button>
             </div>
 
-            {/* Table */}
-            <div style={{ 
-              border: '1px solid #e2e8f0', 
-              borderRadius: '8px', 
+            {/* Table - Desktop */}
+            <div className="emargement-table" style={{
+              border: '1px solid #e2e8f0',
+              borderRadius: '8px',
               overflow: 'hidden',
               backgroundColor: 'white'
             }}>
@@ -429,6 +475,83 @@ export default function EmargementPanel({
                   })}
                 </tbody>
               </table>
+            </div>
+
+            {/* Cards - Mobile */}
+            <div className="emargement-cards" style={{
+              display: 'none',
+              flexDirection: 'column',
+              gap: '12px'
+            }}>
+              {presences.map((presence) => {
+                const statOption = STATUT_OPTIONS.find(s => s.value === presence.status);
+                return (
+                  <div
+                    key={presence.id}
+                    style={{
+                      backgroundColor: 'white',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '12px',
+                      padding: '14px',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                    }}
+                  >
+                    {/* Header with name */}
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'flex-start',
+                      marginBottom: '12px'
+                    }}>
+                      <div>
+                        <div style={{
+                          fontSize: '15px',
+                          fontWeight: '600',
+                          color: '#1e293b',
+                          marginBottom: '2px'
+                        }}>
+                          {presence.studentPrenom} {presence.studentNom}
+                        </div>
+                        <div style={{
+                          fontSize: '12px',
+                          color: '#64748b'
+                        }}>
+                          Mat: {presence.studentMatricule}
+                        </div>
+                      </div>
+                      {/* Status badge */}
+                      <select
+                        value={presence.status}
+                        onChange={(e) => handleStatutChange(presence.studentId!, e.target.value as PresenceStatus)}
+                        style={{
+                          ...selectStyle,
+                          padding: '6px 10px',
+                          fontSize: '12px',
+                          backgroundColor: statOption?.bgColor || '#f1f5f9',
+                          color: statOption?.textColor || '#475569',
+                          border: 'none',
+                          fontWeight: '600',
+                          borderRadius: '20px'
+                        }}
+                      >
+                        {STATUT_OPTIONS.map(opt => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    {/* Time info */}
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      fontSize: '12px',
+                      color: '#94a3b8'
+                    }}>
+                      <span style={{ marginRight: '4px' }}>🕐</span>
+                      {presence.hemargeAt ? new Date(presence.hemargeAt).toLocaleTimeString() : 'Non émargé'}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </>
         )}

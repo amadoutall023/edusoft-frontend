@@ -16,7 +16,7 @@ export default function DashboardLayout({
             <Sidebar activeItem="" />
 
             {/* Header - positioned fixed on mobile */}
-            <div className="lg:hidden fixed top-0 left-0 right-0 z-[9998]">
+            <div className="lg:hidden fixed top-0 left-0 right-0 z-[999999999] h-[60px]">
                 <Header
                     onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)}
                     isSidebarOpen={isSidebarOpen}
@@ -32,7 +32,7 @@ export default function DashboardLayout({
                     />
                 </div>
 
-                <div className="content-scroll m-4 md:m-6 bg-slate-50 rounded-xl md:rounded-[20px] p-4 md:p-8 overflow-x-auto h-full flex-1">
+                <div className="content-scroll m-4 md:m-6 bg-slate-50 rounded-xl md:rounded-[20px] p-4 md:p-8 overflow-x-hidden h-full flex-1">
                     {children}
                 </div>
             </main>
@@ -45,6 +45,10 @@ export default function DashboardLayout({
                     .content-scroll {
                         margin-top: 60px !important;
                     }
+                }
+                .content-scroll {
+                    max-width: 100vw;
+                    overflow-x: hidden;
                 }
             `}</style>
         </div>

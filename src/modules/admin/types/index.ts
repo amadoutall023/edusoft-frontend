@@ -7,6 +7,7 @@ export interface MembreAdministration {
     role: string;
     login: string;
     schoolName?: string | null;
+    qrToken?: string | null;
 }
 
 export type RoleAdministration = 'Directrice' | 'RP' | 'AC' | 'Administrateur';

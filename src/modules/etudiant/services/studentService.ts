@@ -2,6 +2,7 @@ import { httpClient } from '@/shared/api/httpClient';
 import { ApiResponse, StudentResponseDto } from '@/shared/api/types';
 
 const API_BASE = '/api/v1/students';
+const PRESENCE_API_BASE = '/api/v1/presences';
 
 // Types
 export interface StudentRequest {
@@ -162,4 +163,31 @@ export async function countStudents(): Promise<number> {
 export async function countStudentsByClasse(classeId: string): Promise<number> {
     const response = await httpClient<ApiResponse<number>>(`${API_BASE}/count/classe/${classeId}`);
     return response.data ?? 0;
+}
+
+// Types pour les statistiques d'absences
+export interface AbsenceStats {
+    studentId: string;
+    matricule: string;
+    nom: string;
+    prenom: string;
+    totalAbsences: number;
+    justifiedAbsences: number;
+    unjustifiedAbsences: number;
+}
+
+/**
+ * Récupérer les statistiques d'absences pour un étudiant
+ */
+export async function fetchStudentAbsenceStats(studentId: string): Promise<AbsenceStats> {
+    const response = await httpClient<ApiResponse<AbsenceStats>>(`${PRESENCE_API_BASE}/student/${studentId}/stats`);
+    return response.data!;
+}
+
+/**
+ * Récupérer les statistiques d'absences pour tous les étudiants d'une classe
+ */
+export async function fetchClasseAbsenceStats(classeId: string): Promise<AbsenceStats[]> {
+    const response = await httpClient<ApiResponse<AbsenceStats[]>>(`${PRESENCE_API_BASE}/classe/${classeId}/stats`);
+    return response.data ?? [];
 }

@@ -4,6 +4,8 @@ export interface Cours {
     niveau: string;
     filiere?: string;
     professeur: string;
+    professorId?: string | null;
+    moduleId?: string | null;
     volumeHoraire: number;
     heuresPlanifie: number;
     heuresFaites: number;

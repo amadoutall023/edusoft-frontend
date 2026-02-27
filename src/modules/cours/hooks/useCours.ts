@@ -1,14 +1,14 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import { 
-    fetchCourses, 
-    createCourse, 
-    updateCourse, 
+import {
+    fetchCourses,
+    createCourse,
+    updateCourse,
     deleteCourse,
     getCourseById,
     CreateCoursePayload,
-    UpdateCoursePayload 
+    UpdateCoursePayload
 } from '../services/coursService';
 import { CoursResponseDto } from '@/shared/api/types';
 import { Cours } from '../types';
@@ -21,6 +21,8 @@ const mapCoursDto = (cours: CoursResponseDto): Cours => {
     const planned = cours.plannedHour ?? 0;
     const progression = total > 0 ? Math.min(100, Math.round((completed / total) * 100)) : 0;
 
+    console.log('Mapping cours:', cours.id, 'professor:', cours.professor);
+
     return {
         id: cours.id,
         titre: cours.libelle,
@@ -29,6 +31,8 @@ const mapCoursDto = (cours: CoursResponseDto): Cours => {
         professeur: cours.professor
             ? `${cours.professor.firstName ?? ''} ${cours.professor.lastName ?? ''}`.trim() || 'Non assigné'
             : 'Non assigné',
+        professorId: cours.professor?.id ?? null,
+        moduleId: cours.module?.id ?? null,
         volumeHoraire: total,
         heuresPlanifie: planned,
         heuresFaites: completed,
@@ -57,7 +61,7 @@ interface UseCoursReturn {
 
 export function useCours(options: UseCoursOptions = {}): UseCoursReturn {
     const { autoFetch = true } = options;
-    
+
     const [cours, setCours] = useState<Cours[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);

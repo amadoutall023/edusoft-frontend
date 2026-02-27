@@ -6,6 +6,7 @@ import Swal from 'sweetalert2';
 import SearchInput from '@/shared/components/SearchInput';
 import FilterButton from '@/shared/components/FilterButton';
 import Pagination from '@/shared/components/Pagination';
+import TableCard from '@/shared/components/TableCard';
 import { ClasseData, NiveauData } from '@/modules/structure/types';
 import { ClassePayload } from '../services/structureService';
 import { ApiError } from '@/shared/errors/ApiError';
@@ -28,6 +29,7 @@ interface ClassesTableProps {
     onCreate: (payload: ClassePayload) => Promise<unknown>;
     onUpdate: (id: string, payload: ClassePayload) => Promise<unknown>;
     onDelete: (id: string) => Promise<unknown>;
+    onView?: (classe: ClasseData) => void;
 }
 
 export default function ClassesTable({
@@ -42,7 +44,8 @@ export default function ClassesTable({
     defaultSchoolId,
     onCreate,
     onUpdate,
-    onDelete
+    onDelete,
+    onView
 }: ClassesTableProps) {
     const [showModal, setShowModal] = useState(false);
     const [formError, setFormError] = useState<string | null>(null);
@@ -171,13 +174,16 @@ export default function ClassesTable({
         <>
             {/* Search and Filter Section */}
             <div className="search-filter-section" style={{
-                padding: '24px 40px',
+                padding: '24px 20px',
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
                 background: '#fafbfc',
                 flexWrap: 'wrap',
-                gap: '16px'
+                gap: '16px',
+                width: '100%',
+                maxWidth: '100%',
+                boxSizing: 'border-box'
             }}>
                 <div className="search-wrapper" style={{ flex: '1', minWidth: '200px', maxWidth: '400px' }}>
                     <SearchInput
@@ -221,12 +227,15 @@ export default function ClassesTable({
                 </div>
             </div>
 
-            {/* Table */}
+            {/* Table - Desktop */}
             <div className="table-container" style={{
-                overflowX: 'auto',
-                padding: '0 40px'
+                overflowX: 'hidden',
+                padding: '0 20px',
+                width: '100%',
+                maxWidth: '100%',
+                boxSizing: 'border-box'
             }}>
-                <table style={{
+                <table className="desktop-table" style={{
                     width: '100%',
                     borderCollapse: 'collapse',
                     minWidth: '700px'
@@ -336,29 +345,32 @@ export default function ClassesTable({
                                     borderBottom: '1px solid #f1f5f9'
                                 }}>
                                     <div style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}>
-                                        {/* <button style={{
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            width: '36px',
-                                            height: '36px',
-                                            borderRadius: '8px',
-                                            border: 'none',
-                                            background: '#E3F2FD',
-                                            cursor: 'pointer',
-                                            transition: 'all 0.2s ease'
-                                        }}
-                                            onMouseEnter={(e: any) => {
-                                                e.currentTarget.style.background = '#5B8DEF';
-                                                e.currentTarget.querySelector('svg').style.color = 'white';
+                                        {onView && (
+                                            <button style={{
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                width: '36px',
+                                                height: '36px',
+                                                borderRadius: '8px',
+                                                border: 'none',
+                                                background: '#E3F2FD',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s ease'
                                             }}
-                                            onMouseLeave={(e: any) => {
-                                                e.currentTarget.style.background = '#E3F2FD';
-                                                e.currentTarget.querySelector('svg').style.color = '#5B8DEF';
-                                            }}
-                                        >
-                                            <Eye size={18} color="#5B8DEF" strokeWidth={2.5} />
-                                        </button> */}
+                                                onMouseEnter={(e: any) => {
+                                                    e.currentTarget.style.background = '#5B8DEF';
+                                                    e.currentTarget.querySelector('svg').style.color = 'white';
+                                                }}
+                                                onMouseLeave={(e: any) => {
+                                                    e.currentTarget.style.background = '#E3F2FD';
+                                                    e.currentTarget.querySelector('svg').style.color = '#5B8DEF';
+                                                }}
+                                                onClick={() => onView(classe)}
+                                            >
+                                                <Eye size={18} color="#5B8DEF" strokeWidth={2.5} />
+                                            </button>
+                                        )}
                                         <button style={{
                                             display: 'inline-flex',
                                             alignItems: 'center',
@@ -413,6 +425,42 @@ export default function ClassesTable({
                         ))}
                     </tbody>
                 </table>
+            </div>
+
+            {/* Cards - Mobile */}
+            <div
+                className="mobile-cards"
+                style={{
+                    padding: '16px',
+                    overflowX: 'hidden',
+                    maxWidth: '100vw',
+                    width: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center'
+                }}
+            >
+                {data.map((classe, index) => (
+                    <div key={classe.id} style={{ width: '100%', maxWidth: '420px' }}>
+                        <TableCard
+                            index={index}
+                            variant="classe"
+                            fields={[
+                                { label: 'Libellé', value: classe.libelle, highlight: true },
+                                { label: 'Filière', value: getFiliereName(classe.filiereId) },
+                                { label: 'Niveau', value: getNiveauName(classe.niveauId) }
+                            ]}
+                            onView={() => onView && onView(classe)}
+                            onEdit={() => openEditModal(classe)}
+                            onDelete={() => handleDelete(classe)}
+                        />
+                    </div>
+                ))}
+                {data.length === 0 && (
+                    <div style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
+                        Aucune classe trouvée
+                    </div>
+                )}
             </div>
 
             {/* Pagination */}
@@ -650,19 +698,40 @@ export default function ClassesTable({
                         transform: translateY(0);
                     }
                 }
-                @media (max-width: 768px) {
-                    .search-filter-section {
-                        padding: 16px 20px !important;
+
+                /* Desktop: hide mobile cards */
+                @media (min-width: 769px) {
+                    div.mobile-cards {
+                        display: none !important;
                     }
-                    .search-wrapper {
+                }
+
+                /* Mobile: hide table, show cards */
+                @media (max-width: 768px) {
+                    div.search-filter-section {
+                        padding: 16px !important;
+                    }
+                    div.search-wrapper {
                         max-width: 100% !important;
                     }
-                    .actions-wrapper {
+                    div.actions-wrapper {
                         width: 100%;
                         justify-content: flex-start;
                     }
-                    .table-container {
-                        padding: 0 20px !important;
+                    div.table-container {
+                        display: none !important;
+                    }
+                    table.desktop-table {
+                        display: none !important;
+                    }
+                    div.mobile-cards {
+                        display: flex !important;
+                        flex-direction: column !important;
+                        align-items: center !important;
+                        padding: 16px !important;
+                        overflow-x: hidden !important;
+                        width: 100% !important;
+                        max-width: 100vw !important;
                     }
                 }
             `}</style>

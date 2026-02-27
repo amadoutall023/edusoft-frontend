@@ -73,3 +73,11 @@ export async function deleteSession(id: string): Promise<void> {
         method: 'DELETE'
     });
 }
+
+export async function fetchSessionById(id: string): Promise<SessionResponseDto> {
+    const response = await httpClient<ApiResponse<SessionResponseDto>>(`${BASE_URL}/${id}`);
+    if (!response.data) {
+        throw new Error('Session non trouvée');
+    }
+    return response.data;
+}

@@ -1,17 +1,19 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import {  Plus,  Eye, X, Trash2, Edit2, FileSpreadsheet, QrCode, School } from 'lucide-react';
+import { Plus, Eye, X, Trash2, Edit2, FileSpreadsheet, QrCode, School } from 'lucide-react';
 import Swal from 'sweetalert2';
 import SearchInput from '@/shared/components/SearchInput';
 import Pagination from '@/shared/components/Pagination';
+import TableCard from '@/shared/components/TableCard';
 import { Etudiant, EtudiantFormData } from '../types';
 import { fetchClasses } from '@/modules/structure/services/structureService';
-import { 
-    fetchStudents, 
-    createStudent, 
-    updateStudent, 
-    deleteStudent, 
+import { useAuth } from '@/modules/auth/context/AuthContext';
+import {
+    fetchStudents,
+    createStudent,
+    updateStudent,
+    deleteStudent,
     importStudentsFromExcel,
     generateMatricule,
     assignStudentToClasse,
@@ -63,6 +65,8 @@ const mapStudent = (student: StudentResponseDto): Etudiant => ({
 });
 
 export default function EtudiantsContent() {
+    const { roles } = useAuth();
+    const isAttachéClasse = roles.includes('ROLE_ATTACHE_CLASSE');
     const [students, setStudents] = useState<Etudiant[]>([]);
     const [currentPage, setCurrentPage] = useState(1);
     const [searchTerm, setSearchTerm] = useState('');
@@ -84,7 +88,7 @@ export default function EtudiantsContent() {
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [importingFile, setImportingFile] = useState(false);
-    const [classes, setClasses] = useState<{id: string, libelle: string}[]>([]);
+    const [classes, setClasses] = useState<{ id: string, libelle: string }[]>([]);
 
     // Load classes for the dropdown
 
@@ -180,6 +184,19 @@ export default function EtudiantsContent() {
 
     const hasActiveFilters = filters.classe || filters.anneeInscription || filters.gender;
 
+    // Handlers for mobile cards
+    const handleViewStudent = (etudiant: Etudiant) => {
+        setSelectedEtudiant(etudiant);
+    };
+
+    const handleEditStudentClick = (etudiant: Etudiant) => {
+        openEditModal(etudiant);
+    };
+
+    const handleDeleteStudent = async (etudiant: Etudiant) => {
+        await handleDeleteEtudiant(etudiant.id);
+    };
+
     const handleImportClick = () => {
         setShowImportModal(true);
     };
@@ -223,7 +240,7 @@ export default function EtudiantsContent() {
     const handleEditStudent = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!editingEtudiant) return;
-        
+
         setIsSubmitting(true);
         try {
             await updateStudent(editingEtudiant.id, formData);
@@ -253,7 +270,7 @@ export default function EtudiantsContent() {
         });
 
         if (!result.isConfirmed) return;
-        
+
         try {
             await deleteStudent(id);
             Swal.fire({
@@ -397,48 +414,52 @@ export default function EtudiantsContent() {
                 }}>Liste des Étudiants</h1>
 
                 <div style={{ display: 'flex', gap: '12px' }}>
-                    <button
-                        onClick={handleImportClick}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            padding: '10px 16px',
-                            background: 'white',
-                            border: '1.5px solid #e5e7eb',
-                            borderRadius: '10px',
-                            color: '#4a5568',
-                            fontSize: '13px',
-                            fontWeight: '500',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s ease',
-                            fontFamily: 'inherit'
-                        }}
-                    >
-                        <FileSpreadsheet size={16} />
-                        Importer Excel
-                    </button>
-                    <button
-                        onClick={() => { resetForm(); setShowAddModal(true); }}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            padding: '10px 16px',
-                            background: 'linear-gradient(135deg, #5B8DEF 0%, #4169B8 100%)',
-                            border: 'none',
-                            borderRadius: '10px',
-                            color: 'white',
-                            fontSize: '13px',
-                            fontWeight: '600',
-                            cursor: 'pointer',
-                            boxShadow: '0 4px 12px rgba(91,141,239,0.3)',
-                            fontFamily: 'inherit'
-                        }}
-                    >
-                        <Plus size={16} />
-                        Ajouter étudiant
-                    </button>
+                    {!isAttachéClasse && (
+                        <>
+                            <button
+                                onClick={handleImportClick}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    padding: '10px 16px',
+                                    background: 'white',
+                                    border: '1.5px solid #e5e7eb',
+                                    borderRadius: '10px',
+                                    color: '#4a5568',
+                                    fontSize: '13px',
+                                    fontWeight: '500',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s ease',
+                                    fontFamily: 'inherit'
+                                }}
+                            >
+                                <FileSpreadsheet size={16} />
+                                Importer Excel
+                            </button>
+                            <button
+                                onClick={() => { resetForm(); setShowAddModal(true); }}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    padding: '10px 16px',
+                                    background: 'linear-gradient(135deg, #5B8DEF 0%, #4169B8 100%)',
+                                    border: 'none',
+                                    borderRadius: '10px',
+                                    color: 'white',
+                                    fontSize: '13px',
+                                    fontWeight: '600',
+                                    cursor: 'pointer',
+                                    boxShadow: '0 4px 12px rgba(91,141,239,0.3)',
+                                    fontFamily: 'inherit'
+                                }}
+                            >
+                                <Plus size={16} />
+                                Ajouter étudiant
+                            </button>
+                        </>
+                    )}
                 </div>
             </div>
 
@@ -572,14 +593,14 @@ export default function EtudiantsContent() {
             )}
 
             {/* Table */}
-            <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div className="table-container" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                 {isLoading && (
                     <div style={{ padding: '24px', color: '#64748b' }}>Chargement des étudiants...</div>
                 )}
 
                 {!isLoading && (
                     <div style={{ flex: 1, overflow: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <table className="desktop-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
                             <thead>
                                 <tr style={{ background: '#f8fafc' }}>
                                     {['Matricule', 'Nom & Prénom', 'Classe', 'Année', 'Genre', 'Actions'].map((header) => (
@@ -609,88 +630,111 @@ export default function EtudiantsContent() {
                                         <td style={{ padding: '12px 16px', color: '#4a5568', fontSize: '13px' }}>{etudiant.anneeInscription ?? '—'}</td>
                                         <td style={{ padding: '12px 16px', color: '#4a5568', fontSize: '13px' }}>{etudiant.gender === 'M' ? 'Masculin' : etudiant.gender === 'F' ? 'Féminin' : '—'}</td>
                                         <td style={{ padding: '12px 16px', display: 'flex', gap: '8px' }}>
-                                            <button
-                                                onClick={() => openQRModal(etudiant)}
-                                                title="QR Code"
-                                                style={{
-                                                    width: '32px',
-                                                    height: '32px',
-                                                    borderRadius: '8px',
-                                                    border: '1px solid #e2e8f0',
-                                                    background: 'white',
-                                                    cursor: 'pointer',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center'
-                                                }}
-                                            >
-                                                <QrCode size={16} color="#5B8DEF" />
-                                            </button>
-                                            <button
-                                                onClick={() => setSelectedEtudiant(etudiant)}
-                                                style={{
-                                                    width: '32px',
-                                                    height: '32px',
-                                                    borderRadius: '8px',
-                                                    border: '1px solid #e2e8f0',
-                                                    background: 'white',
-                                                    cursor: 'pointer',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center'
-                                                }}
-                                            >
-                                                <Eye size={16} color="#0f172a" />
-                                            </button>
-                                            <button
-                                                onClick={() => openEditModal(etudiant)}
-                                                style={{
-                                                    width: '32px',
-                                                    height: '32px',
-                                                    borderRadius: '8px',
-                                                    border: '1px solid #e2e8f0',
-                                                    background: 'white',
-                                                    cursor: 'pointer',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center'
-                                                }}
-                                            >
-                                                <Edit2 size={16} color="#0f172a" />
-                                            </button>
-                                            <button
-                                                onClick={() => handleAssignClasse(etudiant)}
-                                                title="Assigner à une classe"
-                                                style={{
-                                                    width: '32px',
-                                                    height: '32px',
-                                                    borderRadius: '8px',
-                                                    border: '1px solid #dbeafe',
-                                                    background: '#dbeafe',
-                                                    cursor: 'pointer',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center'
-                                                }}
-                                            >
-                                                <School size={16} color="#2563eb" />
-                                            </button>
-                                            <button
-                                                onClick={() => handleDeleteEtudiant(etudiant.id)}
-                                                style={{
-                                                    width: '32px',
-                                                    height: '32px',
-                                                    borderRadius: '8px',
-                                                    border: '1px solid #fee2e2',
-                                                    background: '#fee2e2',
-                                                    cursor: 'pointer',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center'
-                                                }}
-                                            >
-                                                <Trash2 size={16} color="#dc2626" />
-                                            </button>
+                                            {isAttachéClasse ? (
+                                                // Mode lecture - seul le bouton Voir est affiché
+                                                <button
+                                                    onClick={() => setSelectedEtudiant(etudiant)}
+                                                    style={{
+                                                        width: '32px',
+                                                        height: '32px',
+                                                        borderRadius: '8px',
+                                                        border: '1px solid #e2e8f0',
+                                                        background: 'white',
+                                                        cursor: 'pointer',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center'
+                                                    }}
+                                                >
+                                                    <Eye size={16} color="#0f172a" />
+                                                </button>
+                                            ) : (
+                                                // Mode édition - tous les boutons sont affichés
+                                                <>
+                                                    <button
+                                                        onClick={() => openQRModal(etudiant)}
+                                                        title="QR Code"
+                                                        style={{
+                                                            width: '32px',
+                                                            height: '32px',
+                                                            borderRadius: '8px',
+                                                            border: '1px solid #e2e8f0',
+                                                            background: 'white',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center'
+                                                        }}
+                                                    >
+                                                        <QrCode size={16} color="#5B8DEF" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setSelectedEtudiant(etudiant)}
+                                                        style={{
+                                                            width: '32px',
+                                                            height: '32px',
+                                                            borderRadius: '8px',
+                                                            border: '1px solid #e2e8f0',
+                                                            background: 'white',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center'
+                                                        }}
+                                                    >
+                                                        <Eye size={16} color="#0f172a" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => openEditModal(etudiant)}
+                                                        style={{
+                                                            width: '32px',
+                                                            height: '32px',
+                                                            borderRadius: '8px',
+                                                            border: '1px solid #e2e8f0',
+                                                            background: 'white',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center'
+                                                        }}
+                                                    >
+                                                        <Edit2 size={16} color="#0f172a" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleAssignClasse(etudiant)}
+                                                        title="Assigner à une classe"
+                                                        style={{
+                                                            width: '32px',
+                                                            height: '32px',
+                                                            borderRadius: '8px',
+                                                            border: '1px solid #dbeafe',
+                                                            background: '#dbeafe',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center'
+                                                        }}
+                                                    >
+                                                        <School size={16} color="#2563eb" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDeleteEtudiant(etudiant.id)}
+                                                        style={{
+                                                            width: '32px',
+                                                            height: '32px',
+                                                            borderRadius: '8px',
+                                                            border: '1px solid #fee2e2',
+                                                            background: '#fee2e2',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center'
+                                                        }}
+                                                    >
+                                                        <Trash2 size={16} color="#dc2626" />
+                                                    </button>
+                                                </>
+                                            )}
                                         </td>
                                     </tr>
                                 ))}
@@ -705,6 +749,45 @@ export default function EtudiantsContent() {
                         totalPages={totalPages}
                         onPageChange={setCurrentPage}
                     />
+                )}
+            </div>
+
+            {/* Cards - Mobile */}
+            <div
+                className="mobile-cards"
+                style={{
+                    padding: '16px',
+                    overflowX: 'hidden',
+                    maxWidth: '100vw',
+                    width: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center'
+                }}
+            >
+                {paginatedData.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
+                        Aucun étudiant trouvé
+                    </div>
+                ) : (
+                    paginatedData.map((etudiant, index) => (
+                        <div key={etudiant.id} style={{ width: '100%', maxWidth: '420px' }}>
+                            <TableCard
+                                index={startIndex + index}
+                                variant="classe"
+                                fields={[
+                                    { label: 'Matricule', value: etudiant.matricule, highlight: true },
+                                    { label: 'Nom', value: `${etudiant.firstName} ${etudiant.lastName}` },
+                                    { label: 'Classe', value: etudiant.classe ?? '—' },
+                                    { label: 'Année', value: etudiant.anneeInscription?.toString() ?? '—' },
+                                    { label: 'Téléphone', value: etudiant.phone ?? '—' }
+                                ]}
+                                onView={() => handleViewStudent(etudiant)}
+                                onEdit={() => handleEditStudentClick(etudiant)}
+                                onDelete={() => handleDeleteStudent(etudiant)}
+                            />
+                        </div>
+                    ))
                 )}
             </div>
 
@@ -1019,17 +1102,17 @@ export default function EtudiantsContent() {
                         <p style={{ margin: '0 0 16px', color: '#64748b', fontSize: '14px' }}>
                             {selectedEtudiant.firstName} {selectedEtudiant.lastName}
                         </p>
-                        <div style={{ 
-                            padding: '16px', 
-                            background: selectedEtudiant.qrCodeImage ? 'white' : '#f1f5f9', 
+                        <div style={{
+                            padding: '16px',
+                            background: selectedEtudiant.qrCodeImage ? 'white' : '#f1f5f9',
                             borderRadius: '12px',
                             display: 'inline-block',
                             marginBottom: '16px'
                         }}>
                             {selectedEtudiant.qrCodeImage ? (
-                                <img 
-                                    src={selectedEtudiant.qrCodeImage} 
-                                    alt="QR Code" 
+                                <img
+                                    src={selectedEtudiant.qrCodeImage}
+                                    alt="QR Code"
                                     style={{ width: '200px', height: '200px' }}
                                 />
                             ) : (
@@ -1080,9 +1163,9 @@ export default function EtudiantsContent() {
                         <p style={{ margin: '0 0 16px', color: '#64748b', fontSize: '14px' }}>
                             Importer des étudiants depuis un fichier Excel (.xlsx)
                         </p>
-                        <div style={{ 
-                            border: '2px dashed #cbd5e1', 
-                            borderRadius: '12px', 
+                        <div style={{
+                            border: '2px dashed #cbd5e1',
+                            borderRadius: '12px',
                             padding: '32px',
                             textAlign: 'center',
                             marginBottom: '16px'
@@ -1215,6 +1298,33 @@ export default function EtudiantsContent() {
                     </div>
                 </div>
             )}
+
+            <style jsx>{`
+                @media (max-width: 768px) {
+                    .table-container {
+                        display: none !important;
+                    }
+                    table.desktop-table {
+                        display: none !important;
+                    }
+                    .mobile-cards {
+                        display: flex !important;
+                        flex-direction: column !important;
+                        align-items: center !important;
+                        padding: 16px !important;
+                        overflow-x: hidden !important;
+                        width: 100% !important;
+                        max-width: 100vw !important;
+                    }
+                }
+
+                @media (min-width: 769px) {
+                    .mobile-cards {
+                        display: none !important;
+                    }
+                }
+            `}</style>
         </div>
     );
 }
+

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import ClassesTable from './ClassesTable';
 import NiveauxTable from './NiveauxTable';
 import FilieresTable from './FilieresTable';
@@ -42,6 +43,7 @@ const toModuleData = (module: ModuleResponseDto): ModuleData => ({
 
 export default function StructureAcademiqueContent() {
     const [activeTab, setActiveTab] = React.useState('classes');
+    const router = useRouter();
     const { user } = useAuth();
     const structure = useStructureData(activeTab);
 
@@ -60,6 +62,13 @@ export default function StructureAcademiqueContent() {
     const handleClassesSearchChange = useCallback(
         (q: string) => structure.setQuery.classes(prev => ({ ...prev, q, page: 0 })),
         [structure.setQuery.classes]
+    );
+
+    const handleViewClasse = useCallback(
+        (classe: ClasseData) => {
+            router.push(`/dashboard/structure/classe/${classe.id}`);
+        },
+        [router]
     );
 
     const handleNiveauxPageChange = useCallback(
@@ -109,7 +118,7 @@ export default function StructureAcademiqueContent() {
     );
 
     return (
-        <>
+        <div className="structure-page">
             <div className="page-title" style={{
                 padding: '32px 40px 24px',
                 borderBottom: '1px solid #e2e8f0'
@@ -162,95 +171,116 @@ export default function StructureAcademiqueContent() {
                 })}
             </div>
 
-            {structure.isLoading && (
-                <div style={{ padding: '32px 40px', color: '#64748b' }}>
-                    Chargement des données...
-                </div>
-            )}
+            <div className="content-area" style={{
+                width: '100%',
+                maxWidth: '100%',
+                overflowX: 'hidden'
+            }}>
+                {structure.isLoading && (
+                    <div style={{ padding: '32px 40px', color: '#64748b' }}>
+                        Chargement des données...
+                    </div>
+                )}
 
-            {structure.error && !structure.isLoading && (
-                <div style={{ padding: '32px 40px', color: '#dc2626' }}>
-                    {structure.error}
-                </div>
-            )}
+                {structure.error && !structure.isLoading && (
+                    <div style={{ padding: '32px 40px', color: '#dc2626' }}>
+                        {structure.error}
+                    </div>
+                )}
 
-            {!structure.isLoading && !structure.error && (
-                <>
-                    {activeTab === 'classes' && (
-                        <ClassesTable
-                            data={classes}
-                            niveauxData={niveaux}
-                            filiereOptions={structure.options.filieres}
-                            currentPage={(structure.query.classes.page ?? 0) + 1}
-                            totalPages={structure.meta.classes?.totalPages ?? 1}
-                            searchTerm={structure.query.classes.q ?? ''}
-                            onPageChange={handleClassesPageChange}
-                            onSearchChange={handleClassesSearchChange}
-                            defaultSchoolId={defaultSchoolId}
-                            onCreate={structure.actions.createClasse}
-                            onUpdate={structure.actions.updateClasse}
-                            onDelete={structure.actions.deleteClasse}
-                        />
-                    )}
-                    {activeTab === 'niveaux' && (
-                        <NiveauxTable
-                            data={niveaux}
-                            currentPage={(structure.query.niveaux.page ?? 0) + 1}
-                            totalPages={structure.meta.niveaux?.totalPages ?? 1}
-                            searchTerm={structure.query.niveaux.q ?? ''}
-                            onPageChange={handleNiveauxPageChange}
-                            onSearchChange={handleNiveauxSearchChange}
-                            onCreate={structure.actions.createNiveau}
-                            onUpdate={structure.actions.updateNiveau}
-                            onDelete={structure.actions.deleteNiveau}
-                        />
-                    )}
-                    {activeTab === 'filieres' && (
-                        <FilieresTable
-                            data={filieres}
-                            currentPage={(structure.query.filieres.page ?? 0) + 1}
-                            totalPages={structure.meta.filieres?.totalPages ?? 1}
-                            searchTerm={structure.query.filieres.q ?? ''}
-                            onPageChange={handleFilieresPageChange}
-                            onSearchChange={handleFilieresSearchChange}
-                            onCreate={structure.actions.createFiliere}
-                            onUpdate={structure.actions.updateFiliere}
-                            onDelete={structure.actions.deleteFiliere}
-                        />
-                    )}
-                    {activeTab === 'modules' && (
-                        <ModulesTable
-                            data={modules}
-                            filiereOptions={structure.options.filieres}
-                            currentPage={(structure.query.modules.page ?? 0) + 1}
-                            totalPages={structure.meta.modules?.totalPages ?? 1}
-                            searchTerm={structure.query.modules.q ?? ''}
-                            selectedFiliereId={structure.query.modules.filiereId ?? ''}
-                            onPageChange={handleModulesPageChange}
-                            onSearchChange={handleModulesSearchChange}
-                            onFiliereFilterChange={handleModulesFiliereFilterChange}
-                            onCreate={structure.actions.createModule}
-                            onUpdate={structure.actions.updateModule}
-                            onDelete={structure.actions.deleteModule}
-                        />
-                    )}
-                    {activeTab === 'salles' && (
-                        <SallesTable
-                            data={salles}
-                            currentPage={(structure.query.salles.page ?? 0) + 1}
-                            totalPages={structure.meta.salles?.totalPages ?? 1}
-                            searchTerm={structure.query.salles.q ?? ''}
-                            onPageChange={handleSallesPageChange}
-                            onSearchChange={handleSallesSearchChange}
-                            onCreate={structure.actions.createSalle}
-                            onUpdate={structure.actions.updateSalle}
-                            onDelete={structure.actions.deleteSalle}
-                        />
-                    )}
-                </>
-            )}
+                {!structure.isLoading && !structure.error && (
+                    <>
+                        {activeTab === 'classes' && (
+                            <ClassesTable
+                                data={classes}
+                                niveauxData={niveaux}
+                                filiereOptions={structure.options.filieres}
+                                currentPage={(structure.query.classes.page ?? 0) + 1}
+                                totalPages={structure.meta.classes?.totalPages ?? 1}
+                                searchTerm={structure.query.classes.q ?? ''}
+                                onPageChange={handleClassesPageChange}
+                                onSearchChange={handleClassesSearchChange}
+                                defaultSchoolId={defaultSchoolId}
+                                onCreate={structure.actions.createClasse}
+                                onUpdate={structure.actions.updateClasse}
+                                onDelete={structure.actions.deleteClasse}
+                                onView={handleViewClasse}
+                            />
+                        )}
+                        {activeTab === 'niveaux' && (
+                            <NiveauxTable
+                                data={niveaux}
+                                currentPage={(structure.query.niveaux.page ?? 0) + 1}
+                                totalPages={structure.meta.niveaux?.totalPages ?? 1}
+                                searchTerm={structure.query.niveaux.q ?? ''}
+                                onPageChange={handleNiveauxPageChange}
+                                onSearchChange={handleNiveauxSearchChange}
+                                onCreate={structure.actions.createNiveau}
+                                onUpdate={structure.actions.updateNiveau}
+                                onDelete={structure.actions.deleteNiveau}
+                            />
+                        )}
+                        {activeTab === 'filieres' && (
+                            <FilieresTable
+                                data={filieres}
+                                currentPage={(structure.query.filieres.page ?? 0) + 1}
+                                totalPages={structure.meta.filieres?.totalPages ?? 1}
+                                searchTerm={structure.query.filieres.q ?? ''}
+                                onPageChange={handleFilieresPageChange}
+                                onSearchChange={handleFilieresSearchChange}
+                                onCreate={structure.actions.createFiliere}
+                                onUpdate={structure.actions.updateFiliere}
+                                onDelete={structure.actions.deleteFiliere}
+                            />
+                        )}
+                        {activeTab === 'modules' && (
+                            <ModulesTable
+                                data={modules}
+                                filiereOptions={structure.options.filieres}
+                                currentPage={(structure.query.modules.page ?? 0) + 1}
+                                totalPages={structure.meta.modules?.totalPages ?? 1}
+                                searchTerm={structure.query.modules.q ?? ''}
+                                selectedFiliereId={structure.query.modules.filiereId ?? ''}
+                                onPageChange={handleModulesPageChange}
+                                onSearchChange={handleModulesSearchChange}
+                                onFiliereFilterChange={handleModulesFiliereFilterChange}
+                                onCreate={structure.actions.createModule}
+                                onUpdate={structure.actions.updateModule}
+                                onDelete={structure.actions.deleteModule}
+                            />
+                        )}
+                        {activeTab === 'salles' && (
+                            <SallesTable
+                                data={salles}
+                                currentPage={(structure.query.salles.page ?? 0) + 1}
+                                totalPages={structure.meta.salles?.totalPages ?? 1}
+                                searchTerm={structure.query.salles.q ?? ''}
+                                onPageChange={handleSallesPageChange}
+                                onSearchChange={handleSallesSearchChange}
+                                onCreate={structure.actions.createSalle}
+                                onUpdate={structure.actions.updateSalle}
+                                onDelete={structure.actions.deleteSalle}
+                            />
+                        )}
+                    </>
+                )}
+            </div>
 
             <style jsx>{`
+                .structure-page {
+                    width: 100%;
+                    max-width: 100vw;
+                    overflow-x: hidden;
+                    box-sizing: border-box;
+                }
+                .content-area {
+                    width: 100%;
+                    max-width: 100vw;
+                    overflow-x: hidden;
+                    box-sizing: border-box;
+                }
+
+                /* Global responsive styles for all tables */
                 @media (max-width: 768px) {
                     .page-title {
                         padding: 20px !important;
@@ -259,10 +289,33 @@ export default function StructureAcademiqueContent() {
                         font-size: 22px !important;
                     }
                     .tabs-nav {
-                        padding: 0 20px !important;
+                        padding: 0 16px !important;
+                        overflow-x: auto;
+                        -webkit-overflow-scrolling: touch;
+                    }
+                    .content-area {
+                        padding: 0 !important;
+                        max-width: 100vw !important;
+                    }
+                    /* Hide all table containers on mobile */
+                    .table-container {
+                        display: none !important;
+                    }
+                    /* Show all mobile cards on mobile */
+                    .mobile-cards {
+                        display: flex !important;
+                    }
+                }
+
+                @media (max-width: 480px) {
+                    .page-title {
+                        padding: 16px !important;
+                    }
+                    .page-title h1 {
+                        font-size: 20px !important;
                     }
                 }
             `}</style>
-        </>
+        </div>
     );
 }

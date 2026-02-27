@@ -67,6 +67,10 @@ export const tokenStorage = {
         return readSession()?.refreshToken ?? null;
     },
 
+    getUser(): AuthUser | null {
+        return readSession()?.user ?? null;
+    },
+
     hasValidAccessToken(): boolean {
         const session = readSession();
         if (!session) {

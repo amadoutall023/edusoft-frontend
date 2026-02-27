@@ -73,13 +73,14 @@ export default function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
             alignItems: 'center',
             justifyContent: 'space-between',
             boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
-            zIndex: 9998,
+            zIndex: 9999999999,
             backdropFilter: 'blur(20px)',
             position: 'fixed',
             top: 0,
             left: '280px',
             right: 0,
-            transition: 'left 0.3s ease'
+            transition: 'left 0.3s ease',
+            height: '80px'
         }}>
             {/* Mobile Menu Button */}
             <button
@@ -135,19 +136,19 @@ export default function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
                     }}
                     disabled={isYearLoading || availableYears.length === 0}
                     style={{
-                    padding: '10px 16px',
-                    borderRadius: '10px',
-                    border: '1.5px solid #e2e8f0',
-                    fontSize: '15px',
-                    fontWeight: '500',
-                    color: '#2d3748',
-                    background: 'white',
-                    cursor: 'pointer',
-                    outline: 'none',
-                    minWidth: '150px',
-                    transition: 'all 0.2s ease',
-                    fontFamily: 'inherit'
-                }}
+                        padding: '10px 16px',
+                        borderRadius: '10px',
+                        border: '1.5px solid #e2e8f0',
+                        fontSize: '15px',
+                        fontWeight: '500',
+                        color: '#2d3748',
+                        background: 'white',
+                        cursor: 'pointer',
+                        outline: 'none',
+                        minWidth: '150px',
+                        transition: 'all 0.2s ease',
+                        fontFamily: 'inherit'
+                    }}
                     onFocus={(e: any) => e.currentTarget.style.borderColor = '#5B8DEF'}
                     onBlur={(e: any) => e.currentTarget.style.borderColor = '#e2e8f0'}
                 >
@@ -215,8 +216,8 @@ export default function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
 
                     {/* Notification Dropdown */}
                     <div
-                        className="notification-container md:absolute md:top-full md:right-0"
-                        style={{ zIndex: 10000 }}
+                        className="notification-container"
+                        style={{ zIndex: 99999999 }}
                     >
                         <NotificationDropdown
                             isOpen={isNotificationOpen}
@@ -275,6 +276,7 @@ export default function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
                     .header {
                         left: 0 !important;
                         padding: 16px 20px !important;
+                        z-index: 9999999 !important;
                     }
                     .mobile-menu-btn {
                         display: flex !important;
@@ -282,7 +284,7 @@ export default function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
                 }
                 @media (max-width: 768px) {
                     .header {
-                        z-index: 99999 !important;
+                        z-index: 9999999 !important;
                         height: 60px !important;
                     }
                     .year-selector {
@@ -291,8 +293,20 @@ export default function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
                     .profile-info {
                         display: none !important;
                     }
+                    .notification-dropdown {
+                        z-index: 99999999 !important;
+                        position: fixed !important;
+                        top: 60px !important;
+                        left: 0 !important;
+                        right: 0 !important;
+                        width: 100% !important;
+                        max-width: 100% !important;
+                        height: auto !important;
+                        max-height: calc(100vh - 60px) !important;
+                        border-radius: 0 0 16px 16px !important;
+                    }
                     .notification-container {
-                        z-index: 99999 !important;
+                        z-index: 99999999 !important;
                     }
                 }
             `}</style>

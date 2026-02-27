@@ -1,8 +1,8 @@
 'use client';
 
-import PlanningContent from '@/modules/planning/components/PlanningContent';
+import PlanningFullCalendar from '@/modules/planning/components/PlanningFullCalendar';
 
 export default function PlanningPage() {
-    return <PlanningContent />;
+    return <PlanningFullCalendar />;
 }
 

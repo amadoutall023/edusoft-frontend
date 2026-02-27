@@ -223,6 +223,7 @@ export interface ProfessorModuleDto {
 export type SessionMode = 'PRESENTIEL' | 'EN_LIGNE' | 'HYBRIDE';
 export type SessionType = 'COURS' | 'EVALUATION' | 'AUTRE';
 export type SessionStatus = 'PROGRAMME' | 'EN_COURS' | 'TERMINEE' | 'ANNULE';
+export type NoteStatus = 'A_DEPOSER' | 'DEPOSEE' | 'EN_RETARD' | 'VALIDEE' | 'REFUSEE';
 export interface SessionRequestDto {
     date: string;
     startHour: string;
@@ -251,6 +252,7 @@ export interface SessionResponseDto {
     typeSession: SessionType;
     modeSession: SessionMode;
     status?: SessionStatus | null;
+    noteStatus?: NoteStatus | null;
     libelle: string;
     sessionSummary?: string | null;
     cours?: CoursSimpleDto | null;

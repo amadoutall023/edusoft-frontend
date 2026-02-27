@@ -4,6 +4,7 @@ import React, { useState, useMemo } from 'react';
 import { Eye, X, Trash2 } from 'lucide-react';
 import SearchInput from '@/shared/components/SearchInput';
 import Pagination from '@/shared/components/Pagination';
+import TableCard from '@/shared/components/TableCard';
 import { ProfessorData } from '../types';
 
 interface ProfesseursTableProps {
@@ -69,6 +70,19 @@ export default function ProfesseursTable({ data, onDelete, onViewDetails }: Prof
     };
 
     const hasActiveFilters = filters.grade || filters.specialite;
+
+    // Handle actions for mobile cards
+    const handleViewDetails = (professor: ProfessorData) => {
+        if (onViewDetails) {
+            onViewDetails(professor);
+        }
+    };
+
+    const handleDeleteClick = (professor: ProfessorData) => {
+        if (onDelete) {
+            onDelete(professor);
+        }
+    };
 
     return (
         <>
@@ -220,7 +234,7 @@ export default function ProfesseursTable({ data, onDelete, onViewDetails }: Prof
                 overflowX: 'auto',
                 padding: '0 40px'
             }}>
-                <table style={{
+                <table className="desktop-table" style={{
                     width: '100%',
                     borderCollapse: 'collapse',
                     minWidth: '1000px'
@@ -451,11 +465,73 @@ export default function ProfesseursTable({ data, onDelete, onViewDetails }: Prof
                 </div>
             )}
 
+            {/* Cards - Mobile */}
+            <div
+                className="mobile-cards"
+                style={{
+                    padding: '16px',
+                    overflowX: 'hidden',
+                    maxWidth: '100vw',
+                    width: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center'
+                }}
+            >
+                {paginatedData.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
+                        Aucun professeur trouvé
+                    </div>
+                ) : (
+                    paginatedData.map((professor, index) => (
+                        <div key={professor.id} style={{ width: '100%', maxWidth: '420px' }}>
+                            <TableCard
+                                index={startIndex + index}
+                                variant="classe"
+                                fields={[
+                                    { label: 'Nom', value: `${professor.prenom} ${professor.nom}`, highlight: true },
+                                    { label: 'Grade', value: professor.grade ?? '—' },
+                                    { label: 'Spécialité', value: professor.specialite ?? '—' },
+                                    { label: 'Téléphone', value: professor.telephone ?? '—' },
+                                    { label: 'Email', value: professor.email }
+                                ]}
+                                onEdit={() => handleViewDetails(professor)}
+                                onDelete={() => handleDeleteClick(professor)}
+                            />
+                        </div>
+                    ))
+                )}
+            </div>
+
             <style jsx>{`
                 @media (max-width: 768px) {
                     .search-filter-section, .filter-panel, .table-container {
                         padding-left: 20px !important;
                         padding-right: 20px !important;
+                    }
+                    /* Hide table on mobile */
+                    .table-container {
+                        display: none !important;
+                    }
+                    table.desktop-table {
+                        display: none !important;
+                    }
+                    /* Show mobile cards on mobile */
+                    .mobile-cards {
+                        display: flex !important;
+                        flex-direction: column !important;
+                        align-items: center !important;
+                        padding: 16px !important;
+                        overflow-x: hidden !important;
+                        width: 100% !important;
+                        max-width: 100vw !important;
+                    }
+                }
+
+                /* Desktop: hide mobile cards */
+                @media (min-width: 769px) {
+                    .mobile-cards {
+                        display: none !important;
                     }
                 }
             `}</style>

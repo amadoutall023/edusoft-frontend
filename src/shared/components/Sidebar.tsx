@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { GraduationCap, LayoutGrid, Book, Users, UserCheck, Calendar, Settings, LogOut, Building2, Menu, X } from 'lucide-react';
 import { useAuth } from '@/modules/auth/context/AuthContext';
 import { useSidebar } from '@/shared/context/SidebarContext';
+import { menuItemsByRole, getMenuItemsByRoles, UserRole } from '@/shared/config/roles';
 
 interface SidebarProps {
     activeItem?: string;
@@ -25,16 +26,25 @@ export default function Sidebar({ activeItem }: SidebarProps) {
     const initials = userName ? userName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() : 'U';
     const roleLabel = roles.length ? roles[0].replace('ROLE_', '').replaceAll('_', ' ') : 'Utilisateur';
 
-    const menuItems = [
-        { icon: LayoutGrid, label: 'Tableau de bord', path: '/dashboard' },
-        { icon: Book, label: 'Cours', path: '/dashboard/cours' },
-        { icon: Users, label: 'Étudiants', path: '/dashboard/etudiant' },
-        { icon: UserCheck, label: 'Professeurs', path: '/dashboard/prof' },
-        { icon: Users, label: 'Administration', path: '/dashboard/administration' },
-        { icon: Calendar, label: 'Planning', path: '/dashboard/planning' },
-        { icon: Building2, label: 'Structure académique', path: '/dashboard/structure' },
-        { icon: Settings, label: 'Paramètre', path: '/parametre' },
-    ];
+    // Le menu est identique pour tous les profils
+    // Le CONTENU des pages change selon le rôle (gestion centralisée par RP)
+    const menuItems = menuItemsByRole;
+
+    // Fonction pour obtenir le chemin du tableau de bord selon le rôle
+    const getDashboardPath = () => {
+        if (roles.includes('ROLE_ATTACHE_CLASSE')) {
+            return '/dashboard/attache-classe';
+        }
+        return '/dashboard';
+    };
+
+    // Fonction pour obtenir le chemin des cours selon le rôle
+    const getCoursPath = () => {
+        if (roles.includes('ROLE_ATTACHE_CLASSE')) {
+            return '/dashboard/cours-attache';
+        }
+        return '/dashboard/cours';
+    };
 
     return (
         <>
@@ -155,10 +165,17 @@ export default function Sidebar({ activeItem }: SidebarProps) {
                     {menuItems.map((item, index) => {
                         const Icon = item.icon;
                         const isActive = item.label === activeItem;
+                        // Utiliser le chemin dynamique pour "Tableau de bord" et "Cours"
+                        let itemPath = item.path;
+                        if (item.label === 'Tableau de bord') {
+                            itemPath = getDashboardPath();
+                        } else if (item.label === 'Cours') {
+                            itemPath = getCoursPath();
+                        }
 
                         return (
                             <Link
-                                href={item.path}
+                                href={itemPath}
                                 key={index}
                                 onClick={closeSidebar}
                                 style={{

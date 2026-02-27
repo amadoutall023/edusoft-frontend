@@ -66,7 +66,7 @@ export default function CoursContent() {
         const foundModule = availableModules.find(m => m.libelle === cours.module);
         // Trouver l'ID de la première classe
         const foundClasse = availableClasses.find(c => cours.classes?.includes(c.libelle));
-        
+
         setEditingCours(cours);
         setNewCours({
             titre: cours.titre,
@@ -213,7 +213,7 @@ export default function CoursContent() {
 
         try {
             setIsCreating(true);
-            
+
             if (editingCours) {
                 // Mode modification
                 await updateCourse(editingCours.id, {
@@ -235,7 +235,7 @@ export default function CoursContent() {
                     professorId: newCours.professeurId || undefined
                 });
             }
-            
+
             const refreshed = await fetchCourses();
             setCourses(refreshed.map(mapCoursDto));
             setShowModal(false);
@@ -599,7 +599,9 @@ export default function CoursContent() {
                                         fontSize: '15px',
                                         outline: 'none',
                                         transition: 'border-color 0.2s ease',
-                                        fontFamily: 'inherit'
+                                        fontFamily: 'inherit',
+                                        color: '#1a202c',
+                                        background: 'white'
                                     }}
                                 />
                             </div>
@@ -626,7 +628,8 @@ export default function CoursContent() {
                                         transition: 'border-color 0.2s ease',
                                         fontFamily: 'inherit',
                                         background: 'white',
-                                        cursor: 'pointer'
+                                        cursor: 'pointer',
+                                        color: '#1a202c'
                                     }}
                                 >
                                     <option value="">Sélectionner un module</option>
@@ -658,7 +661,8 @@ export default function CoursContent() {
                                         transition: 'border-color 0.2s ease',
                                         fontFamily: 'inherit',
                                         background: 'white',
-                                        cursor: 'pointer'
+                                        cursor: 'pointer',
+                                        color: '#1a202c'
                                     }}
                                 >
                                     <option value="">Sélectionner une classe</option>
@@ -690,7 +694,8 @@ export default function CoursContent() {
                                         transition: 'border-color 0.2s ease',
                                         fontFamily: 'inherit',
                                         background: 'white',
-                                        cursor: 'pointer'
+                                        cursor: 'pointer',
+                                        color: '#1a202c'
                                     }}
                                 >
                                     <option value="">Sélectionner un professeur</option>
@@ -725,7 +730,9 @@ export default function CoursContent() {
                                         fontSize: '15px',
                                         outline: 'none',
                                         transition: 'border-color 0.2s ease',
-                                        fontFamily: 'inherit'
+                                        fontFamily: 'inherit',
+                                        color: '#1a202c',
+                                        background: 'white'
                                     }}
                                 />
                             </div>
