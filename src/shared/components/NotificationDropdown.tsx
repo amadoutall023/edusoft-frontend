@@ -4,12 +4,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Notification } from '@/modules/auth/types';
 import {
-    notificationsData,
     getUnreadCount,
     getNotificationIcon,
     formatTimestamp
 } from '@/shared/data/notifications';
 import { Bell, Check, CheckCheck } from 'lucide-react';
+import { useNotifications } from '@/shared/hooks/useNotifications';
 
 interface NotificationDropdownProps {
     isOpen: boolean;
@@ -18,11 +18,22 @@ interface NotificationDropdownProps {
 
 export default function NotificationDropdown({ isOpen, onClose }: NotificationDropdownProps) {
     const router = useRouter();
-    const [notifications, setNotifications] = useState<Notification[]>(notificationsData);
+    const { notifications, isLoading, error, setNotifications, refresh } = useNotifications();
     const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const [isMobile, setIsMobile] = useState(false);
 
     const unreadCount = getUnreadCount(notifications);
+
+    // Detect mobile screen
+    useEffect(() => {
+        const checkMobile = () => {
+            setIsMobile(window.innerWidth < 1024);
+        };
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
 
     // Close dropdown when clicking outside
     useEffect(() => {
@@ -79,17 +90,64 @@ export default function NotificationDropdown({ isOpen, onClose }: NotificationDr
 
     if (!isOpen) return null;
 
+    // Styles pour mobile
+    const dropdownStyle: React.CSSProperties = isMobile ? {
+        position: 'fixed',
+        top: '60px',
+        left: '0',
+        right: '0',
+        width: '100%',
+        maxWidth: '100%',
+        maxHeight: 'calc(100vh - 60px)',
+        backgroundColor: 'white',
+        borderRadius: '0 0 16px 16px',
+        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+        overflow: 'hidden',
+        zIndex: 999999999,
+        display: 'flex',
+        flexDirection: 'column'
+    } : {
+        position: 'absolute',
+        top: '100%',
+        right: '0',
+        marginTop: '8px',
+        width: '380px',
+        maxWidth: '380px',
+        maxHeight: '500px',
+        backgroundColor: 'white',
+        borderRadius: '16px',
+        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+        overflow: 'hidden',
+        zIndex: 999999999,
+        display: 'flex',
+        flexDirection: 'column'
+    };
+
+    const overlayStyle: React.CSSProperties = isMobile ? {
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        zIndex: 999999998
+    } : {
+        display: 'none'
+    };
+
     return (
         <>
             {/* Mobile overlay */}
             <div
-                className="lg:hidden fixed inset-0 bg-black/50 z-[10000]"
+                className="notification-overlay"
+                style={overlayStyle}
                 onClick={onClose}
             />
 
             <div
                 ref={dropdownRef}
-                className="notification-dropdown w-[380px] max-w-[calc(100vw-40px)] max-h-[500px] bg-white rounded-2xl shadow-xl overflow-hidden z-[10001] lg:z-[9999] flex flex-col animate-slide-down lg:absolute lg:top-full lg:right-0 lg:mt-2"
+                className="notification-dropdown"
+                style={dropdownStyle}
             >
                 {/* Header */}
                 <div className="p-4 lg:p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
@@ -133,7 +191,21 @@ export default function NotificationDropdown({ isOpen, onClose }: NotificationDr
 
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto max-h-[400px]">
-                    {selectedNotification ? (
+                    {isLoading ? (
+                        <div className="p-10 text-center text-slate-500 text-sm">
+                            Chargement des notifications...
+                        </div>
+                    ) : error ? (
+                        <div className="p-10 text-center text-slate-500 text-sm flex flex-col gap-2">
+                            <span>{error}</span>
+                            <button
+                                onClick={() => void refresh()}
+                                className="text-[#5B8DEF] text-sm font-semibold"
+                            >
+                                Réessayer
+                            </button>
+                        </div>
+                    ) : selectedNotification ? (
                         <div className="p-5">
                             <div className="flex items-start gap-4 mb-5">
                                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl ${selectedNotification.isRead ? 'bg-slate-100' : 'bg-blue-50'}`}>
@@ -227,37 +299,6 @@ export default function NotificationDropdown({ isOpen, onClose }: NotificationDr
                     </div>
                 )}
             </div>
-
-            <style jsx>{`
-                @keyframes slideDown {
-                    from {
-                        opacity: 0;
-                        transform: translateY(-10px);
-                    }
-                    to {
-                        opacity: 1;
-                        transform: translateY(0);
-                    }
-                }
-                .animate-slide-down {
-                    animation: slideDown 0.2s ease-out;
-                }
-                @media (max-width: 1023px) {
-                    .notification-dropdown {
-                        position: fixed !important;
-                        width: 100% !important;
-                        max-width: 100% !important;
-                        right: 0 !important;
-                        left: 0 !important;
-                        bottom: 0 !important;
-                        top: 60px !important;
-                        margin-top: 0 !important;
-                        border-radius: 16px 16px 0 0 !important;
-                        max-height: none !important;
-                        height: calc(100vh - 60px) !important;
-                    }
-                }
-            `}</style>
         </>
     );
 }

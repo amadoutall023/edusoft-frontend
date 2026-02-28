@@ -1,21 +1,25 @@
-import { Emargement } from '../types/emargementTypes';
+import { httpClient } from '@/shared/api/httpClient';
+import {
+    ApiResponse,
+    HemargeRequestDto,
+    HemargeResponseDto
+} from '@/shared/api/types';
+
+const BASE_URL = '/api/v1/presences';
 
 export const emargementApi = {
-    async fetchEmargements(): Promise<Emargement[]> {
-        // Logique pour récupérer les émargements depuis l'API
-        const response = await fetch('/api/emargements');
-        return response.json();
+    async fetchEmargements(sessionId: string): Promise<HemargeResponseDto[]> {
+        const response = await httpClient<ApiResponse<HemargeResponseDto[]>>(
+            `${BASE_URL}/session/${sessionId}`
+        );
+        return response.data ?? [];
     },
 
-    async createEmargement(data: Omit<Emargement, 'id'>): Promise<Emargement> {
-        // Logique pour créer un nouvel émargement
-        const response = await fetch('/api/emargements', {
+    async createEmargement(payload: HemargeRequestDto): Promise<HemargeResponseDto> {
+        const response = await httpClient<ApiResponse<HemargeResponseDto>>(`${BASE_URL}/hemarger`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data),
+            body: JSON.stringify(payload)
         });
-        return response.json();
-    },
-
-    // Autres méthodes API
+        return response.data as HemargeResponseDto;
+    }
 };

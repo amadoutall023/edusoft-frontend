@@ -1,145 +1,455 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
-import { Search, Plus, ChevronDown, X, GripVertical, Trash2, Edit2, Calendar, Layers, RotateCw } from 'lucide-react';
-import { SeancePlanning, PlanningSemaine } from '../types';
-import { planningsSemaine, seances as initialSeances, creneauxConfig, jours, classes, modules, getSemainesDisponibles } from '../data/planning';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+    Search,
+    Plus,
+    ChevronDown,
+    X,
+    GripVertical,
+    Trash2,
+    Edit2,
+    Calendar,
+    Layers,
+    RotateCw
+} from 'lucide-react';
+import Swal from 'sweetalert2';
+import {
+    ClasseResponseDto,
+    CoursResponseDto,
+    Metadata,
+    ModuleResponseDto,
+    ProfessorResponseDto,
+    SalleResponseDto,
+    SessionRequestDto,
+    SessionResponseDto,
+    SessionStatus
+} from '@/shared/api/types';
+import { ApiError } from '@/shared/errors/ApiError';
+import { PlanningSemaine, SeancePlanning, JourSemaine } from '../types';
+import { JOUR_OPTIONS, STATUS_COLOR, TIME_SLOTS } from '../constants';
+import {
+    fetchSessions,
+    createSession,
+    updateSession,
+    deleteSession
+} from '../services/sessionService';
+import {
+    fetchClasses,
+    fetchModules,
+    fetchSalles
+} from '@/modules/structure/services/structureService';
+import { fetchCourses } from '@/modules/cours/services/coursService';
+import { fetchProfessors } from '@/modules/prof/services/professorService';
+import PlanningMobileView from './PlanningMobileView';
+
+const ALL_CLASSES = 'ALL_CLASSES';
+const ALL_MODULES = 'ALL_MODULES';
+
+interface WeekOption {
+    id: string;
+    label: string;
+    debut: string;
+    fin: string;
+}
+
+const DAY_INDEX: Record<JourSemaine, number> = {
+    Lundi: 0,
+    Mardi: 1,
+    Mercredi: 2,
+    Jeudi: 3,
+    Vendredi: 4,
+    Samedi: 5
+};
+
+interface SessionFormState {
+    classeId: string;
+    coursId: string;
+    jour: JourSemaine;
+    creneau: string;
+    professeurId: string;
+    salleInput: string;
+}
+
+function createFormState(overrides: Partial<SessionFormState> = {}): SessionFormState {
+    return {
+        classeId: '',
+        coursId: '',
+        jour: JOUR_OPTIONS[0],
+        creneau: TIME_SLOTS[0].id,
+        professeurId: '',
+        salleInput: '',
+        ...overrides
+    };
+}
+
+function startOfWeek(date: Date): Date {
+    const day = date.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    const start = new Date(date);
+    start.setDate(date.getDate() + diff);
+    start.setHours(0, 0, 0, 0);
+    return start;
+}
+
+function formatWeekLabel(start: Date, end: Date) {
+    const format = (d: Date) => d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+    return `Semaine du ${format(start)} au ${format(end)}`;
+}
+
+function buildWeekOption(dateISO: string): WeekOption {
+    const date = new Date(dateISO);
+    const monday = startOfWeek(date);
+    const friday = new Date(monday);
+    friday.setDate(monday.getDate() + 4);
+    return {
+        id: monday.toISOString().split('T')[0],
+        label: formatWeekLabel(monday, friday),
+        debut: monday.toISOString().split('T')[0],
+        fin: friday.toISOString().split('T')[0]
+    };
+}
+
+function generateRollingWeeks(count = 6): WeekOption[] {
+    const weeks: WeekOption[] = [];
+    const today = new Date();
+    for (let i = -1; i < count; i++) {
+        const ref = new Date(today);
+        ref.setDate(ref.getDate() + i * 7);
+        weeks.push(buildWeekOption(ref.toISOString()));
+    }
+    const dedup = new Map(weeks.map(week => [week.id, week]));
+    return Array.from(dedup.values()).sort((a, b) => a.debut.localeCompare(b.debut));
+}
+
+function formatHourDisplay(time?: string | null) {
+    if (!time) return '--';
+    const [hour, minute] = time.split(':');
+    return `${hour}H${minute !== '00' ? `:${minute}` : ''}`;
+}
+
+function computeColor(status?: SessionStatus | null) {
+    if (!status) return STATUS_COLOR.DEFAULT;
+    return STATUS_COLOR[status] ?? STATUS_COLOR.DEFAULT;
+}
+
+function normalizeJour(dateISO: string): JourSemaine {
+    const formatter = new Intl.DateTimeFormat('fr-FR', { weekday: 'long' });
+    const label = formatter.format(new Date(dateISO));
+    const formatted = (label.charAt(0).toUpperCase() + label.slice(1)).split('-')[0];
+    if (JOUR_OPTIONS.includes(formatted as JourSemaine)) {
+        return formatted as JourSemaine;
+    }
+    return 'Lundi';
+}
+
+function dateFromWeekAndDay(weekStart: string, jour: JourSemaine) {
+    const start = new Date(weekStart);
+    start.setDate(start.getDate() + DAY_INDEX[jour]);
+    return start.toISOString().split('T')[0];
+}
+
+function isWithinWeek(dateISO: string, week: WeekOption) {
+    return dateISO >= week.debut && dateISO <= week.fin;
+}
+
+// Hook personnalisé pour détecter si l'écran est mobile
+function useIsMobile(breakpoint = 768) {
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        const checkMobile = () => {
+            setIsMobile(window.innerWidth < breakpoint);
+        };
+
+        // Vérifier initial
+        checkMobile();
+
+        // Écouter les changements de taille
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, [breakpoint]);
+
+    return isMobile;
+}
+
+function mapSessionToSeance(session: SessionResponseDto): SeancePlanning {
+    const jour = normalizeJour(session.date);
+    return {
+        id: session.id,
+        classe: session.classe?.libelle ?? session.classes?.[0]?.libelle ?? 'Classe',
+        classeId: session.classe?.id ?? session.classes?.[0]?.id ?? null,
+        cours: session.cours?.libelle ?? session.libelle,
+        coursId: session.cours?.id ?? null,
+        moduleId: session.module?.id ?? null,
+        moduleLibelle: session.module?.libelle ?? null,
+        professeur: session.professor
+            ? `${session.professor.prenom ?? ''} ${session.professor.nom ?? ''}`.trim() || 'Non assigné'
+            : 'Non assigné',
+        professeurId: session.professor?.id ?? null,
+        salle: session.salle?.libelle ?? 'Salle',
+        salleId: session.salle?.id ?? null,
+        jour,
+        dateISO: session.date,
+        heureDebut: formatHourDisplay(session.startHour),
+        heureFin: formatHourDisplay(session.endHour),
+        couleur: computeColor(session.status),
+        status: session.status,
+        typeSession: session.typeSession,
+        modeSession: session.modeSession
+    };
+}
+
+function buildSessionPayload(
+    session: SessionResponseDto,
+    overrides: Partial<SessionRequestDto> = {}
+): SessionRequestDto {
+    return {
+        date: overrides.date ?? session.date,
+        startHour: overrides.startHour ?? session.startHour,
+        endHour: overrides.endHour ?? session.endHour,
+        duration: overrides.duration ?? (session.duration ?? null),
+        typeSession: overrides.typeSession ?? session.typeSession,
+        modeSession: overrides.modeSession ?? session.modeSession,
+        status: overrides.status ?? session.status ?? null,
+        libelle: overrides.libelle ?? session.libelle,
+        sessionSummary: overrides.sessionSummary ?? session.sessionSummary ?? null,
+        coursId: overrides.coursId ?? session.cours?.id ?? null,
+        moduleId: overrides.moduleId ?? session.module?.id ?? null,
+        classeId: overrides.classeId ?? session.classe?.id ?? null,
+        classIds: overrides.classIds ?? (session.classes ? session.classes.map(classe => classe.id) : null),
+        professorId: overrides.professorId ?? session.professor?.id ?? null,
+        salleId: overrides.salleId ?? session.salle?.id ?? null,
+    };
+}
+
+function buildSlotId(startHour?: string | null, endHour?: string | null) {
+    const start = (startHour ?? '').slice(0, 5);
+    const end = (endHour ?? '').slice(0, 5);
+    const candidate = `${start}-${end}`;
+    return TIME_SLOTS.some(slot => slot.id === candidate) ? candidate : TIME_SLOTS[0].id;
+}
 
 export default function PlanningContent() {
     const [searchTerm, setSearchTerm] = useState('');
-    const [filtres, setFiltres] = useState({ classe: '', module: '' });
+    const [moduleFilter, setModuleFilter] = useState(ALL_MODULES);
     const [showAddModal, setShowAddModal] = useState(false);
     const [showCreatePlanningModal, setShowCreatePlanningModal] = useState(false);
     const [selectedSeance, setSelectedSeance] = useState<SeancePlanning | null>(null);
-    const [seances, setSeances] = useState<SeancePlanning[]>(initialSeances);
-    const [plannings, setPlannings] = useState<PlanningSemaine[]>(planningsSemaine);
     const [draggedSeance, setDraggedSeance] = useState<SeancePlanning | null>(null);
-    const [selectedClasse, setSelectedClasse] = useState<string>('');
+    const [selectedClasse, setSelectedClasse] = useState<string>(ALL_CLASSES);
     const [selectedSemaine, setSelectedSemaine] = useState<string>('');
-    const [currentPlanning, setCurrentPlanning] = useState<PlanningSemaine | null>(null);
     const [viewMode, setViewMode] = useState<'vertical' | 'horizontal'>('vertical');
+    const [sessions, setSessions] = useState<SessionResponseDto[]>([]);
+    const [classes, setClasses] = useState<ClasseResponseDto[]>([]);
+    const [modules, setModules] = useState<ModuleResponseDto[]>([]);
+    const [courses, setCourses] = useState<CoursResponseDto[]>([]);
+    const [professors, setProfessors] = useState<ProfessorResponseDto[]>([]);
+    const [salles, setSalles] = useState<SalleResponseDto[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [isMutating, setIsMutating] = useState(false);
+    const [formState, setFormState] = useState<SessionFormState>(() => createFormState());
+    const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+    const [editingWeekStart, setEditingWeekStart] = useState<string | null>(null);
+    const [sessionMeta, setSessionMeta] = useState<Metadata | null>(null);
+    const [hasMoreSessions, setHasMoreSessions] = useState(false);
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
+    const [isMobileView, setIsMobileView] = useState(false);
+    const isMobile = useIsMobile(768);
+    const sessionPageSize = 100;
 
-    const semaines = useMemo(() => getSemainesDisponibles(), []);
+    const loadSessionsPage = useCallback(async (page = 0, append = false) => {
+        const result = await fetchSessions({ size: sessionPageSize, page });
+        setSessions(prev => {
+            if (!append) {
+                return result.data;
+            }
+            const existingIds = new Set(prev.map(session => session.id));
+            const merged = [...prev];
+            result.data.forEach(session => {
+                if (!existingIds.has(session.id)) {
+                    merged.push(session);
+                }
+            });
+            return merged;
+        });
+        const meta = result.meta ?? null;
+        setSessionMeta(meta);
+        const currentPage = meta?.page ?? page;
+        setHasMoreSessions(meta ? currentPage + 1 < meta.totalPages : false);
+        return result;
+    }, [sessionPageSize]);
 
-    // Obtenir le planning courant
-    useMemo(() => {
-        if (selectedClasse && selectedClasse !== 'Toutes les classes' && selectedSemaine) {
-            const planning = plannings.find(p => p.classe === selectedClasse && p.semaineDebut === selectedSemaine);
-            setCurrentPlanning(planning || null);
-        } else {
-            setCurrentPlanning(null);
+    const loadData = useCallback(async () => {
+        try {
+            setIsLoading(true);
+            setSessionMeta(null);
+            setHasMoreSessions(false);
+            const [
+                classesRes,
+                modulesRes,
+                coursesRes,
+                professorsRes,
+                sallesRes
+            ] = await Promise.all([
+                fetchClasses(200),
+                fetchModules(200),
+                fetchCourses({ size: 200 }),
+                fetchProfessors(),
+                fetchSalles(200)
+            ]);
+            setClasses(classesRes);
+            setModules(modulesRes);
+            setCourses(coursesRes);
+            setProfessors(professorsRes);
+            setSalles(sallesRes);
+            await loadSessionsPage(0, false);
+            setError(null);
+        } catch (err) {
+            console.error('Unable to load planning data', err);
+            setError(err instanceof ApiError ? err.message : 'Impossible de charger le planning.');
+        } finally {
+            setIsLoading(false);
         }
-    }, [selectedClasse, selectedSemaine, plannings]);
+    }, [loadSessionsPage]);
 
-    // Obtenir les séances à afficher
-    const seancesAafficher = useMemo(() => {
-        if (currentPlanning) {
-            return currentPlanning.seances;
+    useEffect(() => {
+        void loadData();
+    }, [loadData]);
+
+    const sessionMap = useMemo(() => {
+        const entries = new Map<string, SessionResponseDto>();
+        sessions.forEach(session => {
+            entries.set(session.id, session);
+        });
+        return entries;
+    }, [sessions]);
+
+    const seances = useMemo(() => sessions.map(mapSessionToSeance), [sessions]);
+
+    const classOptions = useMemo(
+        () => [
+            { id: ALL_CLASSES, label: 'Toutes les classes' },
+            ...classes
+                .slice()
+                .sort((a, b) => a.libelle.localeCompare(b.libelle))
+                .map(classe => ({ id: classe.id, label: classe.libelle }))
+        ],
+        [classes]
+    );
+
+    const moduleOptions = useMemo(
+        () => [
+            { id: ALL_MODULES, label: 'Tous les modules' },
+            ...modules
+                .slice()
+                .sort((a, b) => a.libelle.localeCompare(b.libelle))
+                .map(module => ({ id: module.id, label: module.libelle }))
+        ],
+        [modules]
+    );
+
+    const weekOptions = useMemo(() => {
+        const weeks = new Map<string, WeekOption>();
+        sessions.forEach(session => {
+            const option = buildWeekOption(session.date);
+            weeks.set(option.id, option);
+        });
+        generateRollingWeeks().forEach(option => weeks.set(option.id, option));
+        return Array.from(weeks.values()).sort((a, b) => a.debut.localeCompare(b.debut));
+    }, [sessions]);
+
+    const weekMap = useMemo(() => {
+        const map = new Map<string, WeekOption>();
+        weekOptions.forEach(option => map.set(option.id, option));
+        return map;
+    }, [weekOptions]);
+
+    useEffect(() => {
+        if (selectedSemaine && !weekMap.has(selectedSemaine)) {
+            setSelectedSemaine('');
         }
-        return seances;
-    }, [currentPlanning, seances]);
+    }, [selectedSemaine, weekMap]);
 
-    // Filter sessions
-    const seancesFiltrees = useMemo(() => {
-        return seancesAafficher.filter(seance => {
+    // Effet pour détecter automatiquement le mode mobile
+    useEffect(() => {
+        if (isMobile) {
+            setIsMobileView(true);
+        }
+    }, [isMobile]);
+
+    const filteredSeances = useMemo(() => {
+        return seances.filter(seance => {
             if (searchTerm) {
                 const search = searchTerm.toLowerCase();
-                const match =
-                    seance.cours.toLowerCase().includes(search) ||
-                    seance.classe.toLowerCase().includes(search) ||
-                    seance.professeur.toLowerCase().includes(search);
-                if (!match) return false;
+                const content = `${seance.cours} ${seance.professeur} ${seance.classe} ${seance.moduleLibelle ?? ''}`;
+                if (!content.toLowerCase().includes(search)) {
+                    return false;
+                }
             }
-
-            if (filtres.classe && filtres.classe !== 'Toutes les classes') {
-                if (seance.classe !== filtres.classe) return false;
+            if (selectedClasse !== ALL_CLASSES && seance.classeId !== selectedClasse) {
+                return false;
             }
-
-            if (filtres.module && filtres.module !== 'Tous les modules') {
-                if (seance.cours !== filtres.module) return false;
+            if (moduleFilter !== ALL_MODULES && seance.moduleId !== moduleFilter) {
+                return false;
             }
-
+            if (selectedSemaine) {
+                const week = weekMap.get(selectedSemaine);
+                if (!week || !isWithinWeek(seance.dateISO, week)) {
+                    return false;
+                }
+            }
             return true;
         });
-    }, [searchTerm, filtres, seancesAafficher]);
+    }, [moduleFilter, seances, searchTerm, selectedClasse, selectedSemaine, weekMap]);
 
-    // Organize sessions by day and time slot
     const planningGrid = useMemo(() => {
-        const grid: { [key: string]: { [key: string]: SeancePlanning[] } } = {};
-
-        jours.forEach(jour => {
+        const grid: Record<string, Record<string, SeancePlanning[]>> = {};
+        JOUR_OPTIONS.forEach(jour => {
             grid[jour] = {};
-            creneauxConfig.forEach(creneau => {
-                grid[jour][creneau.id] = [];
+            TIME_SLOTS.forEach(slot => {
+                grid[jour][slot.id] = [];
             });
         });
-
-        seancesFiltrees.forEach(seance => {
-            const creneauId = `${seance.heureDebut}-${seance.heureFin}`;
-            if (grid[seance.jour] && grid[seance.jour][creneauId]) {
-                grid[seance.jour][creneauId].push(seance);
+        filteredSeances.forEach(seance => {
+            const slot = TIME_SLOTS.find(s => seance.heureDebut.startsWith(s.debut.split(':')[0]));
+            const slotId = slot?.id ?? `${seance.heureDebut}-${seance.heureFin}`;
+            if (!grid[seance.jour][slotId]) {
+                grid[seance.jour][slotId] = [];
             }
+            grid[seance.jour][slotId].push(seance);
         });
-
         return grid;
-    }, [seancesFiltrees]);
+    }, [filteredSeances]);
 
-    // Fonction pour créer un nouveau planning
-    const handleCreatePlanning = (classe: string, semaineId: string) => {
-        const semaine = semaines.find(s => s.id === semaineId);
-        if (!semaine) return;
-
-        const newPlanning: PlanningSemaine = {
-            id: plannings.length + 1,
-            semaineDebut: semaine.debut,
-            semaineFin: semaine.fin,
-            classe,
-            creeLe: new Date().toISOString().split('T')[0],
-            seances: []
+    const currentPlanning: PlanningSemaine | null = useMemo(() => {
+        if (selectedClasse === ALL_CLASSES || !selectedSemaine) {
+            return null;
+        }
+        const week = weekMap.get(selectedSemaine);
+        if (!week) return null;
+        const seancesForWeek = seances.filter(
+            seance => seance.classeId === selectedClasse && isWithinWeek(seance.dateISO, week)
+        );
+        const classeLabel = classOptions.find(option => option.id === selectedClasse)?.label ?? 'Classe';
+        return {
+            id: `${selectedClasse}-${selectedSemaine}`,
+            classe: classeLabel,
+            classeId: selectedClasse,
+            semaineDebut: week.debut,
+            semaineFin: week.fin,
+            seances: seancesForWeek,
+            creeLe: week.debut
         };
+    }, [classOptions, seances, selectedClasse, selectedSemaine, weekMap]);
 
-        setPlannings([...plannings, newPlanning]);
-        setCurrentPlanning(newPlanning);
-        setSelectedClasse(classe);
+    const handleCreatePlanning = (classeId: string, semaineId: string) => {
+        setSelectedClasse(classeId || ALL_CLASSES);
         setSelectedSemaine(semaineId);
         setShowCreatePlanningModal(false);
     };
 
-    // Fonction pour ajouter une séance
-    const handleAddSeance = (e: React.FormEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        const form = e.currentTarget;
-        const formData = new FormData(form);
-
-        const nouvelleSeance: SeancePlanning = {
-            id: seances.length + 1,
-            idPlanning: currentPlanning?.id || 0,
-            classe: formData.get('classe') as string,
-            cours: formData.get('cours') as string,
-            professeur: formData.get('professeur') as string,
-            salle: formData.get('salle') as string,
-            jour: formData.get('jour') as string,
-            heureDebut: (formData.get('creneau') as string).split('-')[0],
-            heureFin: (formData.get('creneau') as string).split('-')[1],
-            couleur: ['amber', 'pink', 'green', 'purple', 'blue', 'red'][Math.floor(Math.random() * 6)]
-        };
-
-        setSeances([...seances, nouvelleSeance]);
-
-        // Mettre à jour le planning si existant
-        if (currentPlanning) {
-            setPlannings(plannings.map(p =>
-                p.id === currentPlanning.id
-                    ? { ...p, seances: [...p.seances, nouvelleSeance] }
-                    : p
-            ));
-            setCurrentPlanning({ ...currentPlanning, seances: [...currentPlanning.seances, nouvelleSeance] });
-        }
-
-        setShowAddModal(false);
-    };
-
-    // Drag and drop handlers
     const handleDragStart = (seance: SeancePlanning) => {
         setDraggedSeance(seance);
     };
@@ -148,42 +458,235 @@ export default function PlanningContent() {
         e.preventDefault();
     };
 
-    const handleDrop = (jour: string, creneauId: string) => {
-        if (draggedSeance) {
-            const [debut, fin] = creneauId.split('-');
-            setSeances(prev => prev.map(s =>
-                s.id === draggedSeance.id
-                    ? { ...s, jour, heureDebut: debut, heureFin: fin }
-                    : s
-            ));
+    const handleDrop = async (jour: JourSemaine, creneauId: string) => {
+        if (!draggedSeance) return;
+        const session = sessionMap.get(draggedSeance.id);
+        if (!session) return;
+
+        const week = buildWeekOption(draggedSeance.dateISO);
+        const newDate = dateFromWeekAndDay(week.debut, jour);
+        const [startHour, endHour] = creneauId.split('-');
+
+        try {
+            setIsMutating(true);
+            await updateSession(
+                draggedSeance.id,
+                buildSessionPayload(session, {
+                    date: newDate,
+                    startHour,
+                    endHour
+                })
+            );
+            await loadSessionsPage(0, false);
+        } catch (err) {
+            const message = err instanceof ApiError ? err.message : 'Impossible de déplacer la séance.';
+            alert(message);
+        } finally {
             setDraggedSeance(null);
+            setIsMutating(false);
         }
     };
 
-    const handleDeleteSeance = (id: number) => {
-        setSeances(prev => prev.filter(s => s.id !== id));
-        if (currentPlanning) {
-            setPlannings(plannings.map(p =>
-                p.id === currentPlanning.id
-                    ? { ...p, seances: p.seances.filter(s => s.id !== id) }
-                    : p
-            ));
-            setCurrentPlanning({ ...currentPlanning, seances: currentPlanning.seances.filter(s => s.id !== id) });
+    const handleLoadMoreSessions = async () => {
+        if (!hasMoreSessions || isLoadingMore) {
+            return;
         }
+        const nextPage = (sessionMeta?.page ?? 0) + 1;
+        try {
+            setIsLoadingMore(true);
+            await loadSessionsPage(nextPage, true);
+        } catch (err) {
+            console.error('Unable to load more sessions', err);
+            setError(err instanceof ApiError ? err.message : 'Impossible de charger plus de séances.');
+        } finally {
+            setIsLoadingMore(false);
+        }
+    };
+
+    const closeFormModal = () => {
+        setShowAddModal(false);
+        setEditingSessionId(null);
+        setEditingWeekStart(null);
+        setFormState(createFormState());
+    };
+
+    const handleOpenCreateModal = (preset?: Partial<SessionFormState>) => {
+        if (selectedClasse === ALL_CLASSES || !selectedSemaine) {
+            alert('Sélectionnez une classe et une semaine avant d’ajouter une séance.');
+            return;
+        }
+        const week = weekMap.get(selectedSemaine);
+        if (!week) {
+            alert('Semaine invalide.');
+            return;
+        }
+        setEditingSessionId(null);
+        setEditingWeekStart(week.debut);
+        setFormState(createFormState({
+            classeId: selectedClasse !== ALL_CLASSES ? selectedClasse : '',
+            salleInput: salles[0]?.libelle ?? '',
+            ...preset
+        }));
+        setShowAddModal(true);
+    };
+
+    const handleEditSeance = (seance: SeancePlanning) => {
+        const session = sessionMap.get(seance.id);
+        if (!session) {
+            alert('Impossible de récupérer les détails de la séance.');
+            return;
+        }
+        const week = buildWeekOption(session.date);
+        setEditingSessionId(seance.id);
+        setEditingWeekStart(week.debut);
+        setFormState(createFormState({
+            classeId: session.classe?.id ?? seance.classeId ?? '',
+            coursId: session.cours?.id ?? '',
+            jour: normalizeJour(session.date),
+            creneau: buildSlotId(session.startHour, session.endHour),
+            professeurId: session.professor?.id ?? '',
+            salleInput: session.salle?.libelle ?? seance.salle
+        }));
         setSelectedSeance(null);
+        setShowAddModal(true);
     };
 
-    const getCouleurGradient = (couleur: string) => {
-        const couleurs: { [key: string]: string } = {
-            amber: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)',
-            pink: 'linear-gradient(135deg, #ec4899 0%, #db2777 100%)',
-            green: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
-            purple: 'linear-gradient(135deg, #a855f7 0%, #9333ea 100%)',
-            blue: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-            red: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
-        };
-        return couleurs[couleur] || couleurs.blue;
+    const handleSubmitSession = async (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        if (!formState.classeId) {
+            alert('Merci de sélectionner une classe.');
+            return;
+        }
+        if (!formState.coursId) {
+            alert('Merci de sélectionner un cours.');
+            return;
+        }
+        const salle = salles.find(salleItem =>
+            salleItem.id === formState.salleInput ||
+            salleItem.libelle.toLowerCase() === formState.salleInput.toLowerCase()
+        );
+        if (!salle) {
+            alert('Merci de sélectionner une salle existante.');
+            return;
+        }
+        const selectedCourse = courses.find(course => course.id === formState.coursId);
+        const [startHour, endHour] = formState.creneau.split('-');
+        try {
+            setIsMutating(true);
+            if (editingSessionId) {
+                const session = sessionMap.get(editingSessionId);
+                if (!session) {
+                    throw new Error('Session introuvable.');
+                }
+                const weekStart = editingWeekStart ?? buildWeekOption(session.date).debut;
+                await updateSession(
+                    editingSessionId,
+                    buildSessionPayload(session, {
+                        date: dateFromWeekAndDay(weekStart, formState.jour),
+                        startHour,
+                        endHour,
+                        classeId: formState.classeId,
+                        coursId: formState.coursId,
+                        moduleId: selectedCourse?.module?.id ?? session.module?.id ?? null,
+                        professorId: formState.professeurId || session.professor?.id || null,
+                        salleId: salle.id,
+                        libelle: selectedCourse?.libelle ?? session.libelle
+                    })
+                );
+            } else {
+                if (!selectedSemaine) {
+                    alert('Sélectionnez une semaine pour planifier.');
+                    return;
+                }
+                const week = weekMap.get(selectedSemaine);
+                if (!week) {
+                    alert('Semaine invalide.');
+                    return;
+                }
+                if (!selectedCourse) {
+                    alert('Cours introuvable.');
+                    return;
+                }
+                const payload: SessionRequestDto = {
+                    date: dateFromWeekAndDay(week.debut, formState.jour),
+                    startHour,
+                    endHour,
+                    duration: null,
+                    typeSession: 'COURS',
+                    modeSession: 'PRESENTIEL',
+                    status: 'PROGRAMME',
+                    libelle: selectedCourse.libelle,
+                    sessionSummary: null,
+                    coursId: selectedCourse.id,
+                    moduleId: selectedCourse.module?.id ?? null,
+                    classeId: formState.classeId,
+                    classIds: null,
+                    professorId: formState.professeurId || null,
+                    salleId: salle.id
+                };
+                await createSession(payload);
+            }
+            closeFormModal();
+            await loadSessionsPage(0, false);
+        } catch (err) {
+            const message = err instanceof ApiError ? err.message : 'Impossible d’enregistrer la séance.';
+            alert(message);
+        } finally {
+            setIsMutating(false);
+        }
     };
+
+    const handleDeleteSeance = async (id: string) => {
+        const result = await Swal.fire({
+            title: 'Êtes-vous sûr ?',
+            text: 'Voulez-vous vraiment supprimer cette séance ?',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc2626',
+            cancelButtonColor: '#64748b',
+            confirmButtonText: 'Oui, supprimer',
+            cancelButtonText: 'Annuler',
+            reverseButtons: true
+        });
+
+        if (!result.isConfirmed) return;
+
+        try {
+            setIsMutating(true);
+            await deleteSession(id);
+            setSelectedSeance(null);
+            await loadSessionsPage(0, false);
+        } catch (err) {
+            const message = err instanceof ApiError ? err.message : 'Impossible de supprimer la séance.';
+            Swal.fire({
+                title: 'Erreur',
+                text: message,
+                icon: 'error'
+            });
+        } finally {
+            setIsMutating(false);
+        }
+    };
+
+    const getCouleurGradient = (status?: SessionStatus | null) => {
+        return computeColor(status);
+    };
+
+    if (isLoading) {
+        return (
+            <div className="planning-container content-scroll" style={{ padding: '40px' }}>
+                Chargement du planning...
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="planning-container content-scroll" style={{ padding: '40px', color: '#dc2626' }}>
+                {error}
+            </div>
+        );
+    }
 
     return (
         <div
@@ -223,7 +726,6 @@ export default function PlanningContent() {
                     }
                 }
             `}</style>
-            {/* Header */}
             <div style={{
                 padding: '20px 32px',
                 borderBottom: '1px solid #f1f5f9',
@@ -243,7 +745,6 @@ export default function PlanningContent() {
                 </h1>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    {/* Search */}
                     <div style={{ position: 'relative' }}>
                         <Search size={18} color="#94a3b8" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)' }} />
                         <input
@@ -263,7 +764,6 @@ export default function PlanningContent() {
                         />
                     </div>
 
-                    {/* Week Filter */}
                     <div style={{ position: 'relative' }}>
                         <Calendar size={16} color="#64748b" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', zIndex: 1 }} />
                         <select
@@ -283,22 +783,18 @@ export default function PlanningContent() {
                             }}
                         >
                             <option value="">Toutes les semaines</option>
-                            {semaines.map(semaine => (
+                            {weekOptions.map(semaine => (
                                 <option key={semaine.id} value={semaine.id}>{semaine.label}</option>
                             ))}
                         </select>
                         <ChevronDown size={16} color="#64748b" style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
                     </div>
 
-                    {/* Class Filter */}
                     <div style={{ position: 'relative' }}>
                         <Layers size={16} color="#64748b" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', zIndex: 1 }} />
                         <select
-                            value={filtres.classe || ''}
-                            onChange={(e) => {
-                                setFiltres({ ...filtres, classe: e.target.value });
-                                setSelectedClasse(e.target.value);
-                            }}
+                            value={selectedClasse}
+                            onChange={(e) => setSelectedClasse(e.target.value)}
                             style={{
                                 padding: '10px 36px 10px 36px',
                                 borderRadius: '12px',
@@ -312,14 +808,38 @@ export default function PlanningContent() {
                                 minWidth: '150px'
                             }}
                         >
-                            {classes.map(classe => (
-                                <option key={classe} value={classe}>{classe}</option>
+                            {classOptions.map(option => (
+                                <option key={option.id} value={option.id}>{option.label}</option>
                             ))}
                         </select>
                         <ChevronDown size={16} color="#64748b" style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
                     </div>
 
-                    {/* Create Planning Button */}
+                    <div style={{ position: 'relative' }}>
+                        <Layers size={16} color="#64748b" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', zIndex: 1 }} />
+                        <select
+                            value={moduleFilter}
+                            onChange={(e) => setModuleFilter(e.target.value)}
+                            style={{
+                                padding: '10px 36px 10px 36px',
+                                borderRadius: '12px',
+                                border: '1.5px solid #e2e8f0',
+                                fontSize: '14px',
+                                fontWeight: '500',
+                                color: '#475569',
+                                background: '#f8fafc',
+                                cursor: 'pointer',
+                                appearance: 'none',
+                                minWidth: '180px'
+                            }}
+                        >
+                            {moduleOptions.map(option => (
+                                <option key={option.id} value={option.id}>{option.label}</option>
+                            ))}
+                        </select>
+                        <ChevronDown size={16} color="#64748b" style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+                    </div>
+
                     <button
                         onClick={() => setShowCreatePlanningModal(true)}
                         style={{
@@ -341,7 +861,6 @@ export default function PlanningContent() {
                         Nouveau Planning
                     </button>
 
-                    {/* View Toggle Button */}
                     <button
                         onClick={() => setViewMode(viewMode === 'vertical' ? 'horizontal' : 'vertical')}
                         title={viewMode === 'vertical' ? 'Vue horizontale' : 'Vue verticale'}
@@ -364,10 +883,37 @@ export default function PlanningContent() {
                         <span className="view-label" style={{ display: 'none' }}>{viewMode === 'vertical' ? 'H' : 'V'}</span>
                     </button>
 
-                    {/* Add Course Button */}
+                    {/* Bouton vue mobile/desktop */}
+                    <button
+                        onClick={() => setIsMobileView(!isMobileView)}
+                        title={isMobileView ? 'Vue tableau' : 'Vue mobile'}
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: '10px 14px',
+                            background: isMobileView ? 'linear-gradient(135deg, #5B8DEF 0%, #4169B8 100%)' : 'white',
+                            border: '1.5px solid #e2e8f0',
+                            borderRadius: '12px',
+                            color: isMobileView ? 'white' : '#64748b',
+                            fontSize: '14px',
+                            fontWeight: '500',
+                            cursor: 'pointer',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
+                        }}
+                    >
+                        {isMobileView ? (
+                            <Layers size={18} />
+                        ) : (
+                            <Calendar size={18} />
+                        )}
+                        <span style={{ display: 'none' }}>{isMobileView ? 'Tableau' : 'Mobile'}</span>
+                    </button>
+
                     {currentPlanning && (
                         <button
-                            onClick={() => setShowAddModal(true)}
+                            onClick={() => handleOpenCreateModal()}
+                            disabled={isMutating}
                             style={{
                                 display: 'flex',
                                 alignItems: 'center',
@@ -380,7 +926,8 @@ export default function PlanningContent() {
                                 fontSize: '14px',
                                 fontWeight: '600',
                                 cursor: 'pointer',
-                                boxShadow: '0 4px 12px rgba(34,197,94,0.3)'
+                                boxShadow: '0 4px 12px rgba(34,197,94,0.3)',
+                                opacity: isMutating ? 0.7 : 1
                             }}
                         >
                             <Plus size={18} />
@@ -390,7 +937,6 @@ export default function PlanningContent() {
                 </div>
             </div>
 
-            {/* Planning Info */}
             {currentPlanning && (
                 <div style={{
                     padding: '12px 32px',
@@ -427,7 +973,6 @@ export default function PlanningContent() {
                 </div>
             )}
 
-            {/* Planning Grid */}
             <div style={{
                 flex: 1,
                 padding: '16px 24px',
@@ -435,750 +980,767 @@ export default function PlanningContent() {
                 display: 'flex',
                 flexDirection: 'column'
             }}>
-                {/* Days Header - Vertical Mode */}
-                {viewMode === 'vertical' && (
-                    <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: '100px repeat(6, 1fr)',
-                        gap: '8px',
-                        marginBottom: '8px',
-                        flexShrink: 0
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {/* Vue mobile - lignes par jour */}
+                {isMobileView ? (
+                    <PlanningMobileView
+                        seances={filteredSeances}
+                        onSeanceClick={(seance) => setSelectedSeance(seance)}
+                        onAddSeance={(jour) => handleOpenCreateModal({ jour })}
+                        currentPlanning={!!currentPlanning}
+                    />
+                ) : (
+                    <>
+                        {viewMode === 'vertical' && (
                             <div style={{
-                                width: '44px',
-                                height: '44px',
-                                background: 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)',
-                                borderRadius: '12px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
-                            }}
-                                onClick={() => currentPlanning && setShowAddModal(true)}
-                            >
-                                <Plus size={20} color={currentPlanning ? "#64748b" : "#cbd5e1"} style={{ cursor: currentPlanning ? 'pointer' : 'not-allowed' }} />
-                            </div>
-                        </div>
-
-                        {jours.map(jour => (
-                            <div key={jour} style={{
-                                background: 'linear-gradient(135deg, #5B8DEF 0%, #4169B8 100%)',
-                                color: 'white',
-                                textAlign: 'center',
-                                padding: '12px',
-                                borderRadius: '12px',
-                                fontWeight: '600',
-                                fontSize: '13px',
-                                boxShadow: '0 4px 12px rgba(91,141,239,0.35)'
-                            }}>
-                                {jour}
-                            </div>
-                        ))}
-                    </div>
-                )}
-
-                {/* Days Header - Horizontal Mode */}
-                {viewMode === 'horizontal' && (
-                    <div style={{
-                        display: 'flex',
-                        gap: '8px',
-                        marginBottom: '8px',
-                        flexShrink: 0,
-                        overflowX: 'auto',
-                        paddingBottom: '8px'
-                    }}>
-                        <div style={{
-                            width: '80px',
-                            flexShrink: 0,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center'
-                        }}>
-                            <div style={{
-                                width: '40px',
-                                height: '40px',
-                                background: 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)',
-                                borderRadius: '10px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center'
-                            }}
-                                onClick={() => currentPlanning && setShowAddModal(true)}
-                            >
-                                <Plus size={18} color={currentPlanning ? "#64748b" : "#cbd5e1"} style={{ cursor: currentPlanning ? 'pointer' : 'not-allowed' }} />
-                            </div>
-                        </div>
-
-                        {creneauxConfig.map(creneau => (
-                            <div key={creneau.id} style={{
-                                background: 'linear-gradient(135deg, #5B8DEF 0%, #4169B8 100%)',
-                                color: 'white',
-                                textAlign: 'center',
-                                padding: '10px 8px',
-                                borderRadius: '10px',
-                                fontWeight: '600',
-                                fontSize: '11px',
-                                boxShadow: '0 4px 12px rgba(91,141,239,0.35)',
-                                minWidth: '70px',
+                                display: 'grid',
+                                gridTemplateColumns: '100px repeat(6, 1fr)',
+                                gap: '8px',
+                                marginBottom: '8px',
                                 flexShrink: 0
                             }}>
-                                {creneau.label}
-                            </div>
-                        ))}
-                    </div>
-                )}
-
-                {/* Time Slots - Vertical Mode */}
-                {viewMode === 'vertical' && (
-                    <div style={{
-                        flex: 1,
-                        overflowY: 'auto',
-                        overflowX: 'hidden'
-                    }}>
-                        {creneauxConfig.map(creneau => (
-                            <div
-                                key={creneau.id}
-                                style={{
-                                    display: 'grid',
-                                    gridTemplateColumns: '100px repeat(6, 1fr)',
-                                    gap: '8px',
-                                    marginBottom: '8px'
-                                }}
-                            >
-                                {/* Time */}
-                                <div style={{
-                                    background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
-                                    border: '1.5px solid #e2e8f0',
-                                    borderRadius: '10px',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    fontWeight: '600',
-                                    color: '#475569',
-                                    fontSize: '11px',
-                                    padding: '8px 4px',
-                                    minHeight: '60px'
-                                }}>
-                                    <span>{creneau.debut}</span>
-                                    <span style={{ opacity: 0.6, fontSize: '9px' }}>à</span>
-                                    <span>{creneau.fin}</span>
+                                <div
+                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: currentPlanning ? 'pointer' : 'default' }}
+                                    onClick={() => currentPlanning && handleOpenCreateModal()}
+                                >
+                                    <div style={{
+                                        width: '44px',
+                                        height: '44px',
+                                        background: 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)',
+                                        borderRadius: '12px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
+                                    }}>
+                                        <Plus size={20} color="#cbd5e1" />
+                                    </div>
                                 </div>
 
-                                {/* Days as columns */}
-                                {jours.map(jour => {
-                                    const seancesCellule = planningGrid[jour]?.[creneau.id] || [];
+                                {JOUR_OPTIONS.map(jour => (
+                                    <div key={jour} style={{
+                                        background: 'linear-gradient(135deg, #5B8DEF 0%, #4169B8 100%)',
+                                        color: 'white',
+                                        textAlign: 'center',
+                                        padding: '12px',
+                                        borderRadius: '12px',
+                                        fontWeight: '600',
+                                        fontSize: '13px',
+                                        boxShadow: '0 4px 12px rgba(91,141,239,0.35)'
+                                    }}>
+                                        {jour}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
 
-                                    return (
-                                        <div
-                                            key={`${jour}-${creneau.id}`}
-                                            style={{
-                                                background: seancesCellule.length > 0 ? '#fafbfc' : 'white',
-                                                border: seancesCellule.length > 0 ? '1.5px solid #e2e8f0' : '1.5px dashed #e2e8f0',
-                                                borderRadius: '10px',
-                                                padding: '4px',
-                                                display: 'flex',
-                                                flexDirection: 'column',
-                                                gap: '4px',
-                                                minHeight: '60px'
-                                            }}
-                                            onDragOver={handleDragOver}
-                                            onDrop={() => handleDrop(jour, creneau.id)}
-                                        >
-                                            {/* Each course takes its own row */}
-                                            {seancesCellule.length > 0 ? (
-                                                seancesCellule.map(seance => (
-                                                    <div
-                                                        key={seance.id}
-                                                        draggable
-                                                        onDragStart={() => handleDragStart(seance)}
-                                                        onClick={() => setSelectedSeance(seance)}
-                                                        style={{
-                                                            background: getCouleurGradient(seance.couleur),
-                                                            borderRadius: '6px',
-                                                            padding: '6px 8px',
-                                                            color: 'white',
-                                                            cursor: 'grab',
-                                                            fontSize: '10px',
-                                                            borderLeft: '3px solid rgba(255,255,255,0.5)'
-                                                        }}
-                                                    >
-                                                        <div style={{ fontWeight: '700', fontSize: '9px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                            <span>{seance.classe}</span>
+                        {viewMode === 'vertical' && (
+                            <div style={{
+                                flex: 1,
+                                overflowY: 'auto',
+                                overflowX: 'hidden'
+                            }}>
+                                {TIME_SLOTS.map(creneau => (
+                                    <div
+                                        key={creneau.id}
+                                        style={{
+                                            display: 'grid',
+                                            gridTemplateColumns: '100px repeat(6, 1fr)',
+                                            gap: '8px',
+                                            marginBottom: '8px'
+                                        }}
+                                    >
+                                        <div style={{
+                                            background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+                                            border: '1.5px solid #e2e8f0',
+                                            borderRadius: '10px',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            fontWeight: '600',
+                                            color: '#475569',
+                                            fontSize: '11px',
+                                            padding: '8px 4px',
+                                            minHeight: '60px'
+                                        }}>
+                                            <span>{creneau.debut}</span>
+                                            <span style={{ opacity: 0.6, fontSize: '9px' }}>à</span>
+                                            <span>{creneau.fin}</span>
+                                        </div>
+
+                                        {JOUR_OPTIONS.map(jour => {
+                                            const seancesCellule = planningGrid[jour]?.[creneau.id] ?? [];
+
+                                            return (
+                                                <div
+                                                    key={`${jour}-${creneau.id}`}
+                                                    style={{
+                                                        background: seancesCellule.length > 0 ? '#fafbfc' : 'white',
+                                                        border: seancesCellule.length > 0 ? '1.5px solid #e2e8f0' : '1.5px dashed #e2e8f0',
+                                                        borderRadius: '10px',
+                                                        padding: '4px',
+                                                        display: 'flex',
+                                                        flexDirection: 'column',
+                                                        gap: '4px',
+                                                        minHeight: '60px'
+                                                    }}
+                                                    onDragOver={handleDragOver}
+                                                    onDrop={() => handleDrop(jour, creneau.id)}
+                                                >
+                                                    {seancesCellule.length > 0 ? (
+                                                        seancesCellule.map(seance => (
+                                                            <div
+                                                                key={seance.id}
+                                                                draggable
+                                                                onDragStart={() => handleDragStart(seance)}
+                                                                onClick={() => setSelectedSeance(seance)}
+                                                                style={{
+                                                                    background: getCouleurGradient(seance.status),
+                                                                    borderRadius: '6px',
+                                                                    padding: '6px 8px',
+                                                                    color: 'white',
+                                                                    cursor: 'grab',
+                                                                    fontSize: '10px',
+                                                                    borderLeft: '3px solid rgba(255,255,255,0.5)',
+                                                                    display: 'flex',
+                                                                    flexDirection: 'column',
+                                                                    gap: '2px'
+                                                                }}
+                                                            >
+                                                                <div style={{ fontWeight: '700', fontSize: '9px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                    <GripVertical size={12} />
+                                                                    <span>{seance.classe}</span>
+                                                                </div>
+                                                                <div style={{ fontWeight: '600', fontSize: '9px', marginTop: '2px' }}>{seance.cours}</div>
+                                                                <div style={{ fontSize: '8px', opacity: 0.9 }}>{seance.professeur}</div>
+                                                            </div>
+                                                        ))
+                                                    ) : (
+                                                        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                            {currentPlanning && (
+                                                                <button
+                                                                    onClick={() => handleOpenCreateModal({ jour, creneau: creneau.id })}
+                                                                    style={{
+                                                                        width: '24px',
+                                                                        height: '24px',
+                                                                        border: 'none',
+                                                                        background: '#f1f5f9',
+                                                                        borderRadius: '50%',
+                                                                        cursor: 'pointer',
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        justifyContent: 'center',
+                                                                        opacity: 0.5
+                                                                    }}
+                                                                >
+                                                                    <Plus size={12} color="#94a3b8" />
+                                                                </button>
+                                                            )}
                                                         </div>
-                                                        <div style={{ fontWeight: '600', fontSize: '9px', marginTop: '2px' }}>{seance.cours}</div>
-                                                        <div style={{ fontSize: '8px', opacity: 0.9 }}>{seance.professeur}</div>
-                                                    </div>
-                                                ))
-                                            ) : (
-                                                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                    {currentPlanning && (
-                                                        <button
-                                                            onClick={() => setShowAddModal(true)}
-                                                            style={{
-                                                                width: '24px',
-                                                                height: '24px',
-                                                                border: 'none',
-                                                                background: '#f1f5f9',
-                                                                borderRadius: '50%',
-                                                                cursor: 'pointer',
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                justifyContent: 'center',
-                                                                opacity: 0.5
-                                                            }}
-                                                        >
-                                                            <Plus size={12} color="#94a3b8" />
-                                                        </button>
                                                     )}
                                                 </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
+                                            );
+                                        })}
+                                    </div>
+                                ))}
                             </div>
-                        ))}
+                        )}
+
+                        {viewMode === 'horizontal' && (
+                            <div style={{
+                                flex: 1,
+                                overflowY: 'auto',
+                                overflowX: 'auto'
+                            }}>
+                                {JOUR_OPTIONS.map(jour => (
+                                    <div
+                                        key={jour}
+                                        style={{
+                                            display: 'flex',
+                                            gap: '8px',
+                                            marginBottom: '6px',
+                                            minHeight: '70px'
+                                        }}
+                                    >
+                                        <div style={{
+                                            background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+                                            border: '1.5px solid #e2e8f0',
+                                            borderRadius: '10px',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            fontWeight: '600',
+                                            color: '#475569',
+                                            fontSize: '11px',
+                                            padding: '4px',
+                                            width: '80px',
+                                            flexShrink: 0
+                                        }}>
+                                            <span>{jour}</span>
+                                        </div>
+
+                                        {TIME_SLOTS.map(creneau => {
+                                            const seancesCellule = planningGrid[jour]?.[creneau.id] ?? [];
+
+                                            return (
+                                                <div
+                                                    key={`${jour}-${creneau.id}`}
+                                                    style={{
+                                                        background: seancesCellule.length > 0 ? '#fafbfc' : 'white',
+                                                        border: seancesCellule.length > 0 ? '1.5px solid #e2e8f0' : '1.5px dashed #e2e8f0',
+                                                        borderRadius: '10px',
+                                                        padding: '4px',
+                                                        minWidth: '70px',
+                                                        flexShrink: 0,
+                                                        transition: 'all 0.2s ease',
+                                                        display: 'flex',
+                                                        flexDirection: 'column',
+                                                        gap: '4px'
+                                                    }}
+                                                    onDragOver={handleDragOver}
+                                                    onDrop={() => handleDrop(jour, creneau.id)}
+                                                >
+                                                    {seancesCellule.length > 0 ? (
+                                                        seancesCellule.map(seance => (
+                                                            <div
+                                                                key={seance.id}
+                                                                draggable
+                                                                onDragStart={() => handleDragStart(seance)}
+                                                                onClick={() => setSelectedSeance(seance)}
+                                                                style={{
+                                                                    background: getCouleurGradient(seance.status),
+                                                                    borderRadius: '6px',
+                                                                    padding: '4px 6px',
+                                                                    color: 'white',
+                                                                    cursor: 'grab'
+                                                                }}
+                                                            >
+                                                                <div style={{ fontWeight: '700', fontSize: '9px' }}>{seance.classe}</div>
+                                                                <div style={{ fontWeight: '600', fontSize: '9px' }}>{seance.cours}</div>
+                                                            </div>
+                                                        ))
+                                                    ) : null}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {hasMoreSessions && (
+                            <div style={{ padding: '12px 0 8px', textAlign: 'center' }}>
+                                <button
+                                    onClick={handleLoadMoreSessions}
+                                    disabled={isLoadingMore}
+                                    style={{
+                                        padding: '10px 26px',
+                                        borderRadius: '999px',
+                                        border: '1px solid #cbd5f5',
+                                        background: 'white',
+                                        color: '#1d4ed8',
+                                        fontWeight: 600,
+                                        cursor: isLoadingMore ? 'not-allowed' : 'pointer',
+                                        opacity: isLoadingMore ? 0.7 : 1,
+                                        boxShadow: '0 6px 18px rgba(59,130,246,0.15)'
+                                    }}
+                                >
+                                    {isLoadingMore ? 'Chargement...' : 'Charger plus de séances'}
+                                </button>
+                            </div>
+                        )}
+                    </>
+                )}
+
+                {selectedSeance && (
+                    <div style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        background: 'rgba(0,0,0,0.5)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 9999,
+                        backdropFilter: 'blur(4px)'
+                    }}
+                        onClick={() => setSelectedSeance(null)}
+                    >
+                        <div style={{
+                            background: 'white',
+                            borderRadius: '20px',
+                            padding: '28px',
+                            width: '90%',
+                            maxWidth: '400px',
+                            boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+                        }}
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                                <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#1a202c', margin: 0 }}>
+                                    Détails de la séance
+                                </h2>
+                                <button
+                                    onClick={() => setSelectedSeance(null)}
+                                    style={{
+                                        width: '32px',
+                                        height: '32px',
+                                        borderRadius: '8px',
+                                        border: 'none',
+                                        background: '#f1f5f9',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
+                                    }}
+                                >
+                                    <X size={18} color="#64748b" />
+                                </button>
+                            </div>
+
+                            <div style={{
+                                background: getCouleurGradient(selectedSeance.status),
+                                borderRadius: '12px',
+                                padding: '16px',
+                                color: 'white',
+                                marginBottom: '20px'
+                            }}>
+                                <div style={{ fontWeight: '700', fontSize: '16px', marginBottom: '4px' }}>{selectedSeance.classe}</div>
+                                <div style={{ fontWeight: '600', fontSize: '15px' }}>{selectedSeance.cours}</div>
+                                <div style={{ fontSize: '12px', opacity: 0.9 }}>{selectedSeance.moduleLibelle ?? 'Sans module'}</div>
+                            </div>
+
+                            <div style={{ marginBottom: '12px' }}>
+                                <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '2px' }}>Professeur</div>
+                                <div style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>{selectedSeance.professeur}</div>
+                            </div>
+
+                            <div style={{ marginBottom: '12px' }}>
+                                <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '2px' }}>Salle</div>
+                                <div style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>{selectedSeance.salle}</div>
+                            </div>
+
+                            <div style={{ marginBottom: '20px' }}>
+                                <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '2px' }}>Horaire</div>
+                                <div style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>
+                                    {selectedSeance.jour} • {selectedSeance.heureDebut} - {selectedSeance.heureFin}
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '10px' }}>
+                                <button
+                                    onClick={() => handleEditSeance(selectedSeance)}
+                                    disabled={isMutating}
+                                    style={{
+                                        flex: 1,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '6px',
+                                        padding: '12px',
+                                        borderRadius: '10px',
+                                        border: '1.5px solid #e2e8f0',
+                                        background: 'white',
+                                        color: '#475569',
+                                        fontSize: '14px',
+                                        fontWeight: '500',
+                                        cursor: 'pointer'
+                                    }}>
+                                    <Edit2 size={16} />
+                                    Modifier
+                                </button>
+                                <button
+                                    onClick={() => handleDeleteSeance(selectedSeance.id)}
+                                    disabled={isMutating}
+                                    style={{
+                                        flex: 1,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '6px',
+                                        padding: '12px',
+                                        borderRadius: '10px',
+                                        border: 'none',
+                                        background: '#fee2e2',
+                                        color: '#dc2626',
+                                        fontSize: '14px',
+                                        fontWeight: '500',
+                                        cursor: 'pointer',
+                                        opacity: isMutating ? 0.7 : 1
+                                    }}>
+                                    <Trash2 size={16} />
+                                    Supprimer
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 )}
 
-                {/* Time Slots - Horizontal Mode */}
-                {viewMode === 'horizontal' && (
+                {showCreatePlanningModal && (
                     <div style={{
-                        flex: 1,
-                        overflowY: 'auto',
-                        overflowX: 'auto'
-                    }}>
-                        {jours.map(jour => (
-                            <div
-                                key={jour}
-                                style={{
-                                    display: 'flex',
-                                    gap: '8px',
-                                    marginBottom: '6px',
-                                    minHeight: '70px'
-                                }}
-                            >
-                                {/* Day */}
-                                <div style={{
-                                    background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
-                                    border: '1.5px solid #e2e8f0',
-                                    borderRadius: '10px',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    fontWeight: '600',
-                                    color: '#475569',
-                                    fontSize: '11px',
-                                    padding: '4px',
-                                    width: '80px',
-                                    flexShrink: 0
-                                }}>
-                                    <span>{jour}</span>
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        background: 'rgba(0,0,0,0.5)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 9999,
+                        backdropFilter: 'blur(4px)'
+                    }}
+                        onClick={() => setShowCreatePlanningModal(false)}
+                    >
+                        <div style={{
+                            background: 'white',
+                            borderRadius: '20px',
+                            padding: '28px',
+                            width: '90%',
+                            maxWidth: '480px',
+                            maxHeight: '90vh',
+                            overflowY: 'auto',
+                            boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+                        }}
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                                <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#1a202c', margin: 0 }}>
+                                    Créer un nouveau planning
+                                </h2>
+                                <button
+                                    onClick={() => setShowCreatePlanningModal(false)}
+                                    style={{
+                                        width: '32px',
+                                        height: '32px',
+                                        borderRadius: '8px',
+                                        border: 'none',
+                                        background: '#f1f5f9',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
+                                    }}
+                                >
+                                    <X size={18} color="#64748b" />
+                                </button>
+                            </div>
+
+                            <form onSubmit={(e) => {
+                                e.preventDefault();
+                                const form = e.currentTarget;
+                                const formData = new FormData(form);
+                                handleCreatePlanning(formData.get('classe') as string, formData.get('semaine') as string);
+                            }}>
+                                <div style={{ marginBottom: '14px' }}>
+                                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#4a5568', marginBottom: '6px' }}>Classe</label>
+                                    <select name="classe" required style={{
+                                        width: '100%',
+                                        padding: '10px 14px',
+                                        borderRadius: '10px',
+                                        border: '1.5px solid #e2e8f0',
+                                        fontSize: '14px',
+                                        background: 'white',
+                                        cursor: 'pointer'
+                                    }}>
+                                        <option value="">Sélectionner une classe</option>
+                                        {classOptions.filter(option => option.id !== ALL_CLASSES).map(option => (
+                                            <option key={option.id} value={option.id}>{option.label}</option>
+                                        ))}
+                                    </select>
                                 </div>
 
-                                {/* Cells */}
-                                {creneauxConfig.map(creneau => {
-                                    const seancesCellule = planningGrid[jour]?.[creneau.id] || [];
+                                <div style={{ marginBottom: '20px' }}>
+                                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#4a5568', marginBottom: '6px' }}>Semaine</label>
+                                    <select name="semaine" required style={{
+                                        width: '100%',
+                                        padding: '10px 14px',
+                                        borderRadius: '10px',
+                                        border: '1.5px solid #e2e8f0',
+                                        fontSize: '14px',
+                                        background: 'white',
+                                        cursor: 'pointer'
+                                    }}>
+                                        <option value="">Sélectionner une semaine</option>
+                                        {weekOptions.map(semaine => (
+                                            <option key={semaine.id} value={semaine.id}>{semaine.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
 
-                                    return (
-                                        <div
-                                            key={`${jour}-${creneau.id}`}
-                                            style={{
-                                                background: seancesCellule.length > 0 ? '#fafbfc' : 'white',
-                                                border: seancesCellule.length > 0 ? '1.5px solid #e2e8f0' : '1.5px dashed #e2e8f0',
-                                                borderRadius: '10px',
-                                                padding: '4px',
-                                                minWidth: '70px',
-                                                flexShrink: 0,
-                                                transition: 'all 0.2s ease',
-                                                display: 'flex',
-                                                flexDirection: 'column',
-                                                gap: '4px'
-                                            }}
-                                            onDragOver={handleDragOver}
-                                            onDrop={() => handleDrop(jour, creneau.id)}
-                                        >
-                                            {seancesCellule.length > 0 ? (
-                                                seancesCellule.map(seance => (
-                                                    <div
-                                                        key={seance.id}
-                                                        draggable
-                                                        onDragStart={() => handleDragStart(seance)}
-                                                        onClick={() => setSelectedSeance(seance)}
-                                                        style={{
-                                                            background: getCouleurGradient(seance.couleur),
-                                                            borderRadius: '6px',
-                                                            padding: '4px 6px',
-                                                            color: 'white',
-                                                            cursor: 'grab'
-                                                        }}
-                                                    >
-                                                        <div style={{ fontWeight: '700', fontSize: '9px' }}>{seance.classe}</div>
-                                                        <div style={{ fontWeight: '600', fontSize: '9px' }}>{seance.cours}</div>
-                                                    </div>
-                                                ))
-                                            ) : null}
-                                        </div>
-                                    );
-                                })}
+                                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowCreatePlanningModal(false)}
+                                        style={{
+                                            padding: '10px 20px',
+                                            borderRadius: '10px',
+                                            border: '1.5px solid #e2e8f0',
+                                            background: 'white',
+                                            color: '#64748b',
+                                            fontSize: '14px',
+                                            fontWeight: '500',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        Annuler
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        style={{
+                                            padding: '10px 20px',
+                                            borderRadius: '10px',
+                                            border: 'none',
+                                            background: 'linear-gradient(135deg, #5B8DEF 0%, #4169B8 100%)',
+                                            color: 'white',
+                                            fontSize: '14px',
+                                            fontWeight: '600',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        Créer le planning
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )}
+
+                {showAddModal && (
+                    <div style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        background: 'rgba(0,0,0,0.5)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 9999,
+                        backdropFilter: 'blur(4px)'
+                    }}
+                        onClick={closeFormModal}
+                    >
+                        <div style={{
+                            background: 'white',
+                            borderRadius: '20px',
+                            padding: '28px',
+                            width: '90%',
+                            maxWidth: '480px',
+                            maxHeight: '90vh',
+                            overflowY: 'auto',
+                            boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+                        }}
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                                <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#1a202c', margin: 0 }}>
+                                    {editingSessionId ? 'Modifier la séance' : 'Ajouter une séance'}
+                                </h2>
+                                <button
+                                    onClick={closeFormModal}
+                                    style={{
+                                        width: '32px',
+                                        height: '32px',
+                                        borderRadius: '8px',
+                                        border: 'none',
+                                        background: '#f1f5f9',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
+                                    }}
+                                >
+                                    <X size={18} color="#64748b" />
+                                </button>
                             </div>
-                        ))}
+
+                            <form onSubmit={handleSubmitSession}>
+                                <div style={{ marginBottom: '14px' }}>
+                                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#4a5568', marginBottom: '6px' }}>Classe</label>
+                                    <select
+                                        name="classe"
+                                        required
+                                        value={formState.classeId}
+                                        onChange={(e) => setFormState(prev => ({ ...prev, classeId: e.target.value }))}
+                                        style={{
+                                            width: '100%',
+                                            padding: '10px 14px',
+                                            borderRadius: '10px',
+                                            border: '1.5px solid #e2e8f0',
+                                            fontSize: '14px',
+                                            background: 'white',
+                                            cursor: 'pointer'
+                                        }}>
+                                        <option value="">Sélectionner une classe</option>
+                                        {classOptions.filter(option => option.id !== ALL_CLASSES).map(option => (
+                                            <option key={option.id} value={option.id}>{option.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div style={{ marginBottom: '14px' }}>
+                                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#4a5568', marginBottom: '6px' }}>Cours</label>
+                                    <select
+                                        name="cours"
+                                        required
+                                        value={formState.coursId}
+                                        onChange={(e) => setFormState(prev => ({ ...prev, coursId: e.target.value }))}
+                                        style={{
+                                            width: '100%',
+                                            padding: '10px 14px',
+                                            borderRadius: '10px',
+                                            border: '1.5px solid #e2e8f0',
+                                            fontSize: '14px',
+                                            background: 'white',
+                                            cursor: 'pointer'
+                                        }}>
+                                        <option value="">Sélectionner un cours</option>
+                                        {courses.map(cours => (
+                                            <option key={cours.id} value={cours.id}>{cours.libelle}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '14px' }}>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#4a5568', marginBottom: '6px' }}>Jour</label>
+                                        <select
+                                            name="jour"
+                                            required
+                                            value={formState.jour}
+                                            onChange={(e) => setFormState(prev => ({ ...prev, jour: e.target.value as JourSemaine }))}
+                                            style={{
+                                                width: '100%',
+                                                padding: '10px 14px',
+                                                borderRadius: '10px',
+                                                border: '1.5px solid #e2e8f0',
+                                                fontSize: '14px',
+                                                background: 'white',
+                                                cursor: 'pointer'
+                                            }}>
+                                            {JOUR_OPTIONS.map(jour => (
+                                                <option key={jour} value={jour}>{jour}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#4a5568', marginBottom: '6px' }}>Créneau</label>
+                                        <select
+                                            name="creneau"
+                                            required
+                                            value={formState.creneau}
+                                            onChange={(e) => setFormState(prev => ({ ...prev, creneau: e.target.value }))}
+                                            style={{
+                                                width: '100%',
+                                                padding: '10px 14px',
+                                                borderRadius: '10px',
+                                                border: '1.5px solid #e2e8f0',
+                                                fontSize: '14px',
+                                                background: 'white',
+                                                cursor: 'pointer'
+                                            }}>
+                                            {TIME_SLOTS.map(c => (
+                                                <option key={c.id} value={c.id}>{c.label}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div style={{ marginBottom: '14px' }}>
+                                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#4a5568', marginBottom: '6px' }}>Professeur</label>
+                                    <select
+                                        name="professeur"
+                                        required
+                                        value={formState.professeurId}
+                                        onChange={(e) => setFormState(prev => ({ ...prev, professeurId: e.target.value }))}
+                                        style={{
+                                            width: '100%',
+                                            padding: '10px 14px',
+                                            borderRadius: '10px',
+                                            border: '1.5px solid #e2e8f0',
+                                            fontSize: '14px',
+                                            background: 'white',
+                                            cursor: 'pointer'
+                                        }}>
+                                        <option value="">Sélectionner un professeur</option>
+                                        {professors.map(prof => (
+                                            <option key={prof.professorId} value={prof.professorId}>
+                                                {prof.firstName} {prof.lastName}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div style={{ marginBottom: '20px' }}>
+                                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#4a5568', marginBottom: '6px' }}>Salle</label>
+                                    <input
+                                        name="salle"
+                                        list="salle-options"
+                                        type="text"
+                                        required
+                                        placeholder="Sélectionner une salle"
+                                        value={formState.salleInput}
+                                        onChange={(e) => setFormState(prev => ({ ...prev, salleInput: e.target.value }))}
+                                        style={{
+                                            width: '100%',
+                                            padding: '10px 14px',
+                                            borderRadius: '10px',
+                                            border: '1.5px solid #e2e8f0',
+                                            fontSize: '14px',
+                                            outline: 'none'
+                                        }}
+                                    />
+                                    <datalist id="salle-options">
+                                        {salles.map(salle => (
+                                            <option key={salle.id} value={salle.libelle}>{salle.id}</option>
+                                        ))}
+                                    </datalist>
+                                </div>
+
+                                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                                    <button
+                                        type="button"
+                                        onClick={closeFormModal}
+                                        style={{
+                                            padding: '10px 20px',
+                                            borderRadius: '10px',
+                                            border: '1.5px solid #e2e8f0',
+                                            background: 'white',
+                                            color: '#64748b',
+                                            fontSize: '14px',
+                                            fontWeight: '500',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        Annuler
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={isMutating}
+                                        style={{
+                                            padding: '10px 20px',
+                                            borderRadius: '10px',
+                                            border: 'none',
+                                            background: 'linear-gradient(135deg, #5B8DEF 0%, #4169B8 100%)',
+                                            color: 'white',
+                                            fontSize: '14px',
+                                            fontWeight: '600',
+                                            cursor: 'pointer',
+                                            opacity: isMutating ? 0.7 : 1
+                                        }}
+                                    >
+                                        {editingSessionId ? 'Mettre à jour' : 'Ajouter'}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
                     </div>
                 )}
             </div>
-
-            {/* Session Details Modal */}
-            {selectedSeance && (
-                <div style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    background: 'rgba(0,0,0,0.5)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    zIndex: 9999,
-                    backdropFilter: 'blur(4px)'
-                }}
-                    onClick={() => setSelectedSeance(null)}
-                >
-                    <div style={{
-                        background: 'white',
-                        borderRadius: '20px',
-                        padding: '28px',
-                        width: '90%',
-                        maxWidth: '400px',
-                        boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
-                    }}
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                            <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#1a202c', margin: 0 }}>
-                                Détails de la séance
-                            </h2>
-                            <button
-                                onClick={() => setSelectedSeance(null)}
-                                style={{
-                                    width: '32px',
-                                    height: '32px',
-                                    borderRadius: '8px',
-                                    border: 'none',
-                                    background: '#f1f5f9',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center'
-                                }}
-                            >
-                                <X size={18} color="#64748b" />
-                            </button>
-                        </div>
-
-                        <div style={{
-                            background: getCouleurGradient(selectedSeance.couleur),
-                            borderRadius: '12px',
-                            padding: '16px',
-                            color: 'white',
-                            marginBottom: '20px'
-                        }}>
-                            <div style={{ fontWeight: '700', fontSize: '16px', marginBottom: '4px' }}>{selectedSeance.classe}</div>
-                            <div style={{ fontWeight: '600', fontSize: '15px' }}>{selectedSeance.cours}</div>
-                        </div>
-
-                        <div style={{ marginBottom: '12px' }}>
-                            <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '2px' }}>Professeur</div>
-                            <div style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>{selectedSeance.professeur}</div>
-                        </div>
-
-                        <div style={{ marginBottom: '12px' }}>
-                            <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '2px' }}>Salle</div>
-                            <div style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>{selectedSeance.salle}</div>
-                        </div>
-
-                        <div style={{ marginBottom: '20px' }}>
-                            <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '2px' }}>Horaire</div>
-                            <div style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>
-                                {selectedSeance.jour} • {selectedSeance.heureDebut} - {selectedSeance.heureFin}
-                            </div>
-                        </div>
-
-                        <div style={{ display: 'flex', gap: '10px' }}>
-                            <button style={{
-                                flex: 1,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '6px',
-                                padding: '12px',
-                                borderRadius: '10px',
-                                border: '1.5px solid #e2e8f0',
-                                background: 'white',
-                                color: '#475569',
-                                fontSize: '14px',
-                                fontWeight: '500',
-                                cursor: 'pointer'
-                            }}>
-                                <Edit2 size={16} />
-                                Modifier
-                            </button>
-                            <button
-                                onClick={() => handleDeleteSeance(selectedSeance.id)}
-                                style={{
-                                    flex: 1,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: '6px',
-                                    padding: '12px',
-                                    borderRadius: '10px',
-                                    border: 'none',
-                                    background: '#fee2e2',
-                                    color: '#dc2626',
-                                    fontSize: '14px',
-                                    fontWeight: '500',
-                                    cursor: 'pointer'
-                                }}>
-                                <Trash2 size={16} />
-                                Supprimer
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Create Planning Modal */}
-            {showCreatePlanningModal && (
-                <div style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    background: 'rgba(0,0,0,0.5)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    zIndex: 9999,
-                    backdropFilter: 'blur(4px)'
-                }}
-                    onClick={() => setShowCreatePlanningModal(false)}
-                >
-                    <div style={{
-                        background: 'white',
-                        borderRadius: '20px',
-                        padding: '28px',
-                        width: '90%',
-                        maxWidth: '480px',
-                        maxHeight: '90vh',
-                        overflowY: 'auto',
-                        boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
-                    }}
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                            <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#1a202c', margin: 0 }}>
-                                Créer un nouveau planning
-                            </h2>
-                            <button
-                                onClick={() => setShowCreatePlanningModal(false)}
-                                style={{
-                                    width: '32px',
-                                    height: '32px',
-                                    borderRadius: '8px',
-                                    border: 'none',
-                                    background: '#f1f5f9',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center'
-                                }}
-                            >
-                                <X size={18} color="#64748b" />
-                            </button>
-                        </div>
-
-                        <form onSubmit={(e) => {
-                            e.preventDefault();
-                            const form = e.currentTarget;
-                            const formData = new FormData(form);
-                            handleCreatePlanning(formData.get('classe') as string, formData.get('semaine') as string);
-                        }}>
-                            <div style={{ marginBottom: '14px' }}>
-                                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#4a5568', marginBottom: '6px' }}>Classe</label>
-                                <select name="classe" required style={{
-                                    width: '100%',
-                                    padding: '10px 14px',
-                                    borderRadius: '10px',
-                                    border: '1.5px solid #e2e8f0',
-                                    fontSize: '14px',
-                                    background: 'white',
-                                    cursor: 'pointer'
-                                }}>
-                                    <option value="">Sélectionner une classe</option>
-                                    {classes.filter(c => c !== 'Toutes les classes').map(classe => (
-                                        <option key={classe} value={classe}>{classe}</option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div style={{ marginBottom: '20px' }}>
-                                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#4a5568', marginBottom: '6px' }}>Semaine</label>
-                                <select name="semaine" required style={{
-                                    width: '100%',
-                                    padding: '10px 14px',
-                                    borderRadius: '10px',
-                                    border: '1.5px solid #e2e8f0',
-                                    fontSize: '14px',
-                                    background: 'white',
-                                    cursor: 'pointer'
-                                }}>
-                                    <option value="">Sélectionner une semaine</option>
-                                    {semaines.map(semaine => (
-                                        <option key={semaine.id} value={semaine.id}>{semaine.label}</option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                                <button
-                                    type="button"
-                                    onClick={() => setShowCreatePlanningModal(false)}
-                                    style={{
-                                        padding: '10px 20px',
-                                        borderRadius: '10px',
-                                        border: '1.5px solid #e2e8f0',
-                                        background: 'white',
-                                        color: '#64748b',
-                                        fontSize: '14px',
-                                        fontWeight: '500',
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    Annuler
-                                </button>
-                                <button
-                                    type="submit"
-                                    style={{
-                                        padding: '10px 20px',
-                                        borderRadius: '10px',
-                                        border: 'none',
-                                        background: 'linear-gradient(135deg, #5B8DEF 0%, #4169B8 100%)',
-                                        color: 'white',
-                                        fontSize: '14px',
-                                        fontWeight: '600',
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    Créer le planning
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-
-            {/* Add Session Modal */}
-            {showAddModal && (
-                <div style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    background: 'rgba(0,0,0,0.5)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    zIndex: 9999,
-                    backdropFilter: 'blur(4px)'
-                }}
-                    onClick={() => setShowAddModal(false)}
-                >
-                    <div style={{
-                        background: 'white',
-                        borderRadius: '20px',
-                        padding: '28px',
-                        width: '90%',
-                        maxWidth: '480px',
-                        maxHeight: '90vh',
-                        overflowY: 'auto',
-                        boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
-                    }}
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                            <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#1a202c', margin: 0 }}>
-                                Ajouter une séance
-                            </h2>
-                            <button
-                                onClick={() => setShowAddModal(false)}
-                                style={{
-                                    width: '32px',
-                                    height: '32px',
-                                    borderRadius: '8px',
-                                    border: 'none',
-                                    background: '#f1f5f9',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center'
-                                }}
-                            >
-                                <X size={18} color="#64748b" />
-                            </button>
-                        </div>
-
-                        <form onSubmit={handleAddSeance}>
-                            <div style={{ marginBottom: '14px' }}>
-                                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#4a5568', marginBottom: '6px' }}>Classe</label>
-                                <select name="classe" required defaultValue={currentPlanning?.classe} style={{
-                                    width: '100%',
-                                    padding: '10px 14px',
-                                    borderRadius: '10px',
-                                    border: '1.5px solid #e2e8f0',
-                                    fontSize: '14px',
-                                    background: 'white',
-                                    cursor: 'pointer'
-                                }}>
-                                    <option value="">Sélectionner une classe</option>
-                                    {classes.filter(c => c !== 'Toutes les classes').map(classe => (
-                                        <option key={classe} value={classe}>{classe}</option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div style={{ marginBottom: '14px' }}>
-                                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#4a5568', marginBottom: '6px' }}>Cours</label>
-                                <select name="cours" required style={{
-                                    width: '100%',
-                                    padding: '10px 14px',
-                                    borderRadius: '10px',
-                                    border: '1.5px solid #e2e8f0',
-                                    fontSize: '14px',
-                                    background: 'white',
-                                    cursor: 'pointer'
-                                }}>
-                                    <option value="">Sélectionner un cours</option>
-                                    {modules.filter(m => m !== 'Tous les modules').map(module => (
-                                        <option key={module} value={module}>{module}</option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '14px' }}>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#4a5568', marginBottom: '6px' }}>Jour</label>
-                                    <select name="jour" required style={{
-                                        width: '100%',
-                                        padding: '10px 14px',
-                                        borderRadius: '10px',
-                                        border: '1.5px solid #e2e8f0',
-                                        fontSize: '14px',
-                                        background: 'white',
-                                        cursor: 'pointer'
-                                    }}>
-                                        {jours.map(jour => (
-                                            <option key={jour} value={jour}>{jour}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#4a5568', marginBottom: '6px' }}>Créneau</label>
-                                    <select name="creneau" required style={{
-                                        width: '100%',
-                                        padding: '10px 14px',
-                                        borderRadius: '10px',
-                                        border: '1.5px solid #e2e8f0',
-                                        fontSize: '14px',
-                                        background: 'white',
-                                        cursor: 'pointer'
-                                    }}>
-                                        {creneauxConfig.map(c => (
-                                            <option key={c.id} value={c.id}>{c.label}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div style={{ marginBottom: '14px' }}>
-                                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#4a5568', marginBottom: '6px' }}>Professeur</label>
-                                <select name="professeur" required style={{
-                                    width: '100%',
-                                    padding: '10px 14px',
-                                    borderRadius: '10px',
-                                    border: '1.5px solid #e2e8f0',
-                                    fontSize: '14px',
-                                    background: 'white',
-                                    cursor: 'pointer'
-                                }}>
-                                    <option value="">Sélectionner un professeur</option>
-                                    <option value="Baila WANE">Baila WANE</option>
-                                    <option value="Aly TALL">Aly TALL</option>
-                                    <option value="Olivier SAGNA">Olivier SAGNA</option>
-                                    <option value="Serigne MBAYE">Serigne MBAYE</option>
-                                    <option value="Moussa DIOP">Moussa DIOP</option>
-                                </select>
-                            </div>
-
-                            <div style={{ marginBottom: '20px' }}>
-                                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#4a5568', marginBottom: '6px' }}>Salle</label>
-                                <input
-                                    name="salle"
-                                    type="text"
-                                    required
-                                    placeholder="Ex: Salle 101"
-                                    style={{
-                                        width: '100%',
-                                        padding: '10px 14px',
-                                        borderRadius: '10px',
-                                        border: '1.5px solid #e2e8f0',
-                                        fontSize: '14px',
-                                        outline: 'none'
-                                    }}
-                                />
-                            </div>
-
-                            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                                <button
-                                    type="button"
-                                    onClick={() => setShowAddModal(false)}
-                                    style={{
-                                        padding: '10px 20px',
-                                        borderRadius: '10px',
-                                        border: '1.5px solid #e2e8f0',
-                                        background: 'white',
-                                        color: '#64748b',
-                                        fontSize: '14px',
-                                        fontWeight: '500',
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    Annuler
-                                </button>
-                                <button
-                                    type="submit"
-                                    style={{
-                                        padding: '10px 20px',
-                                        borderRadius: '10px',
-                                        border: 'none',
-                                        background: 'linear-gradient(135deg, #5B8DEF 0%, #4169B8 100%)',
-                                        color: 'white',
-                                        fontSize: '14px',
-                                        fontWeight: '600',
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    Ajouter
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
+            );
 }

@@ -1,24 +1,63 @@
 export interface Etudiant {
-    id: number;
+    id: string;
     matricule: string;
     firstName: string;
     lastName: string;
-    email: string;
-    phone: string;
-    dateOfBirth: string;
-    lieuNaissance: string;
-    nationalite: string;
-    address: string;
-    gender: string;
-    classe: string;
-    anneeInscription: number;
-    qrToken: string;
+    email?: string | null;
+    phone?: string | null;
+    dateOfBirth?: string | null;
+    lieuNaissace?: string | null;
+    nationalite?: string | null;
+    address?: string | null;
+    gender?: string | null;
+    classe?: string | null;
+    classeInfo?: ClasseInfo | null;
+    anneeInscription?: number | null;
+    qrToken?: string | null;
+    qrCodeImage?: string | null; 
+    createdAt?: string | null;
+    updatedAt?: string | null;
 }
 
 export interface ClasseInfo {
-    id: number;
-    nom: string;
-    niveau: string;
-    filiere: string;
+    id?: string | null;
+    libelle?: string | null;
+    filiere?: FiliereInfo | null;
+    niveau?: NiveauInfo | null;
 }
 
+export interface FiliereInfo {
+    id: string;
+    libelle: string;
+}
+
+export interface NiveauInfo {
+    id: string;
+    libelle: string;
+}
+
+
+export interface EtudiantFormData {
+    username: string;
+    email: string;
+    password: string;
+    firstName: string;
+    lastName: string;
+    dateOfBirth: string;
+    lieuNaissace?: string;
+    nationalite?: string;
+    address?: string;
+    phone?: string;
+    gender?: string;
+    classeId?: string;
+    typeInscription?: string;
+    observations?: string;
+}
+
+// Pour les filtres
+export interface EtudiantFilters {
+    classe?: string;
+    anneeInscription?: number;
+    gender?: string;
+    search?: string;
+}

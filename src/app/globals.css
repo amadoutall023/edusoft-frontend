@@ -133,4 +133,124 @@ input[type="password"]::placeholder {
   .sidebar.open {
     transform: translateX(0);
   }
+
+  /* Notification dropdown mobile styles - maximale priorité */
+  @media (max-width: 1023px) {
+    div.notification-dropdown {
+      position: fixed !important;
+      top: 60px !important;
+      left: 0 !important;
+      right: 0 !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      height: auto !important;
+      max-height: calc(100vh - 60px) !important;
+      border-radius: 0 0 16px 16px !important;
+      z-index: 999999999 !important;
+      transform: translateZ(0) !important;
+      will-change: transform !important;
+    }
+
+    div.notification-overlay {
+      z-index: 999999998 !important;
+      transform: translateZ(0) !important;
+    }
+
+    header,
+    .header {
+      z-index: 999999997 !important;
+    }
+  }
+}
+
+/* FullCalendar Styles */
+.fc {
+  font-family: inherit;
+}
+
+.fc .fc-toolbar-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.fc .fc-button {
+  background: linear-gradient(135deg, #5B8DEF 0%, #4169B8 100%) !important;
+  border: none !important;
+  padding: 8px 16px !important;
+  border-radius: 8px !important;
+  font-weight: 500 !important;
+  text-transform: capitalize !important;
+}
+
+.fc .fc-button:hover {
+  background: linear-gradient(135deg, #4169B8 0%, #3652a0 100%) !important;
+}
+
+.fc .fc-button:disabled {
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+}
+
+.fc .fc-day-today {
+  background: #f0f9ff !important;
+}
+
+.fc .fc-event {
+  border-radius: 6px !important;
+  padding: 2px 4px !important;
+  font-size: 12px !important;
+  cursor: pointer !important;
+  border: none !important;
+}
+
+.fc .fc-event:hover {
+  opacity: 0.9;
+}
+
+.fc .fc-timegrid-slot {
+  height: 48px !important;
+}
+
+.fc .fc-col-header-cell-cushion {
+  padding: 12px 0 !important;
+  font-weight: 600 !important;
+  color: #475569 !important;
+  text-decoration: none !important;
+}
+
+.fc .fc-daygrid-day-number {
+  text-decoration: none !important;
+  color: #475569 !important;
+  padding: 8px !important;
+}
+
+.fc .fc-timegrid-axis-cushion {
+  color: #64748b !important;
+  font-size: 11px !important;
+}
+
+.fc .fc-scrollgrid {
+  border: 1px solid #e2e8f0 !important;
+}
+
+.fc .fc-scrollgrid td,
+.fc .fc-scrollgrid th {
+  border-color: #e2e8f0 !important;
+}
+
+.fc .fc-timegrid-col.fc-day-today {
+  background: #f0f9ff !important;
+}
+
+.fc .fc-timegrid-event {
+  border-radius: 6px !important;
+}
+
+.fc .fc-timegrid-event-dot {
+  display: none !important;
+}
+
+.fc .fc-daygrid-event-dot {
+  display: none !important;
 }

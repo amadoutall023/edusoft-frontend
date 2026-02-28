@@ -1,28 +1,66 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Eye, Plus, X, Pencil, Trash2 } from 'lucide-react';
+import Swal from 'sweetalert2';
 import SearchInput from '@/shared/components/SearchInput';
 import FilterButton from '@/shared/components/FilterButton';
 import Pagination from '@/shared/components/Pagination';
+import TableCard from '@/shared/components/TableCard';
 import { ClasseData, NiveauData } from '@/modules/structure/types';
-import { filieresData, FiliereData } from '@/modules/structure/data/filieres';
+import { ClassePayload } from '../services/structureService';
+import { ApiError } from '@/shared/errors/ApiError';
+
+interface OptionItem {
+    id: string;
+    libelle: string;
+}
 
 interface ClassesTableProps {
     data: ClasseData[];
     niveauxData?: NiveauData[];
+    filiereOptions: OptionItem[];
+    currentPage: number;
+    totalPages: number;
+    searchTerm: string;
+    onPageChange: (page: number) => void;
+    onSearchChange: (value: string) => void;
+    defaultSchoolId?: string | null;
+    onCreate: (payload: ClassePayload) => Promise<unknown>;
+    onUpdate: (id: string, payload: ClassePayload) => Promise<unknown>;
+    onDelete: (id: string) => Promise<unknown>;
+    onView?: (classe: ClasseData) => void;
 }
 
-export default function ClassesTable({ data, niveauxData = [] }: ClassesTableProps) {
-    const [currentPage, setCurrentPage] = useState(1);
-    const [searchTerm, setSearchTerm] = useState('');
+export default function ClassesTable({
+    data,
+    niveauxData = [],
+    filiereOptions,
+    currentPage,
+    totalPages,
+    searchTerm,
+    onPageChange,
+    onSearchChange,
+    defaultSchoolId,
+    onCreate,
+    onUpdate,
+    onDelete,
+    onView
+}: ClassesTableProps) {
     const [showModal, setShowModal] = useState(false);
+    const [formError, setFormError] = useState<string | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [editingClasseId, setEditingClasseId] = useState<string | null>(null);
     const [newClasse, setNewClasse] = useState({
         libelle: '',
         filiereId: '',
-        niveauId: ''
+        niveauId: '',
+        schoolId: defaultSchoolId ?? ''
     });
-    const itemsPerPage = 5;
+
+    React.useEffect(() => {
+        setNewClasse(prev => ({ ...prev, schoolId: defaultSchoolId ?? '' }));
+    }, [defaultSchoolId]);
 
     // Default niveaux if not provided
     const defaultNiveaux: NiveauData[] = niveauxData.length > 0 ? niveauxData : [
@@ -32,61 +70,132 @@ export default function ClassesTable({ data, niveauxData = [] }: ClassesTablePro
         { libelle: 'Quatrième année' },
         { libelle: 'Cinquième année' },
     ];
-
     // Get filiere names for display
     const getFiliereName = (id: string) => {
-        const filiere = filieresData.find(f => f.id.toString() === id);
-        return filiere ? filiere.nom : id;
+        const filiere = filiereOptions.find(option => option.id === id);
+        return filiere?.libelle ?? id;
     };
 
     // Get niveau name for display
-    const getNiveauName = (libelle: string) => {
-        return libelle;
+    const getNiveauName = (id: string) => {
+        const niveau = defaultNiveaux.find(option => (option.id ?? option.libelle) === id);
+        return niveau?.libelle ?? id;
+    };
+    const startIndex = (currentPage - 1) * 10;
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setFormError(null);
+        if (!newClasse.schoolId) {
+            setFormError('Aucune école associée au compte.');
+            return;
+        }
+        try {
+            setIsSubmitting(true);
+            const payload = {
+                libelle: newClasse.libelle,
+                filiereId: newClasse.filiereId,
+                niveauId: newClasse.niveauId,
+                schoolId: newClasse.schoolId
+            };
+            if (editingClasseId) {
+                await onUpdate(editingClasseId, payload);
+            } else {
+                await onCreate(payload);
+            }
+            setShowModal(false);
+            setEditingClasseId(null);
+            setNewClasse({ libelle: '', filiereId: '', niveauId: '', schoolId: defaultSchoolId ?? '' });
+        } catch (err) {
+            if (err instanceof ApiError) {
+                setFormError(err.message);
+            } else {
+                setFormError('Impossible de sauvegarder la classe');
+            }
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
-    // Filter data based on search term
-    const filteredData = data.filter(item =>
-        item.libelle.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.filiereId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.niveauId.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const openCreateModal = () => {
+        setEditingClasseId(null);
+        setFormError(null);
+        setNewClasse({ libelle: '', filiereId: '', niveauId: '', schoolId: defaultSchoolId ?? '' });
+        setShowModal(true);
+    };
 
-    // Paginate data
-    const totalPages = Math.ceil(filteredData.length / itemsPerPage);
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const paginatedData = filteredData.slice(startIndex, startIndex + itemsPerPage);
+    const openEditModal = (classe: ClasseData) => {
+        setEditingClasseId(classe.id);
+        setFormError(null);
+        setNewClasse({
+            libelle: classe.libelle,
+            filiereId: classe.filiereId,
+            niveauId: classe.niveauId,
+            schoolId: classe.schoolId || defaultSchoolId || ''
+        });
+        setShowModal(true);
+    };
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        // Here you would typically save the data to your backend
-        console.log('Nouvelle classe:', newClasse);
-        setShowModal(false);
-        setNewClasse({ libelle: '', filiereId: '', niveauId: '' });
+    const handleDelete = async (classe: ClasseData) => {
+        const result = await Swal.fire({
+            title: 'Êtes-vous sûr ?',
+            text: `Voulez-vous vraiment supprimer la classe "${classe.libelle}" ?`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc2626',
+            cancelButtonColor: '#64748b',
+            confirmButtonText: 'Oui, supprimer',
+            cancelButtonText: 'Annuler',
+            reverseButtons: true
+        });
+
+        if (!result.isConfirmed) return;
+
+        try {
+            await onDelete(classe.id);
+            Swal.fire({
+                title: 'Supprimé !',
+                text: 'La classe a été supprimée avec succès.',
+                icon: 'success',
+                timer: 2000,
+                showConfirmButton: false
+            });
+        } catch (err) {
+            const message = err instanceof ApiError ? err.message : 'Suppression impossible';
+            Swal.fire({
+                title: 'Erreur',
+                text: message,
+                icon: 'error'
+            });
+        }
     };
 
     return (
         <>
             {/* Search and Filter Section */}
             <div className="search-filter-section" style={{
-                padding: '24px 40px',
+                padding: '24px 20px',
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
                 background: '#fafbfc',
                 flexWrap: 'wrap',
-                gap: '16px'
+                gap: '16px',
+                width: '100%',
+                maxWidth: '100%',
+                boxSizing: 'border-box'
             }}>
                 <div className="search-wrapper" style={{ flex: '1', minWidth: '200px', maxWidth: '400px' }}>
                     <SearchInput
                         value={searchTerm}
-                        onChange={setSearchTerm}
+                        onChange={onSearchChange}
                         placeholder="Rechercher une classe..."
                     />
                 </div>
                 <div className="actions-wrapper" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                     <FilterButton label="Filtrer" />
                     <button
-                        onClick={() => setShowModal(true)}
+                        onClick={openCreateModal}
                         style={{
                             display: 'flex',
                             alignItems: 'center',
@@ -118,12 +227,15 @@ export default function ClassesTable({ data, niveauxData = [] }: ClassesTablePro
                 </div>
             </div>
 
-            {/* Table */}
+            {/* Table - Desktop */}
             <div className="table-container" style={{
-                overflowX: 'auto',
-                padding: '0 40px'
+                overflowX: 'hidden',
+                padding: '0 20px',
+                width: '100%',
+                maxWidth: '100%',
+                boxSizing: 'border-box'
             }}>
-                <table style={{
+                <table className="desktop-table" style={{
                     width: '100%',
                     borderCollapse: 'collapse',
                     minWidth: '700px'
@@ -181,7 +293,7 @@ export default function ClassesTable({ data, niveauxData = [] }: ClassesTablePro
                         </tr>
                     </thead>
                     <tbody>
-                        {paginatedData.map((classe, index) => (
+                        {data.map((classe, index) => (
                             <tr key={classe.id} style={{
                                 background: index % 2 === 0 ? 'white' : '#fafbfc',
                                 transition: 'all 0.2s ease'
@@ -226,13 +338,39 @@ export default function ClassesTable({ data, niveauxData = [] }: ClassesTablePro
                                     fontSize: '14px',
                                     fontWeight: '500',
                                     borderBottom: '1px solid #f1f5f9'
-                                }}>{classe.niveauId}</td>
+                                }}>{getNiveauName(classe.niveauId)}</td>
                                 <td style={{
                                     padding: '16px',
                                     textAlign: 'center',
                                     borderBottom: '1px solid #f1f5f9'
                                 }}>
                                     <div style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}>
+                                        {onView && (
+                                            <button style={{
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                width: '36px',
+                                                height: '36px',
+                                                borderRadius: '8px',
+                                                border: 'none',
+                                                background: '#E3F2FD',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s ease'
+                                            }}
+                                                onMouseEnter={(e: any) => {
+                                                    e.currentTarget.style.background = '#5B8DEF';
+                                                    e.currentTarget.querySelector('svg').style.color = 'white';
+                                                }}
+                                                onMouseLeave={(e: any) => {
+                                                    e.currentTarget.style.background = '#E3F2FD';
+                                                    e.currentTarget.querySelector('svg').style.color = '#5B8DEF';
+                                                }}
+                                                onClick={() => onView(classe)}
+                                            >
+                                                <Eye size={18} color="#5B8DEF" strokeWidth={2.5} />
+                                            </button>
+                                        )}
                                         <button style={{
                                             display: 'inline-flex',
                                             alignItems: 'center',
@@ -253,29 +391,7 @@ export default function ClassesTable({ data, niveauxData = [] }: ClassesTablePro
                                                 e.currentTarget.style.background = '#E3F2FD';
                                                 e.currentTarget.querySelector('svg').style.color = '#5B8DEF';
                                             }}
-                                        >
-                                            <Eye size={18} color="#5B8DEF" strokeWidth={2.5} />
-                                        </button>
-                                        <button style={{
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            width: '36px',
-                                            height: '36px',
-                                            borderRadius: '8px',
-                                            border: 'none',
-                                            background: '#E3F2FD',
-                                            cursor: 'pointer',
-                                            transition: 'all 0.2s ease'
-                                        }}
-                                            onMouseEnter={(e: any) => {
-                                                e.currentTarget.style.background = '#5B8DEF';
-                                                e.currentTarget.querySelector('svg').style.color = 'white';
-                                            }}
-                                            onMouseLeave={(e: any) => {
-                                                e.currentTarget.style.background = '#E3F2FD';
-                                                e.currentTarget.querySelector('svg').style.color = '#5B8DEF';
-                                            }}
+                                            onClick={() => openEditModal(classe)}
                                         >
                                             <Pencil size={18} color="#5B8DEF" strokeWidth={2.5} />
                                         </button>
@@ -299,6 +415,7 @@ export default function ClassesTable({ data, niveauxData = [] }: ClassesTablePro
                                                 e.currentTarget.style.background = '#E3F2FD';
                                                 e.currentTarget.querySelector('svg').style.color = '#5B8DEF';
                                             }}
+                                            onClick={() => handleDelete(classe)}
                                         >
                                             <Trash2 size={18} color="#5B8DEF" strokeWidth={2.5} />
                                         </button>
@@ -310,11 +427,47 @@ export default function ClassesTable({ data, niveauxData = [] }: ClassesTablePro
                 </table>
             </div>
 
+            {/* Cards - Mobile */}
+            <div
+                className="mobile-cards"
+                style={{
+                    padding: '16px',
+                    overflowX: 'hidden',
+                    maxWidth: '100vw',
+                    width: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center'
+                }}
+            >
+                {data.map((classe, index) => (
+                    <div key={classe.id} style={{ width: '100%', maxWidth: '420px' }}>
+                        <TableCard
+                            index={index}
+                            variant="classe"
+                            fields={[
+                                { label: 'Libellé', value: classe.libelle, highlight: true },
+                                { label: 'Filière', value: getFiliereName(classe.filiereId) },
+                                { label: 'Niveau', value: getNiveauName(classe.niveauId) }
+                            ]}
+                            onView={() => onView && onView(classe)}
+                            onEdit={() => openEditModal(classe)}
+                            onDelete={() => handleDelete(classe)}
+                        />
+                    </div>
+                ))}
+                {data.length === 0 && (
+                    <div style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
+                        Aucune classe trouvée
+                    </div>
+                )}
+            </div>
+
             {/* Pagination */}
             <Pagination
                 currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={setCurrentPage}
+                totalPages={Math.max(totalPages, 1)}
+                onPageChange={onPageChange}
             />
 
             {/* Modal for adding new class */}
@@ -332,7 +485,10 @@ export default function ClassesTable({ data, niveauxData = [] }: ClassesTablePro
                     zIndex: 1000,
                     backdropFilter: 'blur(4px)'
                 }}
-                    onClick={() => setShowModal(false)}
+                    onClick={() => {
+                        setShowModal(false);
+                        setEditingClasseId(null);
+                    }}
                 >
                     <div className="modal-content" style={{
                         background: 'white',
@@ -356,9 +512,12 @@ export default function ClassesTable({ data, niveauxData = [] }: ClassesTablePro
                                 fontWeight: '700',
                                 color: '#1a202c',
                                 margin: 0
-                            }}>Ajouter une classe</h2>
+                            }}>{editingClasseId ? 'Modifier une classe' : 'Ajouter une classe'}</h2>
                             <button
-                                onClick={() => setShowModal(false)}
+                                onClick={() => {
+                                    setShowModal(false);
+                                    setEditingClasseId(null);
+                                }}
                                 style={{
                                     width: '36px',
                                     height: '36px',
@@ -433,9 +592,9 @@ export default function ClassesTable({ data, niveauxData = [] }: ClassesTablePro
                                     onBlur={(e: any) => e.target.style.borderColor = '#e2e8f0'}
                                 >
                                     <option value="">Sélectionner une filière</option>
-                                    {filieresData.map((filiere) => (
+                                    {filiereOptions.map((filiere) => (
                                         <option key={filiere.id} value={filiere.id}>
-                                            {filiere.nom}
+                                            {filiere.libelle}
                                         </option>
                                     ))}
                                 </select>
@@ -470,17 +629,25 @@ export default function ClassesTable({ data, niveauxData = [] }: ClassesTablePro
                                 >
                                     <option value="">Sélectionner un niveau</option>
                                     {defaultNiveaux.map((niveau, index) => (
-                                        <option key={index} value={niveau.libelle}>
+                                        <option key={index} value={niveau.id ?? niveau.libelle}>
                                             {niveau.libelle}
                                         </option>
                                     ))}
                                 </select>
                             </div>
+                            {formError && (
+                                <div style={{ color: '#dc2626', marginBottom: '12px', fontSize: '13px' }}>
+                                    {formError}
+                                </div>
+                            )}
 
                             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
                                 <button
                                     type="button"
-                                    onClick={() => setShowModal(false)}
+                                    onClick={() => {
+                                        setShowModal(false);
+                                        setEditingClasseId(null);
+                                    }}
                                     style={{
                                         padding: '12px 24px',
                                         borderRadius: '10px',
@@ -497,6 +664,7 @@ export default function ClassesTable({ data, niveauxData = [] }: ClassesTablePro
                                 </button>
                                 <button
                                     type="submit"
+                                    disabled={isSubmitting}
                                     style={{
                                         padding: '12px 24px',
                                         borderRadius: '10px',
@@ -507,10 +675,11 @@ export default function ClassesTable({ data, niveauxData = [] }: ClassesTablePro
                                         fontWeight: '600',
                                         cursor: 'pointer',
                                         transition: 'all 0.2s ease',
-                                        boxShadow: '0 4px 12px rgba(91,141,239,0.3)'
+                                        boxShadow: '0 4px 12px rgba(91,141,239,0.3)',
+                                        opacity: isSubmitting ? 0.7 : 1
                                     }}
                                 >
-                                    Enregistrer
+                                    {isSubmitting ? 'Enregistrement...' : 'Enregistrer'}
                                 </button>
                             </div>
                         </form>
@@ -529,23 +698,43 @@ export default function ClassesTable({ data, niveauxData = [] }: ClassesTablePro
                         transform: translateY(0);
                     }
                 }
-                @media (max-width: 768px) {
-                    .search-filter-section {
-                        padding: 16px 20px !important;
+
+                /* Desktop: hide mobile cards */
+                @media (min-width: 769px) {
+                    div.mobile-cards {
+                        display: none !important;
                     }
-                    .search-wrapper {
+                }
+
+                /* Mobile: hide table, show cards */
+                @media (max-width: 768px) {
+                    div.search-filter-section {
+                        padding: 16px !important;
+                    }
+                    div.search-wrapper {
                         max-width: 100% !important;
                     }
-                    .actions-wrapper {
+                    div.actions-wrapper {
                         width: 100%;
                         justify-content: flex-start;
                     }
-                    .table-container {
-                        padding: 0 20px !important;
+                    div.table-container {
+                        display: none !important;
+                    }
+                    table.desktop-table {
+                        display: none !important;
+                    }
+                    div.mobile-cards {
+                        display: flex !important;
+                        flex-direction: column !important;
+                        align-items: center !important;
+                        padding: 16px !important;
+                        overflow-x: hidden !important;
+                        width: 100% !important;
+                        max-width: 100vw !important;
                     }
                 }
             `}</style>
         </>
     );
 }
-

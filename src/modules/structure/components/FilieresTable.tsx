@@ -1,75 +1,131 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
-import { Eye, Plus, X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Eye, Plus, X, Pencil, Trash2 } from 'lucide-react';
+import Swal from 'sweetalert2';
 import SearchInput from '@/shared/components/SearchInput';
-import FilterButton from '@/shared/components/FilterButton';
 import Pagination from '@/shared/components/Pagination';
-import { FiliereData } from '../data/filieres';
+import TableCard from '@/shared/components/TableCard';
+import { FiliereData } from '../types';
+import { ApiError } from '@/shared/errors/ApiError';
 
 interface FilieresTableProps {
     data: FiliereData[];
+    currentPage: number;
+    totalPages: number;
+    searchTerm: string;
+    onPageChange: (page: number) => void;
+    onSearchChange: (value: string) => void;
+    onCreate: (libelle: string) => Promise<unknown>;
+    onUpdate: (id: string, libelle: string) => Promise<unknown>;
+    onDelete: (id: string) => Promise<unknown>;
 }
 
-export default function FilieresTable({ data }: FilieresTableProps) {
-    const [currentPage, setCurrentPage] = useState(1);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [showFilters, setShowFilters] = useState(false);
-    const [filters, setFilters] = useState({
-        code: ''
-    });
+export default function FilieresTable({
+    data,
+    currentPage,
+    totalPages,
+    searchTerm,
+    onPageChange,
+    onSearchChange,
+    onCreate,
+    onUpdate,
+    onDelete
+}: FilieresTableProps) {
     const [showModal, setShowModal] = useState(false);
-    const [newFiliere, setNewFiliere] = useState({ nom: '', code: '', description: '' });
-    const itemsPerPage = 3;
+    const [formError, setFormError] = useState<string | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [newFiliere, setNewFiliere] = useState({ nom: '', description: '' });
+    const [isMobile, setIsMobile] = useState(false);
 
-    // Get unique codes for filter
-    const uniqueCodes = useMemo(() =>
-        [...new Set(data.map(item => item.code))].sort(),
-        [data]
-    );
+    useEffect(() => {
+        const checkMobile = () => {
+            setIsMobile(window.innerWidth <= 768);
+        };
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
 
-    // Filter data based on search term and filters
-    const filteredData = data.filter(item => {
-        const matchesSearch =
-            item.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.code.toLowerCase().includes(searchTerm.toLowerCase());
+    const filteredData = data;
+    const startIndex = (currentPage - 1) * 10;
 
-        const matchesCode = !filters.code || item.code === filters.code;
+    const openCreate = () => {
+        setEditingId(null);
+        setFormError(null);
+        setNewFiliere({ nom: '', description: '' });
+        setShowModal(true);
+    };
 
-        return matchesSearch && matchesCode;
-    });
+    const openEdit = (filiere: FiliereData) => {
+        setEditingId(filiere.id);
+        setFormError(null);
+        setNewFiliere({ nom: filiere.nom, description: filiere.description ?? '' });
+        setShowModal(true);
+    };
 
-    // Reset page when filters change
-    React.useEffect(() => {
-        setCurrentPage(1);
-    }, [searchTerm, filters]);
+    const handleDelete = async (filiere: FiliereData) => {
+        const result = await Swal.fire({
+            title: 'Êtes-vous sûr ?',
+            text: `Voulez-vous vraiment supprimer la filière "${filiere.nom}" ?`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc2626',
+            cancelButtonColor: '#64748b',
+            confirmButtonText: 'Oui, supprimer',
+            cancelButtonText: 'Annuler',
+            reverseButtons: true
+        });
 
-    const handleSubmit = (e: React.FormEvent) => {
+        if (!result.isConfirmed) return;
+
+        try {
+            await onDelete(filiere.id);
+            Swal.fire({
+                title: 'Supprimé !',
+                text: 'La filière a été supprimée avec succès.',
+                icon: 'success',
+                timer: 2000,
+                showConfirmButton: false
+            });
+        } catch (err) {
+            const message = err instanceof ApiError ? err.message : 'Suppression impossible';
+            Swal.fire({
+                title: 'Erreur',
+                text: message,
+                icon: 'error'
+            });
+        }
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        console.log('Nouvelle filière:', newFiliere);
-        setShowModal(false);
-        setNewFiliere({ nom: '', code: '', description: '' });
+        setFormError(null);
+        try {
+            setIsSubmitting(true);
+            if (editingId) {
+                await onUpdate(editingId, newFiliere.nom);
+            } else {
+                await onCreate(newFiliere.nom);
+            }
+            setShowModal(false);
+            setEditingId(null);
+            setNewFiliere({ nom: '', description: '' });
+        } catch (err) {
+            if (err instanceof ApiError) {
+                setFormError(err.message);
+            } else {
+                setFormError('Impossible de sauvegarder la filière');
+            }
+        } finally {
+            setIsSubmitting(false);
+        }
     };
-
-    const handleFilterChange = (key: keyof typeof filters, value: string) => {
-        setFilters(prev => ({ ...prev, [key]: value }));
-    };
-
-    const clearFilters = () => {
-        setFilters({ code: '' });
-    };
-
-    const hasActiveFilters = filters.code;
-
-    // Paginate data
-    const totalPages = Math.ceil(filteredData.length / itemsPerPage);
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const paginatedData = filteredData.slice(startIndex, startIndex + itemsPerPage);
 
     return (
         <>
-            {/* Search and Filter Section */}
+            <Styles />
             <div className="search-filter-section" style={{
                 padding: '24px 40px',
                 display: 'flex',
@@ -81,44 +137,12 @@ export default function FilieresTable({ data }: FilieresTableProps) {
             }}>
                 <SearchInput
                     value={searchTerm}
-                    onChange={setSearchTerm}
+                    onChange={onSearchChange}
                     placeholder="Rechercher une filière..."
                 />
                 <div style={{ display: 'flex', gap: '12px' }}>
                     <button
-                        onClick={() => setShowFilters(!showFilters)}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            padding: '10px 20px',
-                            background: showFilters ? '#5B8DEF' : 'white',
-                            border: `1.5px solid ${showFilters ? '#5B8DEF' : '#e5e7eb'}`,
-                            borderRadius: '10px',
-                            color: showFilters ? 'white' : '#4a5568',
-                            fontSize: '14px',
-                            fontWeight: '600',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s ease',
-                            whiteSpace: 'nowrap'
-                        }}
-                    >
-                        Filtrer
-                        {hasActiveFilters && (
-                            <span style={{
-                                background: showFilters ? 'white' : '#5B8DEF',
-                                color: showFilters ? '#5B8DEF' : 'white',
-                                padding: '2px 8px',
-                                borderRadius: '10px',
-                                fontSize: '12px',
-                                fontWeight: '600'
-                            }}>
-                                1
-                            </span>
-                        )}
-                    </button>
-                    <button
-                        onClick={() => setShowModal(true)}
+                        onClick={openCreate}
                         style={{
                             display: 'flex',
                             alignItems: 'center',
@@ -132,16 +156,7 @@ export default function FilieresTable({ data }: FilieresTableProps) {
                             fontWeight: '600',
                             cursor: 'pointer',
                             transition: 'all 0.2s ease',
-                            boxShadow: '0 4px 12px rgba(91,141,239,0.3)',
-                            whiteSpace: 'nowrap'
-                        }}
-                        onMouseEnter={(e: any) => {
-                            e.currentTarget.style.transform = 'translateY(-2px)';
-                            e.currentTarget.style.boxShadow = '0 6px 16px rgba(91,141,239,0.4)';
-                        }}
-                        onMouseLeave={(e: any) => {
-                            e.currentTarget.style.transform = 'translateY(0)';
-                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(91,141,239,0.3)';
+                            boxShadow: '0 4px 12px rgba(91,141,239,0.3)'
                         }}
                     >
                         <Plus size={18} />
@@ -150,425 +165,235 @@ export default function FilieresTable({ data }: FilieresTableProps) {
                 </div>
             </div>
 
-            {/* Filter Panel */}
-            {showFilters && (
-                <div className="filter-panel" style={{
-                    padding: '20px 40px',
-                    background: '#f0f7ff',
-                    borderBottom: '1px solid #e2e8f0',
-                    display: 'flex',
-                    gap: '20px',
-                    flexWrap: 'wrap',
-                    alignItems: 'center'
-                }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <label style={{ fontSize: '12px', fontWeight: '600', color: '#4a5568' }}>Code</label>
-                        <select
-                            value={filters.code}
-                            onChange={(e) => handleFilterChange('code', e.target.value)}
-                            style={{
-                                padding: '10px 14px',
-                                borderRadius: '8px',
-                                border: '1.5px solid #e5e7eb',
-                                background: 'white',
-                                fontSize: '14px',
-                                color: '#2d3748',
-                                minWidth: '180px',
-                                cursor: 'pointer',
-                                fontFamily: 'inherit'
-                            }}
-                        >
-                            <option value="">Tous les codes</option>
-                            {uniqueCodes.map(code => (
-                                <option key={code} value={code}>{code}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    {hasActiveFilters && (
-                        <button
-                            onClick={clearFilters}
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                padding: '10px 16px',
-                                background: 'transparent',
-                                border: '1.5px solid #e53e3e',
-                                borderRadius: '8px',
-                                color: '#e53e3e',
-                                fontSize: '14px',
-                                fontWeight: '500',
-                                cursor: 'pointer',
-                                marginTop: '18px',
-                                fontFamily: 'inherit'
-                            }}
-                        >
-                            <X size={16} />
-                            <span>Effacer</span>
-                        </button>
-                    )}
-
-                    <div className="results-count" style={{
-                        marginLeft: 'auto',
-                        fontSize: '14px',
-                        color: '#4a5568',
-                        fontWeight: '500'
-                    }}>
-                        {filteredData.length} résultat{filteredData.length !== 1 ? 's' : ''}
-                    </div>
-                </div>
-            )}
-
-            {/* Table */}
-            <div className="table-container" style={{
-                overflowX: 'auto',
-                padding: '0 40px'
-            }}>
-                <table style={{
-                    width: '100%',
-                    borderCollapse: 'collapse',
-                    minWidth: '800px'
-                }}>
+            {/* Table - Desktop only */}
+            {!isMobile && (
+            <div className="table-container" style={{ overflowX: 'auto', padding: '0 40px' }}>
+                <table className="desktop-table" style={{ width: '100%', borderCollapse: 'collapse', minWidth: '700px' }}>
                     <thead>
-                        <tr style={{
-                            background: 'linear-gradient(135deg, #5B8DEF 0%, #4A7ACC 100%)',
-                            borderRadius: '12px 12px 0 0'
-                        }}>
-                            <th style={{
-                                padding: '16px',
-                                textAlign: 'center',
-                                color: 'white',
-                                fontWeight: '600',
-                                fontSize: '14px',
-                                width: '80px',
-                                borderBottom: '3px solid rgba(255,255,255,0.2)'
-                            }}>N°</th>
-                            <th style={{
-                                padding: '16px',
-                                textAlign: 'center',
-                                color: 'white',
-                                fontWeight: '600',
-                                fontSize: '14px',
-                                width: '150px',
-                                borderBottom: '3px solid rgba(255,255,255,0.2)'
-                            }}>Nom</th>
-                            <th style={{
-                                padding: '16px',
-                                textAlign: 'left',
-                                color: 'white',
-                                fontWeight: '600',
-                                fontSize: '14px',
-                                borderBottom: '3px solid rgba(255,255,255,0.2)'
-                            }}>Description</th>
-                            <th style={{
-                                padding: '16px',
-                                textAlign: 'center',
-                                color: 'white',
-                                fontWeight: '600',
-                                fontSize: '14px',
-                                width: '150px',
-                                borderBottom: '3px solid rgba(255,255,255,0.2)'
-                            }}>Code</th>
-                            <th style={{
-                                padding: '16px',
-                                textAlign: 'center',
-                                color: 'white',
-                                fontWeight: '600',
-                                fontSize: '14px',
-                                width: '120px',
-                                borderBottom: '3px solid rgba(255,255,255,0.2)'
-                            }}>ACTIONS</th>
+                        <tr style={{ background: 'linear-gradient(135deg, #5B8DEF 0%, #4A7ACC 100%)' }}>
+                            <th style={{ padding: '16px', color: 'white', textAlign: 'center' }}>N°</th>
+                            <th style={{ padding: '16px', color: 'white', textAlign: 'center' }}>Nom</th>
+                            <th style={{ padding: '16px', color: 'white', textAlign: 'center' }}>Code</th>
+                            <th style={{ padding: '16px', color: 'white', textAlign: 'center' }}>Description</th>
+                            <th style={{ padding: '16px', color: 'white', textAlign: 'center' }}>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {paginatedData.map((filiere, index) => (
-                            <tr key={filiere.id} style={{
-                                background: index % 2 === 0 ? 'white' : '#fafbfc',
-                                transition: 'all 0.2s ease'
-                            }}
-                                onMouseEnter={(e: any) => {
-                                    e.currentTarget.style.background = '#f0f7ff';
-                                    e.currentTarget.style.transform = 'scale(1.002)';
-                                }}
-                                onMouseLeave={(e: any) => {
-                                    e.currentTarget.style.background = index % 2 === 0 ? 'white' : '#fafbfc';
-                                    e.currentTarget.style.transform = 'scale(1)';
-                                }}
-                            >
-                                <td style={{
-                                    padding: '16px',
-                                    textAlign: 'center',
-                                    color: '#4a5568',
-                                    fontSize: '14px',
-                                    fontWeight: '500',
-                                    borderBottom: '1px solid #f1f5f9'
-                                }}>{startIndex + index + 1}</td>
-                                <td style={{
-                                    padding: '16px',
-                                    textAlign: 'center',
-                                    color: '#1a202c',
-                                    fontSize: '14px',
-                                    fontWeight: '600',
-                                    borderBottom: '1px solid #f1f5f9'
-                                }}>{filiere.nom}</td>
-                                <td style={{
-                                    padding: '16px',
-                                    textAlign: 'left',
-                                    color: '#4a5568',
-                                    fontSize: '14px',
-                                    borderBottom: '1px solid #f1f5f9',
-                                    maxWidth: '300px'
-                                }}>{filiere.description}</td>
-                                <td style={{
-                                    padding: '16px',
-                                    textAlign: 'center',
-                                    color: '#5B8DEF',
-                                    fontSize: '14px',
-                                    fontWeight: '600',
-                                    borderBottom: '1px solid #f1f5f9'
-                                }}>{filiere.code}</td>
-                                <td style={{
-                                    padding: '16px',
-                                    textAlign: 'center',
-                                    borderBottom: '1px solid #f1f5f9'
-                                }}>
-                                    <button style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        width: '36px',
-                                        height: '36px',
-                                        borderRadius: '8px',
-                                        border: 'none',
-                                        background: '#E3F2FD',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.2s ease'
-                                    }}
-                                        onMouseEnter={(e: any) => {
-                                            e.currentTarget.style.background = '#5B8DEF';
-                                            e.currentTarget.querySelector('svg').style.color = 'white';
-                                        }}
-                                        onMouseLeave={(e: any) => {
-                                            e.currentTarget.style.background = '#E3F2FD';
-                                            e.currentTarget.querySelector('svg').style.color = '#5B8DEF';
-                                        }}
-                                    >
-                                        <Eye size={18} color="#5B8DEF" strokeWidth={2.5} />
-                                    </button>
+                        {filteredData.map((filiere, index) => (
+                            <tr key={filiere.id} style={{ background: index % 2 === 0 ? 'white' : '#fafbfc' }}>
+                                <td style={{ padding: '16px', textAlign: 'center', color: 'black' }}>{startIndex + index + 1}</td>
+                                <td style={{ padding: '16px', textAlign: 'center', color: 'black' }}>{filiere.nom}</td>
+                                <td style={{ padding: '16px', textAlign: 'center', color: 'black' }}>{filiere.code}</td>
+                                <td style={{ padding: '16px', textAlign: 'center', color: 'black' }}>{filiere.description ?? 'Non renseigné'}</td>
+                                <td style={{ padding: '16px', textAlign: 'center' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}>
+                                        <button style={iconButtonStyle} onClick={() => openEdit(filiere)}>
+                                            <Pencil size={18} color="#5B8DEF" strokeWidth={2.5} />
+                                        </button>
+                                        <button style={iconButtonStyle} onClick={() => handleDelete(filiere)}>
+                                            <Trash2 size={18} color="#5B8DEF" strokeWidth={2.5} />
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         ))}
                     </tbody>
                 </table>
             </div>
+            )}
 
-            {/* Pagination */}
-            <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={setCurrentPage}
-            />
+            {/* Cards - Mobile only */}
+            {isMobile && (
+            <div
+                className="mobile-cards"
+                style={{
+                    padding: '16px',
+                    overflowX: 'hidden',
+                    maxWidth: '100vw',
+                    width: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center'
+                }}
+            >
+                {filteredData.map((filiere, index) => (
+                    <div key={filiere.id} style={{ width: '100%', maxWidth: '420px' }}>
+                        <TableCard
+                            index={index}
+                            variant="classe"
+                            fields={[
+                                { label: 'Nom', value: filiere.nom, highlight: true },
+                                { label: 'Code', value: filiere.code },
+                                { label: 'Description', value: filiere.description || 'Non renseigné' }
+                            ]}
+                            onEdit={() => openEdit(filiere)}
+                            onDelete={() => handleDelete(filiere)}
+                        />
+                    </div>
+                ))}
+                {filteredData.length === 0 && (
+                    <div style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
+                        Aucune filière trouvée
+                    </div>
+                )}
+            </div>
+            )}
 
-            {/* Modal for adding new filiere */}
+            <Pagination currentPage={currentPage} totalPages={Math.max(totalPages, 1)} onPageChange={onPageChange} />
+
             {showModal && (
                 <div className="modal-overlay" style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    background: 'rgba(0,0,0,0.5)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    zIndex: 1000,
-                    backdropFilter: 'blur(4px)'
-                }}
-                    onClick={() => setShowModal(false)}
-                >
-                    <div className="modal-content" style={{
-                        background: 'white',
-                        borderRadius: '20px',
-                        padding: '32px',
-                        width: '90%',
-                        maxWidth: '500px',
-                        boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
-                        animation: 'slideIn 0.3s ease'
-                    }}
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <div style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            marginBottom: '24px'
-                        }}>
-                            <h2 style={{
-                                fontSize: '22px',
-                                fontWeight: '700',
-                                color: '#1a202c',
-                                margin: 0
-                            }}>Ajouter une filière</h2>
-                            <button
-                                onClick={() => setShowModal(false)}
-                                style={{
-                                    width: '36px',
-                                    height: '36px',
-                                    borderRadius: '10px',
-                                    border: 'none',
-                                    background: '#f1f5f9',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center'
-                                }}
-                            >
+                    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    zIndex: 1000
+                }} onClick={() => { setShowModal(false); setEditingId(null); }}>
+                    <div style={{
+                        background: 'white', borderRadius: '20px', padding: '32px',
+                        width: '90%', maxWidth: '500px', boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+                    }} onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px' }}>
+                            <h2 style={{ fontSize: '22px', fontWeight: 700, margin: 0 }}>
+                                {editingId ? 'Modifier une filière' : 'Ajouter une filière'}
+                            </h2>
+                            <button style={closeButtonStyle} onClick={() => { setShowModal(false); setEditingId(null); }}>
                                 <X size={20} color="#64748b" />
                             </button>
                         </div>
-
                         <form onSubmit={handleSubmit}>
                             <div style={{ marginBottom: '20px' }}>
-                                <label style={{
-                                    display: 'block',
-                                    fontSize: '14px',
-                                    fontWeight: '600',
-                                    color: '#4a5568',
-                                    marginBottom: '8px'
-                                }}>Nom</label>
+                                <label style={labelStyle}>Nom</label>
                                 <input
                                     type="text"
                                     value={newFiliere.nom}
-                                    onChange={(e) => setNewFiliere({ ...newFiliere, nom: e.target.value })}
-                                    placeholder="Ex: CPD"
+                                    onChange={(e) => setNewFiliere(prev => ({ ...prev, nom: e.target.value }))}
                                     required
-                                    style={{
-                                        width: '100%',
-                                        padding: '12px 16px',
-                                        borderRadius: '10px',
-                                        border: '1.5px solid #e2e8f0',
-                                        fontSize: '15px',
-                                        outline: 'none',
-                                        transition: 'border-color 0.2s ease',
-                                        fontFamily: 'inherit'
-                                    }}
-                                    onFocus={(e: any) => e.target.style.borderColor = '#5B8DEF'}
-                                    onBlur={(e: any) => e.target.style.borderColor = '#e2e8f0'}
+                                    style={inputStyle}
                                 />
                             </div>
-
                             <div style={{ marginBottom: '20px' }}>
-                                <label style={{
-                                    display: 'block',
-                                    fontSize: '14px',
-                                    fontWeight: '600',
-                                    color: '#4a5568',
-                                    marginBottom: '8px'
-                                }}>Code</label>
-                                <input
-                                    type="text"
-                                    value={newFiliere.code}
-                                    onChange={(e) => setNewFiliere({ ...newFiliere, code: e.target.value })}
-                                    placeholder="Ex: DC3482"
-                                    required
-                                    style={{
-                                        width: '100%',
-                                        padding: '12px 16px',
-                                        borderRadius: '10px',
-                                        border: '1.5px solid #e2e8f0',
-                                        fontSize: '15px',
-                                        outline: 'none',
-                                        transition: 'border-color 0.2s ease',
-                                        fontFamily: 'inherit'
-                                    }}
-                                    onFocus={(e: any) => e.target.style.borderColor = '#5B8DEF'}
-                                    onBlur={(e: any) => e.target.style.borderColor = '#e2e8f0'}
-                                />
-                            </div>
-
-                            <div style={{ marginBottom: '24px' }}>
-                                <label style={{
-                                    display: 'block',
-                                    fontSize: '14px',
-                                    fontWeight: '600',
-                                    color: '#4a5568',
-                                    marginBottom: '8px'
-                                }}>Description</label>
+                                <label style={labelStyle}>Description</label>
                                 <textarea
                                     value={newFiliere.description}
-                                    onChange={(e) => setNewFiliere({ ...newFiliere, description: e.target.value })}
-                                    placeholder="Ex: Formation axée sur la gestion et la coordination..."
-                                    required
+                                    onChange={(e) => setNewFiliere(prev => ({ ...prev, description: e.target.value }))}
                                     rows={3}
-                                    style={{
-                                        width: '100%',
-                                        padding: '12px 16px',
-                                        borderRadius: '10px',
-                                        border: '1.5px solid #e2e8f0',
-                                        fontSize: '15px',
-                                        outline: 'none',
-                                        transition: 'border-color 0.2s ease',
-                                        fontFamily: 'inherit',
-                                        resize: 'vertical'
-                                    }}
-                                    onFocus={(e: any) => e.target.style.borderColor = '#5B8DEF'}
-                                    onBlur={(e: any) => e.target.style.borderColor = '#e2e8f0'}
+                                    style={{ ...inputStyle, resize: 'vertical' }}
                                 />
                             </div>
-
+                            {formError && (
+                                <div style={{ color: '#dc2626', marginBottom: '12px', fontSize: '13px' }}>{formError}</div>
+                            )}
                             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-                                <button
-                                    type="button"
-                                    onClick={() => setShowModal(false)}
-                                    style={{
-                                        padding: '12px 24px',
-                                        borderRadius: '10px',
-                                        border: '1.5px solid #e2e8f0',
-                                        background: 'white',
-                                        color: '#64748b',
-                                        fontSize: '14px',
-                                        fontWeight: '600',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.2s ease'
-                                    }}
-                                >
+                                <button type="button" onClick={() => { setShowModal(false); setEditingId(null); }} style={cancelButtonStyle}>
                                     Annuler
                                 </button>
-                                <button
-                                    type="submit"
-                                    style={{
-                                        padding: '12px 24px',
-                                        borderRadius: '10px',
-                                        border: 'none',
-                                        background: 'linear-gradient(135deg, #5B8DEF 0%, #4169B8 100%)',
-                                        color: 'white',
-                                        fontSize: '14px',
-                                        fontWeight: '600',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.2s ease',
-                                        boxShadow: '0 4px 12px rgba(91,141,239,0.3)'
-                                    }}
-                                >
-                                    Enregistrer
+                                <button type="submit" disabled={isSubmitting} style={submitButtonStyle(isSubmitting)}>
+                                    {isSubmitting ? 'Enregistrement...' : 'Enregistrer'}
                                 </button>
                             </div>
                         </form>
                     </div>
                 </div>
             )}
-
-            <style jsx>{`
-                @media (max-width: 768px) {
-                    .search-filter-section {
-                        padding: 16px 20px !important;
-                    }
-                    .table-container {
-                        padding: 0 20px !important;
-                    }
-                }
-            `}</style>
         </>
     );
 }
 
+const iconButtonStyle: React.CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '36px',
+    height: '36px',
+    borderRadius: '8px',
+    border: 'none',
+    background: '#E3F2FD',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease'
+};
+
+const labelStyle: React.CSSProperties = {
+    display: 'block',
+    fontSize: '14px',
+    fontWeight: 600,
+    color: '#4a5568',
+    marginBottom: '8px'
+};
+
+const inputStyle: React.CSSProperties = {
+    width: '100%',
+    padding: '12px 16px',
+    borderRadius: '10px',
+    border: '1.5px solid #e2e8f0',
+    fontSize: '15px',
+    outline: 'none',
+    fontFamily: 'inherit'
+};
+
+const closeButtonStyle: React.CSSProperties = {
+    width: '36px',
+    height: '36px',
+    borderRadius: '10px',
+    border: 'none',
+    background: '#f1f5f9',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center'
+};
+
+const cancelButtonStyle: React.CSSProperties = {
+    padding: '12px 24px',
+    borderRadius: '10px',
+    border: '1.5px solid #e2e8f0',
+    background: 'white',
+    color: '#64748b',
+    fontSize: '14px',
+    fontWeight: 600,
+    cursor: 'pointer'
+};
+
+const submitButtonStyle = (disabled: boolean): React.CSSProperties => ({
+    padding: '12px 24px',
+    borderRadius: '10px',
+    border: 'none',
+    background: 'linear-gradient(135deg, #5B8DEF 0%, #4169B8 100%)',
+    color: 'white',
+    fontSize: '14px',
+    fontWeight: 600,
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    opacity: disabled ? 0.7 : 1,
+    boxShadow: '0 4px 12px rgba(91,141,239,0.3)'
+});
+
+const Styles = () => (
+    <style jsx>{`
+        /* Desktop: hide mobile cards */
+        @media (min-width: 769px) {
+            div.mobile-cards {
+                display: none !important;
+            }
+        }
+
+        /* Mobile: hide table, show cards */
+        @media (max-width: 768px) {
+            div.search-filter-section {
+                padding: 16px !important;
+            }
+            div.table-container {
+                display: none !important;
+            }
+            table.desktop-table {
+                display: none !important;
+            }
+            div.mobile-cards {
+                display: flex !important;
+                flex-direction: column !important;
+                align-items: center !important;
+                padding: 16px !important;
+                overflow-x: hidden !important;
+                width: 100% !important;
+                max-width: 100vw !important;
+            }
+        }
+    `}</style>
+);

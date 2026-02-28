@@ -1,21 +1,33 @@
+import { SessionMode, SessionStatus, SessionType, UUID } from '@/shared/api/types';
+
 export interface SeancePlanning {
-    id: number;
-    idPlanning: number;
+    id: UUID;
     classe: string;
+    classeId?: UUID | null;
     cours: string;
+    coursId?: UUID | null;
+    moduleId?: UUID | null;
+    moduleLibelle?: string | null;
     professeur: string;
+    professeurId?: UUID | null;
     salle: string;
-    jour: string;
+    salleId?: UUID | null;
+    jour: JourSemaine;
+    dateISO: string;
     heureDebut: string;
     heureFin: string;
     couleur: string;
+    status?: SessionStatus | null;
+    typeSession?: SessionType;
+    modeSession?: SessionMode;
 }
 
 export interface PlanningSemaine {
-    id: number;
+    id: string;
     semaineDebut: string;
     semaineFin: string;
     classe: string;
+    classeId?: UUID | null;
     seances: SeancePlanning[];
     creeLe: string;
 }
