@@ -23,15 +23,32 @@ function isWithinDays(date: Date | null, maxDays: number) {
 }
 
 export async function fetchDynamicNotifications(): Promise<Notification[]> {
-    const [studentsRes, coursesRes, sessionsRes] = await Promise.all([
-        httpClient<ApiResponse<StudentResponseDto[]>>(STUDENTS_ENDPOINT),
-        httpClient<ApiResponse<CoursResponseDto[]>>(COURSES_ENDPOINT),
-        httpClient<ApiResponse<SessionResponseDto[]>>(SESSIONS_ENDPOINT)
-    ]);
-
-    const students = studentsRes.data ?? [];
-    const courses = coursesRes.data ?? [];
-    const sessions = sessionsRes.data ?? [];
+    // Fetch data - some endpoints may fail for certain roles, handle gracefully
+    // Use suppressErrorLog to avoid console noise for expected 403 errors
+    let students: StudentResponseDto[] = [];
+    let courses: CoursResponseDto[] = [];
+    let sessions: SessionResponseDto[] = [];
+    
+    try {
+        const studentsRes = await httpClient<ApiResponse<StudentResponseDto[]>>(STUDENTS_ENDPOINT, { suppressErrorLog: true });
+        students = studentsRes.data ?? []
+    } catch {
+        // Expected for unauthorized roles - silently ignore
+    }
+    
+    try {
+        const coursesRes = await httpClient<ApiResponse<CoursResponseDto[]>>(COURSES_ENDPOINT, { suppressErrorLog: true });
+        courses = coursesRes.data ?? []
+    } catch {
+        // Expected for unauthorized roles - silently ignore
+    }
+    
+    try {
+        const sessionsRes = await httpClient<ApiResponse<SessionResponseDto[]>>(SESSIONS_ENDPOINT, { suppressErrorLog: true });
+        sessions = sessionsRes.data ?? []
+    } catch {
+        // Expected for unauthorized roles - silently ignore
+    }
 
     const notifications: Notification[] = [];
     let counter = 1;

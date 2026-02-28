@@ -26,14 +26,16 @@ export default function Sidebar({ activeItem }: SidebarProps) {
     const initials = userName ? userName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() : 'U';
     const roleLabel = roles.length ? roles[0].replace('ROLE_', '').replaceAll('_', ' ') : 'Utilisateur';
 
-    // Le menu est identique pour tous les profils
-    // Le CONTENU des pages change selon le rôle (gestion centralisée par RP)
-    const menuItems = menuItemsByRole;
+    // Le menu est filtré par rôle - seul getMenuItemsByRoles est utilisé
+    const menuItems = getMenuItemsByRoles(roles);
 
     // Fonction pour obtenir le chemin du tableau de bord selon le rôle
     const getDashboardPath = () => {
         if (roles.includes('ROLE_ATTACHE_CLASSE')) {
             return '/dashboard/attache-classe';
+        }
+        if (roles.includes('ROLE_PROFESSEUR')) {
+            return '/dashboard/prof';
         }
         return '/dashboard';
     };
@@ -43,7 +45,26 @@ export default function Sidebar({ activeItem }: SidebarProps) {
         if (roles.includes('ROLE_ATTACHE_CLASSE')) {
             return '/dashboard/cours-attache';
         }
+        if (roles.includes('ROLE_PROFESSEUR')) {
+            return '/dashboard/prof/cours';
+        }
         return '/dashboard/cours';
+    };
+
+    // Fonction pour obtenir le chemin du planning selon le rôle
+    const getPlanningPath = () => {
+        if (roles.includes('ROLE_PROFESSEUR')) {
+            return '/dashboard/prof/planning';
+        }
+        return '/dashboard/planning';
+    };
+
+    // Fonction pour obtenir le chemin des évaluations selon le rôle
+    const getEvaluationPath = () => {
+        if (roles.includes('ROLE_PROFESSEUR')) {
+            return '/dashboard/prof/evaluations';
+        }
+        return '/dashboard/evaluation';
     };
 
     return (
@@ -165,12 +186,16 @@ export default function Sidebar({ activeItem }: SidebarProps) {
                     {menuItems.map((item, index) => {
                         const Icon = item.icon;
                         const isActive = item.label === activeItem;
-                        // Utiliser le chemin dynamique pour "Tableau de bord" et "Cours"
+                        // Utiliser le chemin dynamique pour "Tableau de bord", "Cours", "Planning" et "Évaluation"
                         let itemPath = item.path;
                         if (item.label === 'Tableau de bord') {
                             itemPath = getDashboardPath();
                         } else if (item.label === 'Cours') {
                             itemPath = getCoursPath();
+                        } else if (item.label === 'Planning') {
+                            itemPath = getPlanningPath();
+                        } else if (item.label === 'Évaluation' || item.label === 'Evaluations') {
+                            itemPath = getEvaluationPath();
                         }
 
                         return (

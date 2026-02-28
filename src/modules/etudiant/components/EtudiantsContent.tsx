@@ -100,7 +100,7 @@ export default function EtudiantsContent() {
         firstName: '',
         lastName: '',
         dateOfBirth: '',
-        lieuNaissace: '',
+        lieuNaissnace: '',
         nationalite: '',
         address: '',
         phone: '',
@@ -530,7 +530,7 @@ export default function EtudiantsContent() {
                         >
                             <option value="">Toutes les classes</option>
                             {uniqueClasses.map(classe => (
-                                <option key={classe} value={classe}>{classe}</option>
+                                <option key={classe || ''} value={classe || ''}>{classe}</option>
                             ))}
                         </select>
                     </div>

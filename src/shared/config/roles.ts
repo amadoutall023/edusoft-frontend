@@ -1,4 +1,4 @@
-import { LayoutGrid, Book, Users, UserCheck, Calendar, Settings, Building2 } from 'lucide-react';
+import { LayoutGrid, Book, Users, UserCheck, Calendar, Settings, Building2, ClipboardList } from 'lucide-react';
 
 // Types de rôles dans l'application (correspondance avec le backend)
 export type UserRole = 'ROLE_ADMIN' | 'ROLE_RP' | 'ROLE_ATTACHE_CLASSE' | 'ROLE_DIRECTRICE' | 'ROLE_PROFESSEUR' | 'ROLE_SUPER_ADMIN';
@@ -21,34 +21,34 @@ export interface MenuItem {
     roles: UserRole[];
 }
 
-// Configuration des menus par rôle
-// Le menu est identique pour tous les profils
-// C'est le CONTENU des pages qui change selon le rôle
-// "Tableau de bord" et "Cours" redirigent vers des pages spécifiques pour l'Attaché
+
 export const menuItemsByRole: MenuItem[] = [
-    // Tableau de bord - redirige dynamiquement selon le rôle
-    { icon: LayoutGrid, label: 'Tableau de bord', path: '/dashboard', roles: ['ROLE_ADMIN', 'ROLE_RP', 'ROLE_ATTACHE_CLASSE', 'ROLE_DIRECTRICE', 'ROLE_PROFESSEUR'] },
+    // Tableau de bord - pour tous les rôles
+    { icon: LayoutGrid, label: 'Tableau de bord', path: '/dashboard', roles: ['ROLE_ADMIN', 'ROLE_RP', 'ROLE_ATTACHE_CLASSE', 'ROLE_DIRECTRICE', 'ROLE_PROFESSEUR', 'ROLE_SUPER_ADMIN'] },
 
-    // Cours - redirige vers la page appropriée selon le rôle
+    // Cours - pour tous les rôles
     { icon: Book, label: 'Cours', path: '/dashboard/cours', roles: ['ROLE_ADMIN', 'ROLE_RP', 'ROLE_ATTACHE_CLASSE', 'ROLE_DIRECTRICE', 'ROLE_PROFESSEUR'] },
-
-    // Étudiants - pour tous les rôles
-    { icon: Users, label: 'Étudiants', path: '/dashboard/etudiant', roles: ['ROLE_ADMIN', 'ROLE_RP', 'ROLE_ATTACHE_CLASSE', 'ROLE_DIRECTRICE', 'ROLE_PROFESSEUR'] },
-
-    // Professeurs - redirection dynamique selon le rôle dans la page
-    { icon: UserCheck, label: 'Professeurs', path: '/dashboard/prof', roles: ['ROLE_ADMIN', 'ROLE_RP', 'ROLE_ATTACHE_CLASSE', 'ROLE_DIRECTRICE', 'ROLE_PROFESSEUR', 'ROLE_SUPER_ADMIN'] },
-
-    // Administration - pour tous les rôles
-    { icon: Users, label: 'Administration', path: '/dashboard/administration', roles: ['ROLE_ADMIN', 'ROLE_RP', 'ROLE_ATTACHE_CLASSE', 'ROLE_DIRECTRICE', 'ROLE_PROFESSEUR'] },
 
     // Planning - pour tous les rôles
     { icon: Calendar, label: 'Planning', path: '/dashboard/planning', roles: ['ROLE_ADMIN', 'ROLE_RP', 'ROLE_ATTACHE_CLASSE', 'ROLE_DIRECTRICE', 'ROLE_PROFESSEUR'] },
 
-    // Structure académique - pour tous les rôles
-    { icon: Building2, label: 'Structure académique', path: '/dashboard/structure', roles: ['ROLE_ADMIN', 'ROLE_RP', 'ROLE_ATTACHE_CLASSE', 'ROLE_DIRECTRICE', 'ROLE_PROFESSEUR'] },
+    // Évaluations - pour tous les rôles
+    { icon: ClipboardList, label: 'Évaluation', path: '/dashboard/evaluation', roles: ['ROLE_ADMIN', 'ROLE_RP', 'ROLE_ATTACHE_CLASSE', 'ROLE_DIRECTRICE', 'ROLE_PROFESSEUR'] },
 
-    // Paramètres - pour tous
-    { icon: Settings, label: 'Paramètre', path: '/dashboard/parametres', roles: ['ROLE_ADMIN', 'ROLE_RP', 'ROLE_ATTACHE_CLASSE', 'ROLE_DIRECTRICE', 'ROLE_PROFESSEUR'] },
+    // Étudiants - pour admin, RP, AC, Directrice (PAS pour PROFESSEUR)
+    { icon: Users, label: 'Étudiants', path: '/dashboard/etudiant', roles: ['ROLE_ADMIN', 'ROLE_RP', 'ROLE_ATTACHE_CLASSE', 'ROLE_DIRECTRICE', 'ROLE_SUPER_ADMIN'] },
+
+    // Professeurs - pour admin, RP, AC, Directrice (PAS pour PROFESSEUR)
+    { icon: UserCheck, label: 'Professeurs', path: '/dashboard/prof', roles: ['ROLE_ADMIN', 'ROLE_RP', 'ROLE_ATTACHE_CLASSE', 'ROLE_DIRECTRICE', 'ROLE_SUPER_ADMIN'] },
+
+    // Administration - pour admin, RP, AC, Directrice (PAS pour PROFESSEUR)
+    { icon: Users, label: 'Administration', path: '/dashboard/administration', roles: ['ROLE_ADMIN', 'ROLE_RP', 'ROLE_ATTACHE_CLASSE', 'ROLE_DIRECTRICE', 'ROLE_SUPER_ADMIN'] },
+
+    // Structure académique - pour admin, RP, AC, Directrice (PAS pour PROFESSEUR)
+    { icon: Building2, label: 'Structure académique', path: '/dashboard/structure', roles: ['ROLE_ADMIN', 'ROLE_RP', 'ROLE_ATTACHE_CLASSE', 'ROLE_DIRECTRICE', 'ROLE_SUPER_ADMIN'] },
+
+    // Paramètres - pour admin, RP, Directrice (PAS pour PROFESSEUR et ATTACHE_CLASSE)
+    // { icon: Settings, label: 'Paramètre', path: '/dashboard/parametres', roles: ['ROLE_ADMIN', 'ROLE_RP', 'ROLE_DIRECTRICE', 'ROLE_SUPER_ADMIN'] },
 ];
 
 // Fonction pour filtrer les éléments du menu par rôle

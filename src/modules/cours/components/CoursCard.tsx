@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { User, Play, Archive, Pencil, Trash2, X, Eye, Clock, Calendar, Search, Check, Users, ClipboardList } from 'lucide-react';
+import { Play, Archive, Pencil, Trash2, X, Eye, Clock, Calendar, Search, Check, Users, ClipboardList } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Cours } from '../types';
 import { fetchSessions, createSession, updateSession } from '@/modules/planning/services/sessionService';
 import { SessionResponseDto, SessionMode, SessionType, SessionStatus } from '@/shared/api/types';
+import CourseSupportModal from './CourseSupportModal';
 
 interface SessionFormData {
     date: string;
@@ -20,16 +21,32 @@ interface CoursCardProps {
     cours: Cours;
     showActions?: boolean;
     showCreateSession?: boolean;
+    readOnly?: boolean;
+    showSupportAccess?: boolean;
+    canManageSupports?: boolean;
     onArchive?: (id: string) => void;
     onEdit?: (cours: Cours) => void;
     onDelete?: (id: string) => void;
     isArchiveView?: boolean;
 }
 
-export default function CoursCard({ cours, showActions = true, showCreateSession, onArchive, onEdit, onDelete, isArchiveView }: CoursCardProps) {
+export default function CoursCard({
+    cours,
+    showActions = true,
+    showCreateSession,
+    readOnly = false,
+    showSupportAccess = false,
+    canManageSupports = false,
+    onArchive,
+    onEdit,
+    onDelete,
+    isArchiveView
+}: CoursCardProps) {
     const router = useRouter();
     const [showModal, setShowModal] = useState(false);
     const [showSessionsModal, setShowSessionsModal] = useState(false);
+    const [showSupportModal, setShowSupportModal] = useState(false);
+    const [courseSummary, setCourseSummary] = useState<string>(cours.summary ?? '');
     const [sessionSearchTerm, setSessionSearchTerm] = useState('');
     const [newSession, setNewSession] = useState<SessionFormData>({
         date: '',
@@ -92,7 +109,8 @@ export default function CoursCard({ cours, showActions = true, showCreateSession
             return acc;
         }, 0);
 
-        const remaining = Math.max(0, totalPlanned - totalCompleted);
+        // Le restant est basé sur le volume horaire total du cours.
+        const remaining = Math.max(0, cours.volumeHoraire - totalCompleted);
 
         console.log('Heures calculées - Planifiées:', totalPlanned, 'Terminées:', totalCompleted, 'Restantes:', remaining);
 
@@ -101,7 +119,7 @@ export default function CoursCard({ cours, showActions = true, showCreateSession
             heuresFaites: Math.round(totalCompleted * 10) / 10,
             heuresRestantes: Math.round(remaining * 10) / 10
         };
-    }, [sessions]);
+    }, [sessions, cours.volumeHoraire]);
 
     const handleArchive = () => {
         if (onArchive) {
@@ -333,22 +351,42 @@ export default function CoursCard({ cours, showActions = true, showCreateSession
                                 cursor: 'pointer',
                                 transition: 'all 0.2s ease'
                             }}
-                            onMouseEnter={(e: any) => {
+                            onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => {
                                 e.currentTarget.style.background = '#4CAF50';
                                 e.currentTarget.querySelector('svg').style.color = 'white';
                             }}
-                            onMouseLeave={(e: any) => {
+                            onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => {
                                 e.currentTarget.style.background = '#E8F5E9';
                                 e.currentTarget.querySelector('svg').style.color = '#4CAF50';
                             }}
                         >
                             <Eye size={16} color="#4CAF50" strokeWidth={2.5} />
                         </button>
+                        {showSupportAccess && (
+                            <button
+                                title="Supports de cours"
+                                onClick={() => setShowSupportModal(true)}
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    width: '32px',
+                                    height: '32px',
+                                    borderRadius: '6px',
+                                    border: 'none',
+                                    background: '#ede9fe',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s ease'
+                                }}
+                            >
+                                <ClipboardList size={16} color="#6d28d9" strokeWidth={2.5} />
+                            </button>
+                        )}
                         <button
                             title="Créer session du cours"
                             onClick={() => setShowModal(true)}
                             style={{
-                                display: (showActions || showCreateSession) ? 'inline-flex' : 'none',
+                                display: (showActions || showCreateSession) && !readOnly ? 'inline-flex' : 'none',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 width: '32px',
@@ -359,11 +397,11 @@ export default function CoursCard({ cours, showActions = true, showCreateSession
                                 cursor: 'pointer',
                                 transition: 'all 0.2s ease'
                             }}
-                            onMouseEnter={(e: any) => {
+                            onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => {
                                 e.currentTarget.style.background = '#5B8DEF';
                                 e.currentTarget.querySelector('svg').style.color = 'white';
                             }}
-                            onMouseLeave={(e: any) => {
+                            onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => {
                                 e.currentTarget.style.background = '#E3F2FD';
                                 e.currentTarget.querySelector('svg').style.color = '#5B8DEF';
                             }}
@@ -386,11 +424,11 @@ export default function CoursCard({ cours, showActions = true, showCreateSession
                                     cursor: 'pointer',
                                     transition: 'all 0.2s ease'
                                 }}
-                                onMouseEnter={(e: any) => {
+                                onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => {
                                     e.currentTarget.style.background = isArchiveView ? '#4CAF50' : '#FF9800';
                                     e.currentTarget.querySelector('svg').style.color = 'white';
                                 }}
-                                onMouseLeave={(e: any) => {
+                                onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => {
                                     e.currentTarget.style.background = isArchiveView ? '#E8F5E9' : '#FFF3E0';
                                     e.currentTarget.querySelector('svg').style.color = isArchiveView ? '#4CAF50' : '#FF9800';
                                 }}
@@ -639,7 +677,7 @@ export default function CoursCard({ cours, showActions = true, showCreateSession
 
                                             {/* Boutons Terminer/Annuler et Émargement */}
                                             <div style={{ display: 'flex', gap: '8px', marginTop: '12px', paddingTop: '10px', borderTop: '1px solid #e2e8f0' }}>
-                                                {isProgramme && (
+                                                {isProgramme && !readOnly && (
                                                     <>
                                                         <button
                                                             onClick={() => handleSessionStatusChange(session.id, 'TERMINEE')}
@@ -710,7 +748,7 @@ export default function CoursCard({ cours, showActions = true, showCreateSession
                                                     }}
                                                 >
                                                     <ClipboardList size={14} />
-                                                    {isTerminee ? 'Voir émargement' : 'Émargement'}
+                                                    {readOnly || isTerminee ? 'Voir émargement' : 'Émargement'}
                                                 </button>
                                             </div>
                                         </div>
@@ -723,6 +761,15 @@ export default function CoursCard({ cours, showActions = true, showCreateSession
 
                 {/* Panneau d'émargement - affiché sur une page dédiée */}
             </div>
+            <CourseSupportModal
+                coursId={cours.id}
+                coursTitle={cours.titre}
+                initialSummary={courseSummary}
+                readOnly={!canManageSupports}
+                open={showSupportModal}
+                onClose={() => setShowSupportModal(false)}
+                onSummarySaved={setCourseSummary}
+            />
         </>
     );
 }

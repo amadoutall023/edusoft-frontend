@@ -2,12 +2,14 @@
 
 import React, { useEffect, useState } from 'react';
 import { Bell, Menu } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import { useAuth } from '@/modules/auth/context/AuthContext';
-import NotificationDropdown from './NotificationDropdown';
 import { useSidebar } from '@/shared/context/SidebarContext';
 import { getActiveYear, getAvailableYears, setActiveYear } from '@/shared/api/activeYearService';
 import { ActiveYearResponse } from '@/shared/api/types';
 import { ApiError } from '@/shared/errors/ApiError';
+
+const NotificationDropdown = dynamic(() => import('./NotificationDropdown'), { ssr: false });
 
 interface HeaderProps {
     onMenuClick?: () => void;

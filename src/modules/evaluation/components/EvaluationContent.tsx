@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Search, Plus, X, Calendar, FileText, Edit, Trash2, ArrowLeft, ClipboardList, User, Clock, Loader2 } from 'lucide-react';
+import { Search, Plus, X, Calendar, FileText, Edit, ArrowLeft, ClipboardList, User, Clock, Loader2 } from 'lucide-react';
 import { httpClient } from '@/shared/api/httpClient';
-import { ApiResponse, Metadata, NoteStatus, SessionResponseDto, SessionType, UUID } from '@/shared/api/types';
+import { ApiResponse, SessionResponseDto, UUID } from '@/shared/api/types';
 import StatCard from './StatCard';
 import EvaluationCard from './EvaluationCard';
 import {
@@ -17,16 +17,28 @@ import {
     fetchSallesForForm,
     CreateEvaluationPayload
 } from '../services/evaluationService';
+import {
+    deleteEvaluationNoteFile,
+    downloadEvaluationNoteFile,
+    EvaluationNoteFileDto,
+    fetchEvaluationSessionDetails,
+    listEvaluationNoteFiles,
+    uploadEvaluationNoteFile
+} from '../services/evaluationNotesService';
 import { FiltreEvaluation, Evaluation, StatutEvaluation, StatistiqueEvaluation, ClasseOption, StatutNote } from '../types';
 import { useRouter } from 'next/navigation';
 import Pagination from '@/shared/components/Pagination';
-import { UUID } from '@/shared/api/types';
+import { useAuth } from '@/modules/auth/context/AuthContext';
+import { ApiError } from '@/shared/errors/ApiError';
 
 export default function EvaluationContent() {
     const router = useRouter();
+    const { roles } = useAuth();
+    const isProfesseur = roles.includes('ROLE_PROFESSEUR');
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedEvaluation, setSelectedEvaluation] = useState<Evaluation | null>(null);
     const [showAddModal, setShowAddModal] = useState(false);
+    const [showNotesModal, setShowNotesModal] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 4;
     const [filtre, setFiltre] = useState<FiltreEvaluation>({
@@ -41,7 +53,14 @@ export default function EvaluationContent() {
     const [classes, setClasses] = useState<ClasseOption[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [totalElements, setTotalElements] = useState(0);
+    const [evaluationStudents, setEvaluationStudents] = useState<SessionResponseDto['students']>([]);
+    const [evaluationClasses, setEvaluationClasses] = useState<{ id: UUID; libelle: string }[]>([]);
+    const [selectedClasseForNotes, setSelectedClasseForNotes] = useState<string>('');
+    const [notesFiles, setNotesFiles] = useState<EvaluationNoteFileDto[]>([]);
+    const [uploadingNotes, setUploadingNotes] = useState(false);
+    const [notesLoading, setNotesLoading] = useState(false);
+    const [selectedNoteFile, setSelectedNoteFile] = useState<File | null>(null);
+    const [notesError, setNotesError] = useState<string | null>(null);
 
     // États pour le formulaire d'ajout
     const [modules, setModules] = useState<{ id: UUID; libelle: string }[]>([]);
@@ -70,6 +89,9 @@ export default function EvaluationContent() {
             setLoading(true);
             setError(null);
             try {
+                // Pour les professeurs, le backend filtre automatiquement par leur ID
+                // Pas besoin de passer professorId car le backend le fait automatiquement
+                
                 // Charger les évaluations, les statistiques et les classes en parallèle
                 const [evaluationsData, statsData, classesData] = await Promise.all([
                     fetchEvaluations({ page: 0, size: 500 }),
@@ -78,7 +100,6 @@ export default function EvaluationContent() {
                 ]);
 
                 setEvaluations(evaluationsData.evaluations);
-                setTotalElements(evaluationsData.metadata.totalElements);
                 setStatistiques(statsData);
                 setClasses(classesData);
             } catch (err) {
@@ -91,6 +112,14 @@ export default function EvaluationContent() {
 
         loadData();
     }, []);
+
+    useEffect(() => {
+        if (!showNotesModal) {
+            setUploadingNotes(false);
+            setSelectedNoteFile(null);
+            setNotesError(null);
+        }
+    }, [showNotesModal]);
 
     const evaluationsFiltrees = useMemo(() => {
         // Retourner un tableau vide pendant le chargement pour éviter les problèmes de rendu
@@ -242,8 +271,64 @@ export default function EvaluationContent() {
     };
 
     // Gérer l'affichage des détails d'une évaluation
-    const handleVoirDetails = (evaluation: Evaluation) => {
+    const handleVoirDetails = async (evaluation: Evaluation) => {
         setSelectedEvaluation(evaluation);
+        if (isProfesseur) {
+            setShowNotesModal(true);
+        }
+        setNotesLoading(true);
+        setUploadingNotes(false);
+        setSelectedNoteFile(null);
+        setNotesError(null);
+        setError(null);
+        try {
+            const [sessionDetails, uploadedFiles] = await Promise.all([
+                fetchEvaluationSessionDetails(evaluation.uuid),
+                listEvaluationNoteFiles(evaluation.uuid)
+            ]);
+            setEvaluationStudents(sessionDetails.students ?? []);
+            const classOptions = [
+                ...(sessionDetails.classe ? [{ id: sessionDetails.classe.id, libelle: sessionDetails.classe.libelle }] : []),
+                ...((sessionDetails.classes ?? []).map(c => ({ id: c.id, libelle: c.libelle })))
+            ];
+            const uniqueClasses = Array.from(new Map(classOptions.map(c => [c.id, c])).values());
+            setEvaluationClasses(uniqueClasses);
+            setSelectedClasseForNotes(uniqueClasses.length === 1 ? uniqueClasses[0].id : '');
+            setNotesFiles(uploadedFiles);
+        } catch (err) {
+            setNotesError(err instanceof ApiError ? err.message : 'Impossible de charger les données de dépôt des notes.');
+        } finally {
+            setNotesLoading(false);
+        }
+    };
+
+    const handleUploadNotes = async () => {
+        if (!selectedEvaluation?.uuid) {
+            return;
+        }
+        if (!selectedNoteFile) {
+            setNotesError('Choisissez d’abord un fichier de notes à uploader.');
+            return;
+        }
+        setUploadingNotes(true);
+        setNotesError(null);
+        setError(null);
+        try {
+            await uploadEvaluationNoteFile(selectedEvaluation.uuid, selectedNoteFile, selectedClasseForNotes || undefined);
+            const [uploadedFiles, evaluationsData, statsData] = await Promise.all([
+                listEvaluationNoteFiles(selectedEvaluation.uuid),
+                fetchEvaluations({ page: 0, size: 500 }),
+                fetchEvaluationsStats()
+            ]);
+            setNotesFiles(uploadedFiles);
+            setEvaluations(evaluationsData.evaluations);
+            setStatistiques(statsData);
+            setSelectedNoteFile(null);
+        } catch (err) {
+            setNotesError(err instanceof ApiError ? err.message : 'Upload des notes impossible. Vérifiez que cette évaluation vous est bien assignée.');
+        } finally {
+            setUploadingNotes(false);
+        }
     };
 
     // Gérer la soumission du formulaire
@@ -462,17 +547,18 @@ export default function EvaluationContent() {
                     }
                 </div>
 
-                {/* Add Evaluation Button */}
-                <button
-                    onClick={handleAjouterEvaluation}
-                    style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        padding: '12px 24px',
-                        background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                        border: 'none',
-                        borderRadius: '12px',
+                {/* Add Evaluation Button - Only for non-professor roles */}
+                {!isProfesseur && (
+                    <button
+                        onClick={handleAjouterEvaluation}
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: '12px 24px',
+                            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                            border: 'none',
+                            borderRadius: '12px',
                         color: 'white',
                         fontSize: '14px',
                         fontWeight: '600',
@@ -484,6 +570,7 @@ export default function EvaluationContent() {
                     <Plus size={18} />
                     <span className="add-button">Ajouter évaluation</span>
                 </button>
+                )}
             </div>
 
             {/* Evaluations Grid */}
@@ -524,8 +611,10 @@ export default function EvaluationContent() {
                                 key={evaluation.id}
                                 evaluation={evaluation}
                                 onVoirDetails={() => handleVoirDetails(evaluation)}
-                                onStatutChange={handleStatutChange}
-                                onNoteStatutChange={handleNoteStatutChange}
+                                onStatutChange={isProfesseur ? undefined : handleStatutChange}
+                                onNoteStatutChange={isProfesseur ? undefined : handleNoteStatutChange}
+                                readOnly={isProfesseur}
+                                detailsLabel={isProfesseur ? 'Déposer notes' : 'Voir details'}
                             />
                         ))}
                     </div>
@@ -551,7 +640,7 @@ export default function EvaluationContent() {
             )}
 
             {/* Modal Details */}
-            {selectedEvaluation && (
+            {selectedEvaluation && !isProfesseur && (
                 <div style={{
                     position: 'fixed',
                     top: 0,
@@ -578,7 +667,7 @@ export default function EvaluationContent() {
                         {/* Modal Header */}
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
                             <h2 style={{ fontSize: '24px', fontWeight: '700', color: '#1a202c', margin: 0 }}>
-                                Détails de l'évaluation
+                                Détails de l&apos;évaluation
                             </h2>
                             <button
                                 onClick={() => setSelectedEvaluation(null)}
@@ -678,15 +767,15 @@ export default function EvaluationContent() {
                             </div>
 
                             {/* Fichiers déposés */}
-                            {selectedEvaluation.fichiersDeposes && selectedEvaluation.fichiersDeposes.length > 0 && (
+                            {notesFiles.length > 0 && (
                                 <div style={{ marginTop: '20px' }}>
                                     <div style={{ fontSize: '14px', fontWeight: '600', color: '#1a202c', marginBottom: '12px' }}>
                                         <Clock size={16} style={{ display: 'inline', marginRight: '8px', verticalAlign: 'middle' }} />
-                                        Fichiers déposés ({selectedEvaluation.fichiersDeposes.length})
+                                        Fichiers déposés ({notesFiles.length})
                                     </div>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                        {selectedEvaluation.fichiersDeposes.map((fichier, idx) => (
-                                            <div key={idx} style={{
+                                        {notesFiles.map((file) => (
+                                            <div key={file.id} style={{
                                                 display: 'flex',
                                                 alignItems: 'center',
                                                 gap: '12px',
@@ -696,10 +785,21 @@ export default function EvaluationContent() {
                                                 border: '1px solid #e2e8f0'
                                             }}>
                                                 <FileText size={18} color="#64748b" />
-                                                <span style={{ fontSize: '14px', color: '#1a202c', fontWeight: '500' }}>{fichier}</span>
+                                                <span style={{ fontSize: '14px', color: '#1a202c', fontWeight: '500', flex: 1 }}>{file.fileName}</span>
+                                                <button
+                                                    onClick={() => downloadEvaluationNoteFile(selectedEvaluation.uuid, file.id, file.fileName, file.cloudinaryUrl)}
+                                                    style={{ padding: '8px 10px', borderRadius: '8px', border: '1px solid #e2e8f0', background: 'white', cursor: 'pointer' }}
+                                                >
+                                                    Télécharger
+                                                </button>
                                             </div>
                                         ))}
                                     </div>
+                                </div>
+                            )}
+                            {notesFiles.length === 0 && (
+                                <div style={{ marginTop: '20px', fontSize: '14px', color: '#64748b' }}>
+                                    Aucun fichier de notes déposé pour cette évaluation.
                                 </div>
                             )}
                         </div>
@@ -722,26 +822,200 @@ export default function EvaluationContent() {
                             >
                                 Fermer
                             </button>
+                            {!isProfesseur && (
+                                <button
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        padding: '12px 24px',
+                                        background: '#5B8DEF',
+                                        border: 'none',
+                                        borderRadius: '10px',
+                                        color: 'white',
+                                        fontSize: '14px',
+                                        fontWeight: '600',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s ease'
+                                    }}
+                                >
+                                    <Edit size={18} />
+                                    Modifier
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showNotesModal && selectedEvaluation && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(0,0,0,0.5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 1000,
+                    padding: '20px'
+                }}>
+                    <div style={{
+                        background: 'white',
+                        borderRadius: '16px',
+                        padding: '20px',
+                        maxWidth: '900px',
+                        width: '100%',
+                        maxHeight: '85vh',
+                        overflowY: 'auto'
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                            <div>
+                                <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 700 }}>{selectedEvaluation.titre}</h3>
+                                <div style={{ fontSize: '13px', color: '#64748b' }}>{selectedEvaluation.classe}</div>
+                            </div>
                             <button
-                                style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '8px',
-                                    padding: '12px 24px',
-                                    background: '#5B8DEF',
-                                    border: 'none',
-                                    borderRadius: '10px',
-                                    color: 'white',
-                                    fontSize: '14px',
-                                    fontWeight: '600',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s ease'
+                                onClick={() => {
+                                    setShowNotesModal(false);
+                                    setSelectedEvaluation(null);
+                                    setSelectedNoteFile(null);
                                 }}
+                                style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}
                             >
-                                <Edit size={18} />
-                                Modifier
+                                <X size={22} color="#64748b" />
                             </button>
                         </div>
+
+                        {error && (
+                            <div style={{ marginBottom: '10px', color: '#dc2626', fontSize: '13px' }}>
+                                {error}
+                            </div>
+                        )}
+
+                        {notesLoading ? (
+                            <div style={{ color: '#64748b', fontSize: '14px' }}>Chargement...</div>
+                        ) : (
+                            <>
+                                <div style={{ marginBottom: '14px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                                    <div style={{ border: '1px solid #e2e8f0', borderRadius: '10px', padding: '12px' }}>
+                                        <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '6px' }}>Classe ciblée</div>
+                                        <select
+                                            value={selectedClasseForNotes}
+                                            onChange={(e) => setSelectedClasseForNotes(e.target.value)}
+                                            style={{
+                                                width: '100%',
+                                                padding: '10px',
+                                                borderRadius: '8px',
+                                                border: '1px solid #e2e8f0',
+                                                fontSize: '14px'
+                                            }}
+                                        >
+                                            <option value="">Toutes les classes concernées</option>
+                                            {evaluationClasses.map(c => (
+                                                <option key={c.id} value={c.id}>{c.libelle}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div style={{ border: '1px solid #e2e8f0', borderRadius: '10px', padding: '12px' }}>
+                                        <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '6px' }}>
+                                            {isProfesseur ? 'Fichier de notes' : 'Notes déposées'}
+                                        </div>
+                                        {isProfesseur ? (
+                                            <>
+                                                <input
+                                                    type="file"
+                                                    onChange={(e) => setSelectedNoteFile(e.target.files?.[0] ?? null)}
+                                                    style={{ width: '100%' }}
+                                                />
+                                                {selectedNoteFile && (
+                                                    <div style={{ marginTop: '6px', fontSize: '12px', color: '#475569' }}>
+                                                        Fichier sélectionné: {selectedNoteFile.name}
+                                                    </div>
+                                                )}
+                                                <button
+                                                    onClick={handleUploadNotes}
+                                                    disabled={uploadingNotes}
+                                                    style={{
+                                                        marginTop: '10px',
+                                                        padding: '10px 14px',
+                                                        border: 'none',
+                                                        borderRadius: '8px',
+                                                        background: uploadingNotes ? '#94a3b8' : '#2563eb',
+                                                        color: 'white',
+                                                        fontWeight: 600,
+                                                        cursor: uploadingNotes ? 'not-allowed' : 'pointer',
+                                                        opacity: uploadingNotes ? 0.7 : 1
+                                                    }}
+                                                >
+                                                    {uploadingNotes ? 'Upload...' : 'Uploader les notes'}
+                                                </button>
+                                            </>
+                                        ) : (
+                                            <div style={{ fontSize: '13px', color: '#475569' }}>
+                                                Consultation uniquement.
+                                            </div>
+                                        )}
+                                        {notesError && (
+                                            <div style={{ marginTop: '8px', fontSize: '12px', color: '#dc2626' }}>
+                                                {notesError}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div style={{ marginBottom: '14px' }}>
+                                    <div style={{ fontWeight: 700, marginBottom: '8px' }}>Étudiants concernés ({evaluationStudents?.length ?? 0})</div>
+                                    <div style={{ maxHeight: '180px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '10px' }}>
+                                        {(evaluationStudents ?? []).length === 0 ? (
+                                            <div style={{ color: '#64748b', fontSize: '14px' }}>Aucun étudiant trouvé pour cette évaluation.</div>
+                                        ) : (
+                                            (evaluationStudents ?? []).map(student => (
+                                                <div key={student.id} style={{ padding: '6px 0', fontSize: '14px', borderBottom: '1px dashed #edf2f7' }}>
+                                                    {student.matricule} - {student.prenom} {student.nom}
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <div style={{ fontWeight: 700, marginBottom: '8px' }}>Fichiers déposés ({notesFiles.length})</div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        {notesFiles.map(file => (
+                                            <div key={file.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '10px' }}>
+                                                <div style={{ flex: 1 }}>
+                                                    <div style={{ fontSize: '14px', fontWeight: 600 }}>{file.fileName}</div>
+                                                    <div style={{ fontSize: '12px', color: '#64748b' }}>
+                                                        {(file.fileSize / 1024).toFixed(1)} KB
+                                                        {file.classeLibelle ? ` • ${file.classeLibelle}` : ''}
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => downloadEvaluationNoteFile(selectedEvaluation.uuid, file.id, file.fileName, file.cloudinaryUrl)}
+                                                    style={{ padding: '8px 10px', borderRadius: '8px', border: '1px solid #e2e8f0', background: 'white', cursor: 'pointer' }}
+                                                >
+                                                    Télécharger
+                                                </button>
+                                                {isProfesseur && (
+                                                    <button
+                                                        onClick={async () => {
+                                                            await deleteEvaluationNoteFile(selectedEvaluation.uuid, file.id);
+                                                            const refreshed = await listEvaluationNoteFiles(selectedEvaluation.uuid);
+                                                            setNotesFiles(refreshed);
+                                                        }}
+                                                        style={{ padding: '8px 10px', borderRadius: '8px', border: '1px solid #fecaca', background: 'white', color: '#b91c1c', cursor: 'pointer' }}
+                                                    >
+                                                        Supprimer
+                                                    </button>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
             )}
@@ -808,7 +1082,7 @@ export default function EvaluationContent() {
                             )}
                             <div>
                                 <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#1a202c', marginBottom: '8px' }}>
-                                    Titre de l'évaluation *
+                                    Titre de l&apos;évaluation *
                                 </label>
                                 <input
                                     type="text"

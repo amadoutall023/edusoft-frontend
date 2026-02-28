@@ -31,7 +31,10 @@ const mapCoursDto = (cours: CoursResponseDto): Cours => {
         heuresRestantes: Math.max(0, total - completed),
         progression,
         classes: cours.classes?.map(classe => classe.libelle) ?? [],
-        module: cours.module?.libelle ?? null
+        module: cours.module?.libelle ?? null,
+        summary: cours.summary ?? null,
+        professorId: cours.professor?.id ?? null,
+        moduleId: cours.module?.id ?? null
     };
 };
 

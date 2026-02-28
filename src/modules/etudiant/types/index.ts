@@ -6,7 +6,9 @@ export interface Etudiant {
     email?: string | null;
     phone?: string | null;
     dateOfBirth?: string | null;
-    lieuNaissace?: string | null;
+    lieuNaissace?: string | null; // typo variant
+    lieuNaissnace?: string | null; // correct spelling
+    lieuNaissance?: string | null; // another variant
     nationalite?: string | null;
     address?: string | null;
     gender?: string | null;
@@ -44,7 +46,9 @@ export interface EtudiantFormData {
     firstName: string;
     lastName: string;
     dateOfBirth: string;
-    lieuNaissace?: string;
+    lieuNaissace?: string; // typo variant
+    lieuNaissnace?: string; // correct spelling
+    lieuNaissance?: string; // another variant
     nationalite?: string;
     address?: string;
     phone?: string;

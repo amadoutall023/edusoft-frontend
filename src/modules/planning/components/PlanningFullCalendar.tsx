@@ -43,6 +43,7 @@ import {
 import { fetchCourses } from '@/modules/cours/services/coursService';
 import { fetchProfessors } from '@/modules/prof/services/professorService';
 import { JourSemaine, SeancePlanning } from '../types';
+import { useAuth } from '@/modules/auth/context/AuthContext';
 
 const ALL_CLASSES = 'ALL_CLASSES';
 const ALL_MODULES = 'ALL_MODULES';
@@ -72,6 +73,29 @@ interface SessionFormState {
     endHour: string;
     professeurId: string;
     salleId: string;
+}
+
+interface CalendarEventClickInfo {
+    event: {
+        extendedProps: {
+            session?: SessionResponseDto;
+            extendedProps?: Partial<SeancePlanning>;
+            [key: string]: unknown;
+        };
+    };
+}
+
+interface CalendarEventDropInfo extends CalendarEventClickInfo {
+    event: {
+        start: Date | null;
+        end: Date | null;
+        extendedProps: {
+            session?: SessionResponseDto;
+            extendedProps?: Partial<SeancePlanning>;
+            [key: string]: unknown;
+        };
+    };
+    revert?: () => void;
 }
 
 function createFormState(overrides: Partial<SessionFormState> = {}): SessionFormState {
@@ -130,6 +154,9 @@ function mapSessionToEvent(session: SessionResponseDto): SeancePlanning {
 }
 
 export default function PlanningFullCalendar() {
+    const { roles } = useAuth();
+    const isProfesseur = roles.includes('ROLE_PROFESSEUR');
+    const [isMobileView, setIsMobileView] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [moduleFilter, setModuleFilter] = useState(ALL_MODULES);
     const [salleFilter, setSalleFilter] = useState(ALL_SALLES);
@@ -216,6 +243,28 @@ export default function PlanningFullCalendar() {
     useEffect(() => {
         void loadData();
     }, [loadData]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') {
+            return;
+        }
+        const mediaQuery = window.matchMedia('(max-width: 768px)');
+        const syncMobile = () => setIsMobileView(mediaQuery.matches);
+        syncMobile();
+        mediaQuery.addEventListener('change', syncMobile);
+        return () => mediaQuery.removeEventListener('change', syncMobile);
+    }, []);
+
+    useEffect(() => {
+        if (!calendarRef) {
+            return;
+        }
+        const api = calendarRef.getApi();
+        const targetView = isMobileView ? 'timeGridDay' : 'timeGridWeek';
+        if (api.view.type !== targetView) {
+            api.changeView(targetView);
+        }
+    }, [calendarRef, isMobileView]);
 
     const events = useMemo(() => {
         const mappedEvents = sessions
@@ -313,6 +362,9 @@ export default function PlanningFullCalendar() {
     );
 
     const handleDateClick = useCallback((info: { dateStr: string }) => {
+        if (isProfesseur) {
+            return;
+        }
         setSelectedDate(info.dateStr);
         setEditingSessionId(null);
         setFormState(createFormState({
@@ -320,28 +372,39 @@ export default function PlanningFullCalendar() {
             salleId: salles[0]?.id ?? ''
         }));
         setShowAddModal(true);
-    }, [salles]);
+    }, [isProfesseur, salles]);
 
-    const handleEventClick = useCallback((info: any) => {
+    const handleEventClick = useCallback((info: CalendarEventClickInfo) => {
+        if (isProfesseur) {
+            return;
+        }
         const session = info.event.extendedProps.session;
-        const seance = info.event.extendedProps.extendedProps;
+        const seance = info.event.extendedProps.extendedProps || {};
 
         setSelectedEvent(seance);
-        setEditingSessionId(session.id);
+        setEditingSessionId(session?.id);
         setFormState({
-            classeId: session.classe?.id ?? seance.classeId ?? '',
-            coursId: session.cours?.id ?? '',
-            date: session.date,
-            startHour: session.startHour,
-            endHour: session.endHour,
-            professeurId: session.professor?.id ?? '',
-            salleId: session.salle?.id ?? seance.salleId ?? ''
+            classeId: session?.classe?.id ?? seance?.classeId ?? '',
+            coursId: session?.cours?.id ?? '',
+            date: session?.date ?? '',
+            startHour: session?.startHour ?? '',
+            endHour: session?.endHour ?? '',
+            professeurId: session?.professor?.id ?? '',
+            salleId: session?.salle?.id ?? seance?.salleId ?? ''
         });
         setShowAddModal(true);
-    }, []);
+    }, [isProfesseur]);
 
-    const handleEventDrop = useCallback(async (info: any) => {
+    const handleEventDrop = useCallback(async (info: CalendarEventDropInfo) => {
+        if (isProfesseur) {
+            if (typeof info.revert === 'function') info.revert();
+            return;
+        }
         const session = info.event.extendedProps.session;
+        if (!session) {
+            if (typeof info.revert === 'function') info.revert();
+            return;
+        }
         const newDate = info.event.start ? info.event.start.toISOString().split('T')[0] : session.date;
 
         // Get time from the dropped event and format as HH:MM:SS
@@ -391,9 +454,12 @@ export default function PlanningFullCalendar() {
         } finally {
             setIsMutating(false);
         }
-    }, [loadSessionsPage]);
+    }, [isProfesseur, loadSessionsPage]);
 
     const handleDeleteSeance = async (id: string) => {
+        if (isProfesseur) {
+            return;
+        }
         const result = await Swal.fire({
             title: 'Êtes-vous sûr ?',
             text: 'Voulez-vous vraiment supprimer cette séance ?',
@@ -431,6 +497,9 @@ export default function PlanningFullCalendar() {
 
     const handleSubmitSession = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
+        if (isProfesseur) {
+            return;
+        }
 
         if (!formState.classeId) {
             alert('Merci de sélectionner une classe.');
@@ -524,14 +593,23 @@ export default function PlanningFullCalendar() {
 
     const handlePrev = () => {
         calendarRef?.getApi().prev();
+        if (calendarRef) {
+            setSelectedDate(calendarRef.getApi().getDate().toISOString().split('T')[0]);
+        }
     };
 
     const handleNext = () => {
         calendarRef?.getApi().next();
+        if (calendarRef) {
+            setSelectedDate(calendarRef.getApi().getDate().toISOString().split('T')[0]);
+        }
     };
 
     const handleToday = () => {
         calendarRef?.getApi().today();
+        if (calendarRef) {
+            setSelectedDate(calendarRef.getApi().getDate().toISOString().split('T')[0]);
+        }
     };
 
     if (isLoading) {
@@ -556,9 +634,10 @@ export default function PlanningFullCalendar() {
             style={{
                 display: 'flex',
                 flexDirection: 'column',
-                height: 'calc(100vh - 140px)',
+                height: isMobileView ? 'auto' : 'calc(100vh - 140px)',
+                minHeight: isMobileView ? 'calc(100vh - 110px)' : undefined,
                 background: 'white',
-                borderRadius: '24px',
+                borderRadius: isMobileView ? '16px' : '24px',
                 overflow: 'hidden',
                 boxShadow: '0 4px 24px rgba(0,0,0,0.08)'
             }}
@@ -607,10 +686,49 @@ export default function PlanningFullCalendar() {
                     .planning-controls {
                         flex-wrap: wrap !important;
                     }
+                    .planning-header {
+                        padding: 14px !important;
+                    }
+                    .planning-title {
+                        font-size: 18px !important;
+                    }
+                    .planning-control-field {
+                        width: 100% !important;
+                    }
+                    .planning-control-input,
+                    .planning-control-select {
+                        width: 100% !important;
+                        min-width: 100% !important;
+                    }
+                    .mobile-hide-filter {
+                        display: none !important;
+                    }
+                    .planning-calendar-nav {
+                        justify-content: space-between !important;
+                        margin-bottom: 10px !important;
+                    }
+                    .planning-date-badge {
+                        display: inline-flex !important;
+                    }
+                    :global(.fc .fc-timegrid-slot) {
+                        height: 40px !important;
+                    }
+                    :global(.fc .fc-timegrid-axis-cushion),
+                    :global(.fc .fc-timegrid-slot-label-cushion) {
+                        font-size: 11px !important;
+                    }
+                    :global(.fc .fc-col-header-cell-cushion) {
+                        font-size: 12px !important;
+                        padding: 8px 0 !important;
+                    }
+                    :global(.fc .fc-event-main) {
+                        font-size: 11px !important;
+                        line-height: 1.2;
+                    }
                 }
             `}</style>
 
-            <div style={{
+            <div className="planning-header" style={{
                 padding: '20px 32px',
                 borderBottom: '1px solid #f1f5f9',
                 display: 'flex',
@@ -619,7 +737,7 @@ export default function PlanningFullCalendar() {
                 flexWrap: 'wrap',
                 gap: '16px'
             }}>
-                <h1 style={{
+                <h1 className="planning-title" style={{
                     fontSize: '24px',
                     fontWeight: '700',
                     color: '#1e293b',
@@ -629,13 +747,14 @@ export default function PlanningFullCalendar() {
                 </h1>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }} className="planning-controls">
-                    <div style={{ position: 'relative' }}>
+                    <div style={{ position: 'relative' }} className="planning-control-field">
                         <Search size={18} color="#94a3b8" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)' }} />
                         <input
                             type="text"
                             placeholder="Rechercher..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
+                            className="planning-control-input"
                             style={{
                                 padding: '10px 16px 10px 42px',
                                 borderRadius: '12px',
@@ -648,11 +767,12 @@ export default function PlanningFullCalendar() {
                         />
                     </div>
 
-                    <div style={{ position: 'relative' }}>
+                    <div style={{ position: 'relative' }} className="planning-control-field">
                         <Layers size={16} color="#64748b" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', zIndex: 1 }} />
                         <select
                             value={selectedClasse}
                             onChange={(e) => setSelectedClasse(e.target.value)}
+                            className="planning-control-select"
                             style={{
                                 padding: '10px 36px 10px 36px',
                                 borderRadius: '12px',
@@ -673,11 +793,12 @@ export default function PlanningFullCalendar() {
                         <ChevronDown size={16} color="#64748b" style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
                     </div>
 
-                    <div style={{ position: 'relative' }}>
+                    <div style={{ position: 'relative' }} className="planning-control-field mobile-hide-filter">
                         <Layers size={16} color="#64748b" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', zIndex: 1 }} />
                         <select
                             value={moduleFilter}
                             onChange={(e) => setModuleFilter(e.target.value)}
+                            className="planning-control-select"
                             style={{
                                 padding: '10px 36px 10px 36px',
                                 borderRadius: '12px',
@@ -698,11 +819,12 @@ export default function PlanningFullCalendar() {
                         <ChevronDown size={16} color="#64748b" style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
                     </div>
 
-                    <div style={{ position: 'relative' }}>
+                    <div style={{ position: 'relative' }} className="planning-control-field mobile-hide-filter">
                         <Layers size={16} color="#64748b" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', zIndex: 1 }} />
                         <select
                             value={salleFilter}
                             onChange={(e) => setSalleFilter(e.target.value)}
+                            className="planning-control-select"
                             style={{
                                 padding: '10px 36px 10px 36px',
                                 borderRadius: '12px',
@@ -723,33 +845,35 @@ export default function PlanningFullCalendar() {
                         <ChevronDown size={16} color="#64748b" style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
                     </div>
 
-                    <button
-                        onClick={() => {
-                            setEditingSessionId(null);
-                            setFormState(createFormState({
-                                date: new Date().toISOString().split('T')[0],
-                                salleId: salles[0]?.id ?? ''
-                            }));
-                            setShowAddModal(true);
-                        }}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            padding: '10px 20px',
-                            background: 'linear-gradient(135deg, #5B8DEF 0%, #4169B8 100%)',
-                            border: 'none',
-                            borderRadius: '12px',
-                            color: 'white',
-                            fontSize: '14px',
-                            fontWeight: '600',
-                            cursor: 'pointer',
-                            boxShadow: '0 4px 12px rgba(91,141,239,0.3)'
-                        }}
-                    >
-                        <Plus size={18} />
-                        Nouvelle séance
-                    </button>
+                    {!isProfesseur && (
+                        <button
+                            onClick={() => {
+                                setEditingSessionId(null);
+                                setFormState(createFormState({
+                                    date: new Date().toISOString().split('T')[0],
+                                    salleId: salles[0]?.id ?? ''
+                                }));
+                                setShowAddModal(true);
+                            }}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                padding: '10px 20px',
+                                background: 'linear-gradient(135deg, #5B8DEF 0%, #4169B8 100%)',
+                                border: 'none',
+                                borderRadius: '12px',
+                                color: 'white',
+                                fontSize: '14px',
+                                fontWeight: '600',
+                                cursor: 'pointer',
+                                boxShadow: '0 4px 12px rgba(91,141,239,0.3)'
+                            }}
+                        >
+                            <Plus size={18} />
+                            Nouvelle séance
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -758,12 +882,24 @@ export default function PlanningFullCalendar() {
                 padding: '16px 24px',
                 overflow: 'hidden'
             }}>
-                <div style={{
+                <div className="planning-calendar-nav" style={{
                     display: 'flex',
                     gap: '8px',
                     marginBottom: '16px',
                     justifyContent: 'flex-end'
                 }}>
+                    <span className="planning-date-badge" style={{
+                        display: 'none',
+                        padding: '8px 10px',
+                        borderRadius: '999px',
+                        border: '1px solid #dbeafe',
+                        background: '#eff6ff',
+                        color: '#1e3a8a',
+                        fontSize: '12px',
+                        fontWeight: 600
+                    }}>
+                        {new Date(selectedDate).toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' })}
+                    </span>
                     <button
                         onClick={handlePrev}
                         style={{
@@ -791,7 +927,7 @@ export default function PlanningFullCalendar() {
                             cursor: 'pointer'
                         }}
                     >
-                        Aujourd'hui
+                        Aujourd&apos;hui
                     </button>
                     <button
                         onClick={handleNext}
@@ -814,9 +950,9 @@ export default function PlanningFullCalendar() {
                     key={calendarKey}
                     ref={(el) => setCalendarRef(el)}
                     plugins={[timeGridPlugin, interactionPlugin]}
-                    initialView="timeGridWeek"
+                    initialView={isMobileView ? 'timeGridDay' : 'timeGridWeek'}
                     headerToolbar={false}
-                    events={(info, successCallback, failureCallback) => {
+                    events={(info, successCallback) => {
                         // Debug: Log the date range FullCalendar is requesting
                         console.log('FullCalendar requesting events for:', info.start, 'to', info.end);
                         console.log('Total events available:', events.length);
@@ -828,15 +964,15 @@ export default function PlanningFullCalendar() {
 
                         successCallback(events);
                     }}
-                    editable={true}
-                    droppable={true}
-                    selectable={true}
+                    editable={!isProfesseur}
+                    droppable={!isProfesseur}
+                    selectable={!isProfesseur}
                     selectMirror={true}
-                    dayMaxEvents={true}
+                    dayMaxEvents={!isMobileView}
                     weekends={true}
                     slotMinTime="08:00:00"
                     slotMaxTime="18:00:00"
-                    slotDuration="02:00:00"
+                    slotDuration={isMobileView ? '01:00:00' : '02:00:00'}
                     allDaySlot={false}
                     height="auto"
                     locale="fr"
@@ -857,9 +993,12 @@ export default function PlanningFullCalendar() {
                         minute: '2-digit',
                         meridiem: false
                     }}
-                    dateClick={handleDateClick}
+                    datesSet={(info) => {
+                        setSelectedDate(info.start.toISOString().split('T')[0]);
+                    }}
+                    dateClick={isProfesseur ? undefined : handleDateClick}
                     eventClick={handleEventClick}
-                    eventDrop={handleEventDrop}
+                    eventDrop={isProfesseur ? undefined : handleEventDrop}
                     eventContent={(arg) => {
                         const props = arg.event.extendedProps;
                         const seance = props?.extendedProps || props;

@@ -23,6 +23,7 @@ export interface CreateCoursePayload {
     moduleId: string;
     classIds: string[];
     professorId?: string;
+    summary?: string;
 }
 
 export async function createCourse(payload: CreateCoursePayload): Promise<CoursResponseDto> {
@@ -37,6 +38,17 @@ export async function createCourse(payload: CreateCoursePayload): Promise<CoursR
 }
 
 export type UpdateCoursePayload = CreateCoursePayload;
+
+export async function updateCourseSummary(id: string, summary: string): Promise<CoursResponseDto> {
+    const response = await httpClient<ApiResponse<CoursResponseDto>>(`${BASE_URL}/${id}/summary`, {
+        method: 'PATCH',
+        body: JSON.stringify({ summary })
+    });
+    if (!response.data) {
+        throw new Error('Réponse de mise à jour de résumé invalide');
+    }
+    return response.data;
+}
 
 export async function updateCourse(id: string, payload: UpdateCoursePayload): Promise<CoursResponseDto> {
     const response = await httpClient<ApiResponse<CoursResponseDto>>(`${BASE_URL}/${id}`, {

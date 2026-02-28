@@ -18,11 +18,20 @@ export default function ProgressionChart({ data }: ProgressionChartProps) {
 
     const maxValue = 50; // Fixed max for better visualization
 
+    const getXPosition = (index: number) => {
+        if (data.length <= 1) {
+            return padding.left + chartWidth / 2;
+        }
+        return padding.left + (index / (data.length - 1)) * chartWidth;
+    };
+
     // Calculate points for each line
     const getPoints = (key: keyof Omit<ProgressionCours, 'mois'>) => {
         return data.map((item, index) => {
-            const x = padding.left + (index / (data.length - 1)) * chartWidth;
-            const y = padding.top + chartHeight - (item[key] / maxValue) * chartHeight;
+            const x = getXPosition(index);
+            const rawValue = Number(item[key]);
+            const safeValue = Number.isFinite(rawValue) ? Math.max(0, rawValue) : 0;
+            const y = padding.top + chartHeight - (safeValue / maxValue) * chartHeight;
             return { x, y };
         });
     };
@@ -49,7 +58,7 @@ export default function ProgressionChart({ data }: ProgressionChartProps) {
     };
 
     // Generate area path for fill
-    const generateAreaPath = (points: { x: number; y: number }[], color: string) => {
+    const generateAreaPath = (points: { x: number; y: number }[]) => {
         if (points.length === 0) return '';
 
         let path = `M ${points[0].x} ${padding.top + chartHeight}`;
@@ -158,7 +167,7 @@ export default function ProgressionChart({ data }: ProgressionChartProps) {
                     {data.map((item, idx) => (
                         <text
                             key={idx}
-                            x={padding.left + (idx / (data.length - 1)) * chartWidth}
+                            x={getXPosition(idx)}
                             y={height - 15}
                             textAnchor="middle"
                             fontSize="12"
@@ -173,7 +182,7 @@ export default function ProgressionChart({ data }: ProgressionChartProps) {
                     {lines.map((line, idx) => (
                         <path
                             key={`area-${idx}`}
-                            d={generateAreaPath(line.points, line.color)}
+                            d={generateAreaPath(line.points)}
                             fill={line.color}
                             opacity={0.1}
                         />

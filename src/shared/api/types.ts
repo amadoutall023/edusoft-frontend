@@ -158,6 +158,7 @@ export interface CoursResponseDto {
     totalHour: number;
     completedHour: number;
     plannedHour: number;
+    summary?: string | null;
     module?: ModuleSimpleDto | null;
     classes?: ClasseSimpleDto[] | null;
     professor?: CourseProfessorDto | null;

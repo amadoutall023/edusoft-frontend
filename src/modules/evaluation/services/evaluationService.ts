@@ -61,6 +61,7 @@ export interface EvaluationsQuery {
     classeId?: UUID;
     moduleId?: UUID;
     professorId?: UUID;
+    typeSession?: SessionType;
     status?: string;
     noteStatus?: NoteStatus;
 }
@@ -73,7 +74,7 @@ export interface EvaluationsResponse {
 
 // Récupérer toutes les évaluations
 export async function fetchEvaluations(query: EvaluationsQuery = {}): Promise<EvaluationsResponse> {
-    const { page = 0, size = 100, classeId, moduleId, professorId, status, noteStatus } = query;
+    const { page = 0, size = 100, classeId, moduleId, professorId, typeSession = 'EVALUATION', status, noteStatus } = query;
 
     // Construire les paramètres de requête
     const params = new URLSearchParams();
@@ -83,6 +84,7 @@ export async function fetchEvaluations(query: EvaluationsQuery = {}): Promise<Ev
     if (classeId) params.append('classeId', classeId);
     if (moduleId) params.append('moduleId', moduleId);
     if (professorId) params.append('professorId', professorId);
+    if (typeSession) params.append('typeSession', typeSession);
     if (status) params.append('status', status);
     if (noteStatus) params.append('noteStatus', noteStatus);
 
@@ -92,17 +94,13 @@ export async function fetchEvaluations(query: EvaluationsQuery = {}): Promise<Ev
         `${BASE_URL}?${params.toString()}`
     );
 
-    console.log('Response received:', response);
+    console.log('Raw API response:', response);
+    console.log('Response data:', response.data);
 
-    // Filtrer les sessions pour ne garder que celles de type EVALUATION
+    // Filtre de sécurité côté frontend (le backend filtre déjà via typeSession)
     const allSessions = response.data || [];
-    console.log('All sessions:', allSessions.length);
-
     const evaluationSessions = allSessions.filter(session => session.typeSession === 'EVALUATION');
-    console.log('Evaluation sessions:', evaluationSessions.length);
-
     const evaluations = evaluationSessions.map(mapSessionToEvaluation);
-    console.log('Mapped evaluations:', evaluations);
 
     return {
         evaluations,

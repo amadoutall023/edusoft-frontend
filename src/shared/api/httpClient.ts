@@ -7,9 +7,10 @@ type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 export interface HttpRequestOptions extends RequestInit {
     skipAuth?: boolean;
     method?: HttpMethod;
+    suppressErrorLog?: boolean; // Suppress console.error for expected errors (e.g., 403 on optional endpoints)
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8081';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8089';
 
 let refreshPromise: Promise<void> | null = null;
 
@@ -107,7 +108,11 @@ export async function httpClient<T>(path: string, options: HttpRequestOptions = 
         } catch {
             details = null;
         }
-        console.error('Erreur API:', response.status, details);
+        // Only log errors if not suppressed
+        const suppressLog = (options as HttpRequestOptions)?.suppressErrorLog;
+        if (!suppressLog) {
+            console.error('Erreur API:', response.status, details);
+        }
         const message = (details as { message?: string })?.message ?? response.statusText;
         throw new ApiError(response.status, message, details);
     }

@@ -5,12 +5,6 @@ import StatCard from './StatCard';
 import ProgressionChart from './ProgressionChart';
 import SessionsList from './SessionsList';
 import AlertSession from './AlertSession';
-import {
-    statistiques as statistiquesFallback,
-    sessionsAVenir as sessionsFallback,
-    progressionMensuelle as progressionFallback,
-    sessionAnnulee as sessionAnnuleeFallback
-} from '../data/dashboard';
 import { StatistiqueDashboard, SessionAVenir, ProgressionCours, SessionAnnulee } from '../types';
 import { fetchClasses, fetchFilieres } from '@/modules/structure/services/structureService';
 import { fetchStudents } from '@/modules/etudiant/services/studentService';
@@ -18,6 +12,7 @@ import { fetchProfessors } from '@/modules/prof/services/professorService';
 import { fetchSessions } from '@/modules/planning/services/sessionService';
 import { SessionResponseDto } from '@/shared/api/types';
 import { ApiError } from '@/shared/errors/ApiError';
+import { useAuth } from '@/modules/auth/context/AuthContext';
 
 const COLOR_BY_STATUS: Record<string, string> = {
     TERMINEE: '#10b981',
@@ -29,10 +24,11 @@ const COLOR_BY_STATUS: Record<string, string> = {
 const MONTHS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
 
 export default function PedagogiqueContent() {
-    const [stats, setStats] = useState<StatistiqueDashboard[]>(statistiquesFallback);
-    const [sessions, setSessions] = useState<SessionAVenir[]>(sessionsFallback);
-    const [progression, setProgression] = useState<ProgressionCours[]>(progressionFallback);
-    const [alert, setAlert] = useState<SessionAnnulee>(sessionAnnuleeFallback);
+    const { roles } = useAuth();
+    const [stats, setStats] = useState<StatistiqueDashboard[]>([]);
+    const [sessions, setSessions] = useState<SessionAVenir[]>([]);
+    const [progression, setProgression] = useState<ProgressionCours[]>([]);
+    const [alert, setAlert] = useState<SessionAnnulee | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -87,16 +83,18 @@ export default function PedagogiqueContent() {
                         professeur: upcomingSessions[0].professeur,
                         date: 'demain'
                     });
+                } else {
+                    setAlert(null);
                 }
 
                 setError(null);
             } catch (err) {
                 console.error('Dashboard load error', err);
                 setError(err instanceof ApiError ? err.message : 'Impossible de charger les indicateurs');
-                setStats(statistiquesFallback);
-                setSessions(sessionsFallback);
-                setProgression(progressionFallback);
-                setAlert(sessionAnnuleeFallback);
+                setStats([]);
+                setSessions([]);
+                setProgression([]);
+                setAlert(null);
             } finally {
                 setIsLoading(false);
             }
@@ -141,22 +139,27 @@ export default function PedagogiqueContent() {
                     </div>
                 </div>
 
-                {/* Alert */}
-                <div className="mb-4 md:mb-6">
-                    <AlertSession session={alert} />
-                </div>
+                {alert && (
+                    <div className="mb-4 md:mb-6">
+                        <AlertSession session={alert} />
+                    </div>
+                )}
             </>
         );
     }, [alert, error, isLoading, progression, sessions, stats]);
+
+    const dashboardTitle = roles.includes('ROLE_ADMIN') || roles.includes('ROLE_SUPER_ADMIN')
+        ? 'Administrateur'
+        : 'Responsable Pédagogique';
 
     return (
         <>
             <div className="mb-6 md:mb-8">
                 <h1 className="text-2xl md:text-[32px] font-extrabold text-[#1a202c] mb-2">
-                    Responsable Pédagogique
+                    {dashboardTitle}
                 </h1>
                 <p className="text-sm md:text-[15px] text-slate-500">
-                    Vue d'ensemble de votre établissement
+                    Vue d&apos;ensemble de votre établissement
                 </p>
             </div>
             {content}
@@ -168,10 +171,14 @@ function buildUpcomingSessions(sessions: SessionResponseDto[]): SessionAVenir[] 
     const now = new Date();
     return sessions
         .filter(session => {
-            const date = new Date(session.date);
-            return !Number.isNaN(date.getTime()) && date >= now;
+            const dateTime = new Date(`${session.date}T${session.startHour || '00:00'}`);
+            return !Number.isNaN(dateTime.getTime()) && dateTime >= now;
         })
-        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+        .sort((a, b) => {
+            const dateA = new Date(`${a.date}T${a.startHour || '00:00'}`);
+            const dateB = new Date(`${b.date}T${b.startHour || '00:00'}`);
+            return dateA.getTime() - dateB.getTime();
+        })
         .map(session => {
             const libelle = session.cours?.libelle ?? session.module?.libelle ?? session.libelle;
             const classe = session.classe?.libelle ?? session.classes?.[0]?.libelle ?? 'Multi-classes';
@@ -183,6 +190,8 @@ function buildUpcomingSessions(sessions: SessionResponseDto[]): SessionAVenir[] 
                 cours: libelle ?? 'Cours',
                 niveau: `${classe}`,
                 professeur,
+                dateLabel: session.date,
+                heureLabel: `${session.startHour} - ${session.endHour}`,
                 couleur: COLOR_BY_STATUS[session.status ?? 'default'] ?? COLOR_BY_STATUS.default
             } as SessionAVenir;
         });
@@ -194,6 +203,9 @@ function buildProgressionData(sessions: SessionResponseDto[]): ProgressionCours[
 
     sessions.forEach(session => {
         const date = new Date(session.date);
+        if (Number.isNaN(date.getTime())) {
+            return;
+        }
         const monthKey = `${date.getFullYear()}-${date.getMonth()}`;
         if (!grouped[monthKey]) {
             grouped[monthKey] = {
