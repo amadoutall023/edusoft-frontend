@@ -1,7 +1,7 @@
-import { LayoutGrid, Book, Users, UserCheck, Calendar, Settings, Building2, ClipboardList } from 'lucide-react';
+import { LayoutGrid, Book, Users, UserCheck, Calendar, Settings, Building2, ClipboardList, User } from 'lucide-react';
 
 // Types de rôles dans l'application (correspondance avec le backend)
-export type UserRole = 'ROLE_ADMIN' | 'ROLE_RP' | 'ROLE_ATTACHE_CLASSE' | 'ROLE_DIRECTRICE' | 'ROLE_PROFESSEUR' | 'ROLE_SUPER_ADMIN';
+export type UserRole = 'ROLE_ADMIN' | 'ROLE_RP' | 'ROLE_ATTACHE_CLASSE' | 'ROLE_DIRECTRICE' | 'ROLE_PROFESSEUR' | 'ROLE_SUPER_ADMIN' | 'ROLE_ETUDIANT';
 
 // Labels lisibles pour chaque rôle
 export const RoleLabels: Record<UserRole, string> = {
@@ -11,6 +11,7 @@ export const RoleLabels: Record<UserRole, string> = {
     'ROLE_ATTACHE_CLASSE': 'Attaché de Classe',
     'ROLE_DIRECTRICE': 'Directrice',
     'ROLE_PROFESSEUR': 'Professeur',
+    'ROLE_ETUDIANT': 'Étudiant',
 };
 
 // Interface pour les éléments de menu
@@ -24,7 +25,7 @@ export interface MenuItem {
 
 export const menuItemsByRole: MenuItem[] = [
     // Tableau de bord - pour tous les rôles
-    { icon: LayoutGrid, label: 'Tableau de bord', path: '/dashboard', roles: ['ROLE_ADMIN', 'ROLE_RP', 'ROLE_ATTACHE_CLASSE', 'ROLE_DIRECTRICE', 'ROLE_PROFESSEUR', 'ROLE_SUPER_ADMIN'] },
+    { icon: LayoutGrid, label: 'Tableau de bord', path: '/dashboard', roles: ['ROLE_ADMIN', 'ROLE_RP', 'ROLE_ATTACHE_CLASSE', 'ROLE_DIRECTRICE', 'ROLE_PROFESSEUR', 'ROLE_SUPER_ADMIN', 'ROLE_ETUDIANT'] },
 
     // Cours - pour tous les rôles
     { icon: Book, label: 'Cours', path: '/dashboard/cours', roles: ['ROLE_ADMIN', 'ROLE_RP', 'ROLE_ATTACHE_CLASSE', 'ROLE_DIRECTRICE', 'ROLE_PROFESSEUR'] },
@@ -32,11 +33,20 @@ export const menuItemsByRole: MenuItem[] = [
     // Planning - pour tous les rôles
     { icon: Calendar, label: 'Planning', path: '/dashboard/planning', roles: ['ROLE_ADMIN', 'ROLE_RP', 'ROLE_ATTACHE_CLASSE', 'ROLE_DIRECTRICE', 'ROLE_PROFESSEUR'] },
 
-    // Évaluations - pour tous les rôles
-    { icon: ClipboardList, label: 'Évaluation', path: '/dashboard/evaluation', roles: ['ROLE_ADMIN', 'ROLE_RP', 'ROLE_ATTACHE_CLASSE', 'ROLE_DIRECTRICE', 'ROLE_PROFESSEUR'] },
-
-    // Étudiants - pour admin, RP, AC, Directrice (PAS pour PROFESSEUR)
+    // Étudiants - pour admin, RP, AC, Directrice (PAS pour PROFESSEUR et ETUDIANT)
     { icon: Users, label: 'Étudiants', path: '/dashboard/etudiant', roles: ['ROLE_ADMIN', 'ROLE_RP', 'ROLE_ATTACHE_CLASSE', 'ROLE_DIRECTRICE', 'ROLE_SUPER_ADMIN'] },
+
+    // Mon Profil - pour les étudiants
+    { icon: User, label: 'Mon Profil', path: '/dashboard/etudiant/profil', roles: ['ROLE_ETUDIANT'] },
+
+    // Mes Cours - pour les étudiants
+    { icon: Book, label: 'Mes Cours', path: '/dashboard/etudiant/cours', roles: ['ROLE_ETUDIANT'] },
+
+    // Mon Planning - pour les étudiants
+    { icon: Calendar, label: 'Mon Planning', path: '/dashboard/etudiant/planning', roles: ['ROLE_ETUDIANT'] },
+
+    // Mes Évaluations - pour les étudiants
+    { icon: ClipboardList, label: 'Mes Évaluations', path: '/dashboard/etudiant/evaluation', roles: ['ROLE_ETUDIANT'] },
 
     // Professeurs - pour admin, RP, AC, Directrice (PAS pour PROFESSEUR)
     { icon: UserCheck, label: 'Professeurs', path: '/dashboard/prof', roles: ['ROLE_ADMIN', 'ROLE_RP', 'ROLE_ATTACHE_CLASSE', 'ROLE_DIRECTRICE', 'ROLE_SUPER_ADMIN'] },

@@ -97,10 +97,10 @@ export default function CourseSupportModal({ coursId, coursTitle, initialSummary
             <div style={contentStyle} onClick={(e) => e.stopPropagation()}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                     <div>
-                        <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700 }}>Supports de cours</h3>
-                        <div style={{ fontSize: '13px', color: '#64748b' }}>{coursTitle}</div>
+                        <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: 'black' }}>Supports de cours</h3>
+                        <div style={{ fontSize: '13px', color: 'black' }}>{coursTitle}</div>
                     </div>
-                    <button onClick={onClose} style={closeBtnStyle}><X size={18} /></button>
+                    <button onClick={onClose} style={{ ...closeBtnStyle, color: 'black' }}><X size={18} color="black" /></button>
                 </div>
 
                 {!readOnly && (
@@ -114,7 +114,7 @@ export default function CourseSupportModal({ coursId, coursTitle, initialSummary
                 )}
 
                 <div style={{ marginBottom: '14px', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '10px' }}>
-                    <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '8px' }}>Résumé du cours</div>
+                    <div style={{ fontSize: '13px', color: 'black', marginBottom: '8px' }}>Résumé du cours</div>
                     <textarea
                         value={summary}
                         onChange={(e) => setSummary(e.target.value)}
@@ -154,16 +154,16 @@ export default function CourseSupportModal({ coursId, coursTitle, initialSummary
                 {error && <div style={{ color: '#dc2626', fontSize: '13px', marginBottom: '10px' }}>{error}</div>}
 
                 {loading ? (
-                    <div style={{ color: '#64748b', fontSize: '14px' }}>Chargement...</div>
+                    <div style={{ color: 'black', fontSize: '14px' }}>Chargement...</div>
                 ) : supports.length === 0 ? (
-                    <div style={{ color: '#64748b', fontSize: '14px' }}>Aucun support uploadé.</div>
+                    <div style={{ color: 'black', fontSize: '14px' }}>Aucun support uploadé.</div>
                 ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                         {supports.map(support => (
                             <div key={support.id} style={itemStyle}>
                                 <div style={{ flex: 1 }}>
                                     <div style={{ fontSize: '14px', fontWeight: 600 }}>{support.fileName}</div>
-                                    <div style={{ fontSize: '12px', color: '#64748b' }}>
+                                    <div style={{ fontSize: '12px', color: 'black' }}>
                                         {(support.fileSize / 1024).toFixed(1)} KB
                                         {support.uploadedByFullName ? ` • ${support.uploadedByFullName}` : ''}
                                     </div>

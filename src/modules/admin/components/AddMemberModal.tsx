@@ -15,7 +15,8 @@ interface AddMemberModalProps {
 // Note: Le backend attend 'ROLE_ADMIN' ou 'ROLE_ATTACHE_CLASSE'
 const roleOptions = [
     { value: 'ROLE_ADMIN', label: 'Administrateur' },
-    { value: 'ROLE_ATTACHE_CLASSE', label: 'Attaché de classe' }
+    { value: 'ROLE_ATTACHE_CLASSE', label: 'Attaché de classe' },
+    { value: 'ROLE_RESPONSABLE', label: 'Responsable de classe' }
 ];
 
 export default function AddMemberModal({ isOpen, onClose, onSuccess }: AddMemberModalProps) {

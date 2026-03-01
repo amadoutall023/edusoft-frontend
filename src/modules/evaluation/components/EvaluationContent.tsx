@@ -91,7 +91,7 @@ export default function EvaluationContent() {
             try {
                 // Pour les professeurs, le backend filtre automatiquement par leur ID
                 // Pas besoin de passer professorId car le backend le fait automatiquement
-                
+
                 // Charger les évaluations, les statistiques et les classes en parallèle
                 const [evaluationsData, statsData, classesData] = await Promise.all([
                     fetchEvaluations({ page: 0, size: 500 }),
@@ -559,17 +559,17 @@ export default function EvaluationContent() {
                             background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
                             border: 'none',
                             borderRadius: '12px',
-                        color: 'white',
-                        fontSize: '14px',
-                        fontWeight: '600',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s ease',
-                        boxShadow: '0 4px 12px rgba(16,185,129,0.3)'
-                    }}
-                >
-                    <Plus size={18} />
-                    <span className="add-button">Ajouter évaluation</span>
-                </button>
+                            color: 'white',
+                            fontSize: '14px',
+                            fontWeight: '600',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease',
+                            boxShadow: '0 4px 12px rgba(16,185,129,0.3)'
+                        }}
+                    >
+                        <Plus size={18} />
+                        <span className="add-button">Ajouter évaluation</span>
+                    </button>
                 )}
             </div>
 
@@ -662,7 +662,8 @@ export default function EvaluationContent() {
                         width: '100%',
                         maxHeight: '80vh',
                         overflow: 'auto',
-                        boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+                        boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+                        color: '#000000'
                     }}>
                         {/* Modal Header */}
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
@@ -798,7 +799,7 @@ export default function EvaluationContent() {
                                 </div>
                             )}
                             {notesFiles.length === 0 && (
-                                <div style={{ marginTop: '20px', fontSize: '14px', color: '#64748b' }}>
+                                <div style={{ marginTop: '20px', fontSize: '14px', color: '#000000' }}>
                                     Aucun fichier de notes déposé pour cette évaluation.
                                 </div>
                             )}
@@ -869,12 +870,13 @@ export default function EvaluationContent() {
                         maxWidth: '900px',
                         width: '100%',
                         maxHeight: '85vh',
-                        overflowY: 'auto'
+                        overflowY: 'auto',
+                        color: '#000000'
                     }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
                             <div>
                                 <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 700 }}>{selectedEvaluation.titre}</h3>
-                                <div style={{ fontSize: '13px', color: '#64748b' }}>{selectedEvaluation.classe}</div>
+                                <div style={{ fontSize: '13px', color: '#000000' }}>{selectedEvaluation.classe}</div>
                             </div>
                             <button
                                 onClick={() => {
@@ -895,12 +897,12 @@ export default function EvaluationContent() {
                         )}
 
                         {notesLoading ? (
-                            <div style={{ color: '#64748b', fontSize: '14px' }}>Chargement...</div>
+                            <div style={{ color: '#000000', fontSize: '14px' }}>Chargement...</div>
                         ) : (
                             <>
                                 <div style={{ marginBottom: '14px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                                     <div style={{ border: '1px solid #e2e8f0', borderRadius: '10px', padding: '12px' }}>
-                                        <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '6px' }}>Classe ciblée</div>
+                                        <div style={{ fontSize: '13px', color: '#000000', marginBottom: '6px' }}>Classe ciblée</div>
                                         <select
                                             value={selectedClasseForNotes}
                                             onChange={(e) => setSelectedClasseForNotes(e.target.value)}
@@ -919,7 +921,7 @@ export default function EvaluationContent() {
                                         </select>
                                     </div>
                                     <div style={{ border: '1px solid #e2e8f0', borderRadius: '10px', padding: '12px' }}>
-                                        <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '6px' }}>
+                                        <div style={{ fontSize: '13px', color: '#000000', marginBottom: '6px' }}>
                                             {isProfesseur ? 'Fichier de notes' : 'Notes déposées'}
                                         </div>
                                         {isProfesseur ? (
@@ -930,7 +932,7 @@ export default function EvaluationContent() {
                                                     style={{ width: '100%' }}
                                                 />
                                                 {selectedNoteFile && (
-                                                    <div style={{ marginTop: '6px', fontSize: '12px', color: '#475569' }}>
+                                                    <div style={{ marginTop: '6px', fontSize: '12px', color: '#000000' }}>
                                                         Fichier sélectionné: {selectedNoteFile.name}
                                                     </div>
                                                 )}
@@ -953,7 +955,7 @@ export default function EvaluationContent() {
                                                 </button>
                                             </>
                                         ) : (
-                                            <div style={{ fontSize: '13px', color: '#475569' }}>
+                                            <div style={{ fontSize: '13px', color: '#000000' }}>
                                                 Consultation uniquement.
                                             </div>
                                         )}
@@ -966,13 +968,13 @@ export default function EvaluationContent() {
                                 </div>
 
                                 <div style={{ marginBottom: '14px' }}>
-                                    <div style={{ fontWeight: 700, marginBottom: '8px' }}>Étudiants concernés ({evaluationStudents?.length ?? 0})</div>
+                                    <div style={{ fontWeight: 700, marginBottom: '8px', color: '#000000' }}>Étudiants concernés ({evaluationStudents?.length ?? 0})</div>
                                     <div style={{ maxHeight: '180px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '10px' }}>
                                         {(evaluationStudents ?? []).length === 0 ? (
-                                            <div style={{ color: '#64748b', fontSize: '14px' }}>Aucun étudiant trouvé pour cette évaluation.</div>
+                                            <div style={{ color: '#000000', fontSize: '14px' }}>Aucun étudiant trouvé pour cette évaluation.</div>
                                         ) : (
                                             (evaluationStudents ?? []).map(student => (
-                                                <div key={student.id} style={{ padding: '6px 0', fontSize: '14px', borderBottom: '1px dashed #edf2f7' }}>
+                                                <div key={student.id} style={{ padding: '6px 0', fontSize: '14px', color: '#000000', borderBottom: '1px dashed #edf2f7' }}>
                                                     {student.matricule} - {student.prenom} {student.nom}
                                                 </div>
                                             ))
@@ -981,13 +983,13 @@ export default function EvaluationContent() {
                                 </div>
 
                                 <div>
-                                    <div style={{ fontWeight: 700, marginBottom: '8px' }}>Fichiers déposés ({notesFiles.length})</div>
+                                    <div style={{ fontWeight: 700, marginBottom: '8px', color: '#000000' }}>Fichiers déposés ({notesFiles.length})</div>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                         {notesFiles.map(file => (
                                             <div key={file.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '10px' }}>
                                                 <div style={{ flex: 1 }}>
-                                                    <div style={{ fontSize: '14px', fontWeight: 600 }}>{file.fileName}</div>
-                                                    <div style={{ fontSize: '12px', color: '#64748b' }}>
+                                                    <div style={{ fontSize: '14px', color: '#000000', fontWeight: 600 }}>{file.fileName}</div>
+                                                    <div style={{ fontSize: '12px', color: '#000000' }}>
                                                         {(file.fileSize / 1024).toFixed(1)} KB
                                                         {file.classeLibelle ? ` • ${file.classeLibelle}` : ''}
                                                     </div>
@@ -1043,7 +1045,8 @@ export default function EvaluationContent() {
                         width: '100%',
                         maxHeight: '80vh',
                         overflow: 'auto',
-                        boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+                        boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+                        color: '#000000'
                     }}>
                         {/* Modal Header */}
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>

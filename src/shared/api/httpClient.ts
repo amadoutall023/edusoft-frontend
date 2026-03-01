@@ -10,7 +10,7 @@ export interface HttpRequestOptions extends RequestInit {
     suppressErrorLog?: boolean; // Suppress console.error for expected errors (e.g., 403 on optional endpoints)
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8089';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8081';
 
 let refreshPromise: Promise<void> | null = null;
 

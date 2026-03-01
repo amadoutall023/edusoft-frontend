@@ -1,43 +1,36 @@
+import { LucideIcon } from 'lucide-react';
+
 export interface Etudiant {
     id: string;
     matricule: string;
     firstName: string;
     lastName: string;
-    email?: string | null;
-    phone?: string | null;
-    dateOfBirth?: string | null;
-    lieuNaissace?: string | null; // typo variant
-    lieuNaissnace?: string | null; // correct spelling
-    lieuNaissance?: string | null; // another variant
-    nationalite?: string | null;
-    address?: string | null;
-    gender?: string | null;
-    classe?: string | null;
-    classeInfo?: ClasseInfo | null;
-    anneeInscription?: number | null;
-    qrToken?: string | null;
-    qrCodeImage?: string | null; 
-    createdAt?: string | null;
-    updatedAt?: string | null;
+    email?: string;
+    phone?: string;
+    photo?: string;
+    classe: string;
+    classeInfo?: {
+        id: string | null;
+        libelle: string | null;
+        filiere: { id: string; libelle: string } | null;
+        niveau: { id: string; libelle: string } | null;
+    };
+    anneeInscription?: number;
+    qrToken?: string;
+    qrCodeImage?: string;
+    dateOfBirth?: string;
+    lieuNaissance?: string;
+    nationalite?: string;
+    address?: string;
+    gender?: string;
+    presence?: number;
+    prochainCours?: {
+        matiere: string;
+        heure: string;
+    };
+    createdAt?: string;
+    updatedAt?: string;
 }
-
-export interface ClasseInfo {
-    id?: string | null;
-    libelle?: string | null;
-    filiere?: FiliereInfo | null;
-    niveau?: NiveauInfo | null;
-}
-
-export interface FiliereInfo {
-    id: string;
-    libelle: string;
-}
-
-export interface NiveauInfo {
-    id: string;
-    libelle: string;
-}
-
 
 export interface EtudiantFormData {
     username: string;
@@ -46,22 +39,46 @@ export interface EtudiantFormData {
     firstName: string;
     lastName: string;
     dateOfBirth: string;
-    lieuNaissace?: string; // typo variant
-    lieuNaissnace?: string; // correct spelling
-    lieuNaissance?: string; // another variant
-    nationalite?: string;
-    address?: string;
-    phone?: string;
-    gender?: string;
-    classeId?: string;
-    typeInscription?: string;
-    observations?: string;
+    lieuNaissace: string;
+    nationalite: string;
+    address: string;
+    phone: string;
+    gender: string;
+    classeId: string;
 }
 
-// Pour les filtres
-export interface EtudiantFilters {
-    classe?: string;
-    anneeInscription?: number;
-    gender?: string;
-    search?: string;
+export interface MenuAction {
+    id: string;
+    titre: string;
+    sousTitre: string;
+    icon: LucideIcon;
+    couleur: string;
+    route: string;
+}
+
+/*
+ * Les types AbsenceRecord et EvaluationEtudiant sont maintenant definis 
+ * dans src/modules/etudiant/services/dashboardService.ts
+ * pour correspondre aux donnees retournees par l'API.
+ */
+
+// Type legacy pour compatibilite - utilise maintenant StudentAbsenceRecord dans dashboardService
+export interface AbsenceRecord {
+    id: string;
+    date: string;
+    matiere: string;
+    type: 'absence' | 'retard';
+    justifiee: boolean;
+    heures: number;
+}
+
+// Type legacy pour compatibilite - utilise maintenant EvaluationEtudiant dans dashboardService
+export interface EvaluationEtudiant {
+    id: string;
+    module: string;
+    professeur: string;
+    date: string;
+    type: string;
+    note?: number;
+    moyenneClasse?: number;
 }

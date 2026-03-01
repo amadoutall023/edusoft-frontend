@@ -13,10 +13,14 @@ export default function DashboardPage() {
     useEffect(() => {
         if (!isLoading && roles.length > 0) {
             // Rediriger selon le rôle
-            if (roles.includes('ROLE_ATTACHE_CLASSE')) {
+            if (roles.includes('ROLE_ETUDIANT')) {
+                router.replace('/dashboard/etudiant');
+            } else if (roles.includes('ROLE_ATTACHE_CLASSE')) {
                 router.replace('/dashboard/attache-classe');
             } else if (roles.includes('ROLE_PROFESSEUR')) {
                 router.replace('/dashboard/prof');
+            } else if (roles.includes('ROLE_RESPONSABLE')) {
+                router.replace('/dashboard/etudiant');
             }
             // Pour les autres rôles (RP, ADMIN), rester sur ce dashboard pédagogique
         }
@@ -32,7 +36,7 @@ export default function DashboardPage() {
     }
 
     // Ne pas afficher le dashboard pédagogique pour les rôles qui seront redirigés
-    if (roles.includes('ROLE_ATTACHE_CLASSE') || roles.includes('ROLE_PROFESSEUR')) {
+    if (roles.includes('ROLE_ETUDIANT') || roles.includes('ROLE_ATTACHE_CLASSE') || roles.includes('ROLE_PROFESSEUR') || roles.includes('ROLE_RESPONSABLE')) {
         return (
             <div className="flex items-center justify-center h-screen">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />

@@ -2,11 +2,12 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Star, Loader2 } from 'lucide-react';
 import { fetchStudentsByClasse, fetchClasseAbsenceStats, AbsenceStats } from '@/modules/etudiant/services/studentService';
 import { StudentResponseDto } from '@/shared/api/types';
 import { httpClient } from '@/shared/api/httpClient';
 import { ApiResponse } from '@/shared/api/types';
+import { tokenStorage } from '@/shared/api/tokenStorage';
 
 interface PresenceStats {
     totalAbsences: number;
@@ -16,6 +17,7 @@ interface PresenceStats {
 
 interface StudentWithAbsences extends StudentResponseDto {
     absences: PresenceStats;
+    isResponsable: boolean;
 }
 
 export default function ClasseDetailsPage() {
@@ -27,11 +29,11 @@ export default function ClasseDetailsPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [classeName, setClasseName] = useState('');
     const [error, setError] = useState<string | null>(null);
+    const [updatingId, setUpdatingId] = useState<string | null>(null);
 
     const fetchAbsences = async (studentId: string): Promise<PresenceStats> => {
         try {
             const response = await fetchClasseAbsenceStats(classeId);
-            // Find the stats for this specific student
             const studentStats = response.find(s => s.studentId === studentId);
             if (studentStats) {
                 return {
@@ -43,7 +45,6 @@ export default function ClasseDetailsPage() {
         } catch (error) {
             console.error('Error fetching absences:', error);
         }
-        // Fallback to zeros if API fails
         return {
             totalAbsences: 0,
             justifiedAbsences: 0,
@@ -58,20 +59,17 @@ export default function ClasseDetailsPage() {
             setIsLoading(true);
             const studentsData = await fetchStudentsByClasse(classeId);
 
-            // Get class name from first student if available
             if (studentsData.length > 0 && studentsData[0].classe?.libelle) {
                 setClasseName(studentsData[0].classe.libelle);
             }
 
-            // Fetch absences for each student (use Promise.allSettled to continue even if one fails)
             const results = await Promise.allSettled(
                 studentsData.map(async (student) => {
                     const absences = await fetchAbsences(student.id);
-                    return { ...student, absences };
+                    return { ...student, absences, isResponsable: false };
                 })
             );
 
-            // Process results
             const studentsWithAbsences = results
                 .filter((r): r is PromiseFulfilledResult<StudentWithAbsences> => r.status === 'fulfilled')
                 .map(r => r.value);
@@ -92,6 +90,55 @@ export default function ClasseDetailsPage() {
 
     const handleGoBack = () => {
         router.back();
+    };
+
+    const handleToggleResponsable = async (studentId: string) => {
+        try {
+            setUpdatingId(studentId);
+
+            const token = tokenStorage.getAccessToken();
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+            const url = `${apiUrl}/api/v1/students/${studentId}/responsable`;
+
+            console.log('Calling API:', url);
+            console.log('Token present:', !!token);
+
+            if (!token) {
+                console.error('Pas de token d\'authentification');
+                alert('Veuillez vous reconnecter');
+                return;
+            }
+
+            // Appeler l'API backend pour basculer le role RESPONSABLE
+            const response = await fetch(url, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            console.log('Response status:', response.status);
+            console.log('Response statusText:', response.statusText);
+
+            if (response.ok) {
+                const data = await response.json();
+                console.log('Response data:', data);
+                // Mettre a jour l'etat local avec la reponse du serveur
+                setStudents(prev => prev.map(s =>
+                    s.id === studentId ? { ...s, isResponsable: data.data?.isResponsable ?? !s.isResponsable } : s
+                ));
+            } else {
+                const errorText = await response.text();
+                console.error('Erreur lors de la mise a jour du responsable:', response.status, errorText);
+                alert('Erreur: ' + response.status + ' - ' + errorText);
+            }
+        } catch (error) {
+            console.error('Erreur lors de la mise a jour du responsable:', error);
+            alert('Erreur de connexion: ' + error);
+        } finally {
+            setUpdatingId(null);
+        }
     };
 
     if (isLoading) {
@@ -218,6 +265,13 @@ export default function ClasseDetailsPage() {
                                 color: 'white',
                                 fontWeight: '600',
                                 fontSize: '14px'
+                            }}>Responsable</th>
+                            <th style={{
+                                padding: '16px',
+                                textAlign: 'center',
+                                color: 'white',
+                                fontWeight: '600',
+                                fontSize: '14px'
                             }}>Total absences</th>
                             <th style={{
                                 padding: '16px',
@@ -265,6 +319,37 @@ export default function ClasseDetailsPage() {
                                 }}>{student.firstName || '-'}</td>
                                 <td style={{
                                     padding: '14px 16px',
+                                    textAlign: 'center'
+                                }}>
+                                    <button
+                                        onClick={() => handleToggleResponsable(student.id)}
+                                        disabled={updatingId === student.id}
+                                        style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            padding: '6px 12px',
+                                            borderRadius: '6px',
+                                            border: 'none',
+                                            cursor: 'pointer',
+                                            background: student.isResponsable ? '#fbbf24' : '#f1f5f9',
+                                            color: student.isResponsable ? '#92400e' : '#64748b',
+                                            fontSize: '12px',
+                                            fontWeight: '600',
+                                            opacity: updatingId === student.id ? 0.5 : 1
+                                        }}
+                                        title={student.isResponsable ? 'Retirer comme responsable' : 'Définir comme responsable'}
+                                    >
+                                        {updatingId === student.id ? (
+                                            <Loader2 size={14} className="animate-spin" style={{ marginRight: '4px' }} />
+                                        ) : (
+                                            <Star size={14} style={{ marginRight: '4px', fill: student.isResponsable ? '#92400e' : 'none' }} />
+                                        )}
+                                        {student.isResponsable ? 'Oui' : 'Non'}
+                                    </button>
+                                </td>
+                                <td style={{
+                                    padding: '14px 16px',
                                     textAlign: 'center',
                                     color: student.absences.totalAbsences > 0 ? '#dc2626' : '#22c55e',
                                     fontSize: '14px',
@@ -287,7 +372,7 @@ export default function ClasseDetailsPage() {
                         ))}
                         {students.length === 0 && (
                             <tr>
-                                <td colSpan={7} style={{
+                                <td colSpan={8} style={{
                                     padding: '40px',
                                     textAlign: 'center',
                                     color: '#64748b'

@@ -224,7 +224,7 @@ export default function TableCard({
                 .classe-field-label {
                     font-size: 10px;
                     font-weight: 600;
-                    color: #64748b;
+                    color: black;
                     text-transform: uppercase;
                     letter-spacing: 0.3px;
                     white-space: nowrap;
@@ -377,14 +377,14 @@ export default function TableCard({
                 .card-field-label {
                     font-size: 9px;
                     font-weight: 600;
-                    color: #94a3b8;
+                    color: black;
                     text-transform: uppercase;
                     letter-spacing: 0.2px;
                 }
                 .card-field-value {
                     font-size: 10px;
                     font-weight: 500;
-                    color: #334155;
+                    color: black;
                     text-align: right;
                 }
                 .card-actions {
