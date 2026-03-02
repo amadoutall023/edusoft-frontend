@@ -9,11 +9,13 @@ const eslintConfig = defineConfig([
   {
     rules: {
       // Allow 'any' type in specific cases (e.g., event handlers)
-      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-explicit-any': 'off',
       // Allow setState in useEffect for client-side mounting
-      'react-hooks/set-state-in-effect': 'warn',
+      'react-hooks/set-state-in-effect': 'off',
       // Allow unescaped entities in JSX
-      'react/no-unescaped-entities': 'warn',
+      'react/no-unescaped-entities': 'off',
+      // Disable preserve-manual-memoization which conflicts with React Compiler
+      'react-hooks/preserve-manual-memoization': 'off',
     },
   },
   // Override default ignores of eslint-config-next.

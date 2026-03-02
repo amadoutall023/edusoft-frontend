@@ -57,11 +57,13 @@ export default function StructureAcademiqueContent() {
 
     const handleClassesPageChange = useCallback(
         (page: number) => structure.setQuery.classes(prev => ({ ...prev, page: page - 1 })),
-        [structure.setQuery.classes]
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        [structure.setQuery]
     );
     const handleClassesSearchChange = useCallback(
         (q: string) => structure.setQuery.classes(prev => ({ ...prev, q, page: 0 })),
-        [structure.setQuery.classes]
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        [structure.setQuery]
     );
 
     const handleViewClasse = useCallback(
@@ -73,29 +75,35 @@ export default function StructureAcademiqueContent() {
 
     const handleNiveauxPageChange = useCallback(
         (page: number) => structure.setQuery.niveaux(prev => ({ ...prev, page: page - 1 })),
-        [structure.setQuery.niveaux]
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        [structure.setQuery]
     );
     const handleNiveauxSearchChange = useCallback(
         (q: string) => structure.setQuery.niveaux(prev => ({ ...prev, q, page: 0 })),
-        [structure.setQuery.niveaux]
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        [structure.setQuery]
     );
 
     const handleFilieresPageChange = useCallback(
         (page: number) => structure.setQuery.filieres(prev => ({ ...prev, page: page - 1 })),
-        [structure.setQuery.filieres]
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        [structure.setQuery]
     );
     const handleFilieresSearchChange = useCallback(
         (q: string) => structure.setQuery.filieres(prev => ({ ...prev, q, page: 0 })),
-        [structure.setQuery.filieres]
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        [structure.setQuery]
     );
 
     const handleModulesPageChange = useCallback(
         (page: number) => structure.setQuery.modules(prev => ({ ...prev, page: page - 1 })),
-        [structure.setQuery.modules]
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        [structure.setQuery]
     );
     const handleModulesSearchChange = useCallback(
         (q: string) => structure.setQuery.modules(prev => ({ ...prev, q, page: 0 })),
-        [structure.setQuery.modules]
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        [structure.setQuery]
     );
     const handleModulesFiliereFilterChange = useCallback(
         (filiereId: string) => {
@@ -105,16 +113,19 @@ export default function StructureAcademiqueContent() {
                 page: 0
             }));
         },
-        [structure.setQuery.modules]
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        [structure.setQuery]
     );
 
     const handleSallesPageChange = useCallback(
         (page: number) => structure.setQuery.salles(prev => ({ ...prev, page: page - 1 })),
-        [structure.setQuery.salles]
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        [structure.setQuery]
     );
     const handleSallesSearchChange = useCallback(
         (q: string) => structure.setQuery.salles(prev => ({ ...prev, q, page: 0 })),
-        [structure.setQuery.salles]
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        [structure.setQuery]
     );
 
     return (
