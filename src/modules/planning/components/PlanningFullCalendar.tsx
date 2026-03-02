@@ -530,10 +530,17 @@ export default function PlanningFullCalendar() {
             return;
         }
         const session = info.event.extendedProps.session;
-        const seance = info.event.extendedProps.extendedProps || {};
+        const seanceRaw = info.event.extendedProps.extendedProps;
+        
+        // Validate that seance has required id before using
+        if (!seanceRaw?.id) {
+            return;
+        }
+        
+        const seance = seanceRaw as SeancePlanning;
 
         setSelectedEvent(seance);
-        setEditingSessionId(session?.id);
+        setEditingSessionId(session?.id ?? null);
         const normalizedStart = toInputTime(session?.startHour ?? '');
         const normalizedEnd = toInputTime(session?.endHour ?? '');
         const normalizedDate = normalizeDate(session?.date) ?? '';
