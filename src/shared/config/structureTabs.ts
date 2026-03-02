@@ -1,9 +1,9 @@
-import { GraduationCap, Building2, Book, DoorOpen, Layers } from 'lucide-react';
+import { GraduationCap, Building2, Book, DoorOpen, Layers, LucideIcon } from 'lucide-react';
 
 export interface TabItem {
     id: string;
     label: string;
-    icon: any;
+    icon: LucideIcon;
 }
 
 export const structureTabs: TabItem[] = [

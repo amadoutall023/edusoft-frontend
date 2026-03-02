@@ -1,4 +1,4 @@
-import { LayoutGrid, Book, Users, UserCheck, Calendar, Settings, Building2, ClipboardList, User } from 'lucide-react';
+import { LayoutGrid, Book, Users, UserCheck, Calendar, Building2, ClipboardList, User } from 'lucide-react';
 
 // Types de rôles dans l'application (correspondance avec le backend)
 export type UserRole = 'ROLE_ADMIN' | 'ROLE_RP' | 'ROLE_ATTACHE_CLASSE' | 'ROLE_DIRECTRICE' | 'ROLE_PROFESSEUR' | 'ROLE_SUPER_ADMIN' | 'ROLE_ETUDIANT';

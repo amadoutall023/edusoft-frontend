@@ -3,10 +3,10 @@
 import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { GraduationCap, LayoutGrid, Book, Users, UserCheck, Calendar, Settings, LogOut, Building2, Menu, X } from 'lucide-react';
+import { GraduationCap, LayoutGrid, LogOut, Menu, X } from 'lucide-react';
 import { useAuth } from '@/modules/auth/context/AuthContext';
 import { useSidebar } from '@/shared/context/SidebarContext';
-import { menuItemsByRole, getMenuItemsByRoles, UserRole } from '@/shared/config/roles';
+import { getMenuItemsByRoles } from '@/shared/config/roles';
 
 interface SidebarProps {
     activeItem?: string;

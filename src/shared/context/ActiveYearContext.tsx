@@ -4,7 +4,6 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { ActiveYearResponse } from '@/shared/api/types';
 import { ApiError } from '@/shared/errors/ApiError';
 import { getActiveYear, getAvailableYears, setActiveYear } from '@/shared/api/activeYearService';
-import { ACTIVE_YEAR_CHANGED_EVENT } from '@/shared/api/activeYearStorage';
 
 interface ActiveYearContextShape {
     activeYear: ActiveYearResponse | null;
