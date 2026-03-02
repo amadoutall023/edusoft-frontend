@@ -23,8 +23,7 @@ function isWithinDays(date: Date | null, maxDays: number) {
 }
 
 export async function fetchDynamicNotifications(): Promise<Notification[]> {
-    // Fetch data - some endpoints may fail for certain roles, handle gracefully
-    // Use suppressErrorLog to avoid console noise for expected 403 errors
+  
     let students: StudentResponseDto[] = [];
     let courses: CoursResponseDto[] = [];
     let sessions: SessionResponseDto[] = [];

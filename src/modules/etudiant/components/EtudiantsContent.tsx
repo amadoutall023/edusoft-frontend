@@ -9,15 +9,18 @@ import TableCard from '@/shared/components/TableCard';
 import { Etudiant, EtudiantFormData } from '../types';
 import { fetchClasses } from '@/modules/structure/services/structureService';
 import { useAuth } from '@/modules/auth/context/AuthContext';
+import { useActiveYear } from '@/shared/context/ActiveYearContext';
 import {
     fetchStudents,
+    fetchStudentsByYear,
     createStudent,
     updateStudent,
     deleteStudent,
     importStudentsFromExcel,
     generateMatricule,
     assignStudentToClasse,
-    removeStudentFromClasse
+    removeStudentFromClasse,
+    StudentRequest
 } from '../services/studentService';
 import { StudentResponseDto } from '@/shared/api/types';
 import { ApiError } from '@/shared/errors/ApiError';
@@ -66,6 +69,7 @@ const mapStudent = (student: StudentResponseDto): Etudiant => ({
 
 export default function EtudiantsContent() {
     const { roles } = useAuth();
+    const { activeStartYear } = useActiveYear();
     const isAttachéClasse = roles.includes('ROLE_ATTACHE_CLASSE');
     const [students, setStudents] = useState<Etudiant[]>([]);
     const [currentPage, setCurrentPage] = useState(1);
@@ -111,15 +115,23 @@ export default function EtudiantsContent() {
     const itemsPerPage = 5;
 
     useEffect(() => {
-        loadStudents();
         loadClasses();
     }, []);
+
+    useEffect(() => {
+        loadStudents();
+    }, [activeStartYear]);
 
     const loadStudents = async () => {
         try {
             setIsLoading(true);
-            const response = await fetchStudents({ page: 0, size: 100 });
-            setStudents(response.content.map(mapStudent));
+            if (activeStartYear) {
+                const studentsByYear = await fetchStudentsByYear(activeStartYear);
+                setStudents(studentsByYear.map(mapStudent));
+            } else {
+                const response = await fetchStudents({ page: 0, size: 100 });
+                setStudents(response.content.map(mapStudent));
+            }
             setError(null);
         } catch (err) {
             if (err instanceof ApiError) {
@@ -225,7 +237,12 @@ export default function EtudiantsContent() {
         e.preventDefault();
         setIsSubmitting(true);
         try {
-            await createStudent(formData);
+            const payload: StudentRequest = {
+                ...formData,
+                lieuNaissance: formData.lieuNaissace || undefined,
+                anneeInscription: activeStartYear ?? undefined
+            };
+            await createStudent(payload);
             setSuccessMessage('Étudiant créé avec succès');
             setShowAddModal(false);
             resetForm();

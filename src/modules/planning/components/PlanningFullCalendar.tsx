@@ -85,6 +85,16 @@ interface CalendarEventClickInfo {
     };
 }
 
+interface CalendarDateClickInfo {
+    date: Date;
+    dateStr: string;
+}
+
+interface CalendarSelectInfo {
+    start: Date;
+    end: Date;
+}
+
 interface CalendarEventDropInfo extends CalendarEventClickInfo {
     event: {
         start: Date | null;
@@ -124,9 +134,125 @@ function computeHexColor(status?: SessionStatus | null): string {
     return '#6b7280';
 }
 
+function normalizeDate(rawDate: unknown): string | null {
+    if (!rawDate) return null;
+    const value = String(rawDate).trim();
+    if (!value) return null;
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        return value;
+    }
+
+    if (value.includes(',')) {
+        const [year, month, day] = value.split(',').map(part => part.trim());
+        if (!year || !month || !day) return null;
+        return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    }
+
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+        return parsed.toISOString().split('T')[0];
+    }
+
+    return null;
+}
+
+function normalizeTime(rawTime: unknown): string | null {
+    if (!rawTime) return null;
+    const value = String(rawTime).trim().replace(/,/g, ':');
+    if (!value || !value.includes(':')) return null;
+
+    const parts = value.split(':');
+    const hour = Number(parts[0]);
+    const minute = Number(parts[1]);
+    const second = Number(parts[2] ?? '0');
+
+    if ([hour, minute, second].some(part => Number.isNaN(part))) return null;
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59) return null;
+
+    return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${String(second).padStart(2, '0')}`;
+}
+
+function toMinutes(time: string): number {
+    const [hour, minute] = time.split(':').map(Number);
+    return hour * 60 + minute;
+}
+
+function fromMinutes(totalMinutes: number): string {
+    const normalized = ((totalMinutes % 1440) + 1440) % 1440;
+    const hour = Math.floor(normalized / 60);
+    const minute = normalized % 60;
+    return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`;
+}
+
+function computeEndTime(startHour: string, endHour?: unknown, duration?: number | null): string {
+    const normalizedEnd = normalizeTime(endHour);
+    if (normalizedEnd && toMinutes(normalizedEnd) > toMinutes(startHour)) {
+        return normalizedEnd;
+    }
+
+    if (typeof duration === 'number' && duration > 0) {
+        const durationInMinutes = duration <= 12 ? duration * 60 : duration;
+        return fromMinutes(toMinutes(startHour) + durationInMinutes);
+    }
+
+    return fromMinutes(toMinutes(startHour) + 120);
+}
+
+function normalizeSessionSchedule(session: SessionResponseDto): {
+    date: string;
+    startHour: string;
+    endHour: string;
+} | null {
+    const date = normalizeDate(session.date);
+    const startHour = normalizeTime(session.startHour);
+    if (!date || !startHour) return null;
+
+    return {
+        date,
+        startHour,
+        endHour: computeEndTime(startHour, session.endHour, session.duration)
+    };
+}
+
+function toInputTime(time?: string | null): string {
+    const normalized = normalizeTime(time);
+    if (!normalized) return '';
+    return normalized.slice(0, 5);
+}
+
+function toApiTime(time: string): string {
+    const normalized = normalizeTime(time);
+    return normalized ?? '08:00:00';
+}
+
+function formatLocalDate(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function formatLocalTime(date: Date): string {
+    const hour = String(date.getHours()).padStart(2, '0');
+    const minute = String(date.getMinutes()).padStart(2, '0');
+    return `${hour}:${minute}`;
+}
+
+function addMinutes(time: string, minutesToAdd: number): string {
+    const [hour, minute] = time.split(':').map(Number);
+    const total = hour * 60 + minute + minutesToAdd;
+    const normalized = ((total % 1440) + 1440) % 1440;
+    const nextHour = Math.floor(normalized / 60);
+    const nextMinute = normalized % 60;
+    return `${String(nextHour).padStart(2, '0')}:${String(nextMinute).padStart(2, '0')}`;
+}
+
 function mapSessionToEvent(session: SessionResponseDto): SeancePlanning {
-    const startDateTime = `${session.date}T${session.startHour}:00`;
-    const endDateTime = `${session.date}T${session.endHour}:00`;
+    const normalized = normalizeSessionSchedule(session);
+    const safeDate = normalized?.date ?? normalizeDate(session.date) ?? new Date().toISOString().split('T')[0];
+    const safeStartHour = normalized?.startHour ?? toApiTime(String(session.startHour ?? '08:00'));
+    const safeEndHour = normalized?.endHour ?? fromMinutes(toMinutes(safeStartHour) + 120);
 
     return {
         id: session.id,
@@ -142,10 +268,10 @@ function mapSessionToEvent(session: SessionResponseDto): SeancePlanning {
         professeurId: session.professor?.id ?? null,
         salle: session.salle?.libelle ?? 'Salle',
         salleId: session.salle?.id ?? null,
-        jour: JOUR_OPTIONS[new Date(session.date).getDay() - 1] || 'Lundi',
-        dateISO: session.date,
-        heureDebut: session.startHour,
-        heureFin: session.endHour,
+        jour: JOUR_OPTIONS[new Date(safeDate).getDay() - 1] || 'Lundi',
+        dateISO: safeDate,
+        heureDebut: safeStartHour.slice(0, 5),
+        heureFin: safeEndHour.slice(0, 5),
         couleur: computeColor(session.status),
         status: session.status,
         typeSession: session.typeSession,
@@ -181,6 +307,13 @@ export default function PlanningFullCalendar() {
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [calendarKey, setCalendarKey] = useState(0);
     const sessionPageSize = 100;
+    const selectedCourseForForm = useMemo(
+        () => courses.find(course => course.id === formState.coursId) ?? null,
+        [courses, formState.coursId]
+    );
+    const lockedProfessorId = selectedCourseForForm?.professor?.id ?? '';
+    const isProfessorLockedByCourse = Boolean(lockedProfessorId);
+    const effectiveProfessorId = lockedProfessorId || formState.professeurId;
 
     const loadSessionsPage = useCallback(async (page = 0, append = false) => {
         const result = await fetchSessions({
@@ -295,20 +428,11 @@ export default function PlanningFullCalendar() {
                 return true;
             })
             .map(session => {
-                // Debug: console.log the session data
-                console.log('Session:', session.date, session.startHour, session.endHour);
+                const normalized = normalizeSessionSchedule(session);
+                if (!normalized) return null;
 
-                // Fix: Ensure proper ISO format - startHour may already include seconds
-                const formatTime = (time: string | null | undefined): string => {
-                    if (!time) return '08:00:00';
-                    // If time already has seconds (HH:MM:SS), use as is
-                    if (time.split(':').length === 3) return time;
-                    // If time only has hours and minutes (HH:MM), add seconds
-                    return `${time}:00`;
-                };
-
-                const eventStart = `${session.date}T${formatTime(session.startHour)}`;
-                const eventEnd = `${session.date}T${formatTime(session.endHour)}`;
+                const eventStart = `${normalized.date}T${normalized.startHour}`;
+                const eventEnd = `${normalized.date}T${normalized.endHour}`;
 
                 return {
                     id: session.id,
@@ -322,7 +446,8 @@ export default function PlanningFullCalendar() {
                         session: session
                     }
                 };
-            });
+            })
+            .filter((event): event is NonNullable<typeof event> => Boolean(event));
 
         console.log('Events mapped:', mappedEvents.length);
         return mappedEvents;
@@ -361,18 +486,44 @@ export default function PlanningFullCalendar() {
         [salles]
     );
 
-    const handleDateClick = useCallback((info: { dateStr: string }) => {
-        if (isProfesseur) {
-            return;
-        }
-        setSelectedDate(info.dateStr);
+    const applyCourseSelection = useCallback((courseId: string) => {
+        const course = courses.find(c => c.id === courseId);
+        const autoProfessorId = course?.professor?.id ?? '';
+        setFormState(prev => ({
+            ...prev,
+            coursId: courseId,
+            professeurId: autoProfessorId
+        }));
+    }, [courses]);
+
+    const openCreateModalWithSlot = useCallback((start: Date, end?: Date) => {
+        const date = formatLocalDate(start);
+        const startHour = formatLocalTime(start);
+        const endHour = end ? formatLocalTime(end) : addMinutes(startHour, 120);
+        setSelectedDate(date);
         setEditingSessionId(null);
         setFormState(createFormState({
-            date: info.dateStr,
+            date,
+            startHour,
+            endHour: endHour === startHour ? addMinutes(startHour, 120) : endHour,
             salleId: salles[0]?.id ?? ''
         }));
         setShowAddModal(true);
-    }, [isProfesseur, salles]);
+    }, [salles]);
+
+    const handleDateClick = useCallback((info: CalendarDateClickInfo) => {
+        if (isProfesseur) {
+            return;
+        }
+        openCreateModalWithSlot(info.date);
+    }, [isProfesseur, openCreateModalWithSlot]);
+
+    const handleSelect = useCallback((info: CalendarSelectInfo) => {
+        if (isProfesseur) {
+            return;
+        }
+        openCreateModalWithSlot(info.start, info.end);
+    }, [isProfesseur, openCreateModalWithSlot]);
 
     const handleEventClick = useCallback((info: CalendarEventClickInfo) => {
         if (isProfesseur) {
@@ -383,12 +534,15 @@ export default function PlanningFullCalendar() {
 
         setSelectedEvent(seance);
         setEditingSessionId(session?.id);
+        const normalizedStart = toInputTime(session?.startHour ?? '');
+        const normalizedEnd = toInputTime(session?.endHour ?? '');
+        const normalizedDate = normalizeDate(session?.date) ?? '';
         setFormState({
             classeId: session?.classe?.id ?? seance?.classeId ?? '',
             coursId: session?.cours?.id ?? '',
-            date: session?.date ?? '',
-            startHour: session?.startHour ?? '',
-            endHour: session?.endHour ?? '',
+            date: normalizedDate,
+            startHour: normalizedStart || '08:00',
+            endHour: normalizedEnd || '10:00',
             professeurId: session?.professor?.id ?? '',
             salleId: session?.salle?.id ?? seance?.salleId ?? ''
         });
@@ -405,17 +559,22 @@ export default function PlanningFullCalendar() {
             if (typeof info.revert === 'function') info.revert();
             return;
         }
-        const newDate = info.event.start ? info.event.start.toISOString().split('T')[0] : session.date;
+        const newDate = info.event.start
+            ? info.event.start.toISOString().split('T')[0]
+            : (normalizeDate(session.date) ?? new Date().toISOString().split('T')[0]);
 
         // Get time from the dropped event and format as HH:MM:SS
         const getTimeWithSeconds = (date: Date | null, fallback: string): string => {
-            if (!date) return fallback || '08:00:00';
+            if (!date) return toApiTime(fallback);
             const time = date.toTimeString().slice(0, 8); // HH:MM:SS format
             return time;
         };
 
-        const newStartHour = getTimeWithSeconds(info.event.start, session.startHour);
-        const newEndHour = getTimeWithSeconds(info.event.end, session.endHour);
+        const fallbackStart = normalizeTime(session.startHour) ?? '08:00:00';
+        const fallbackEnd = computeEndTime(fallbackStart, session.endHour, session.duration);
+        const newStartHour = getTimeWithSeconds(info.event.start, fallbackStart);
+        const droppedEndHour = getTimeWithSeconds(info.event.end, fallbackEnd);
+        const newEndHour = computeEndTime(newStartHour, droppedEndHour, session.duration);
 
         console.log('Event drop - new values:', { newDate, newStartHour, newEndHour, session: session.id });
 
@@ -515,6 +674,9 @@ export default function PlanningFullCalendar() {
         }
 
         const selectedCourse = courses.find(course => course.id === formState.coursId);
+        const payloadStartHour = toApiTime(formState.startHour);
+        const payloadEndHour = computeEndTime(payloadStartHour, toApiTime(formState.endHour), null);
+        const payloadProfessorId = (selectedCourse?.professor?.id ?? formState.professeurId) || null;
 
         try {
             setIsMutating(true);
@@ -527,8 +689,8 @@ export default function PlanningFullCalendar() {
 
                 await updateSession(editingSessionId, {
                     date: formState.date,
-                    startHour: formState.startHour,
-                    endHour: formState.endHour,
+                    startHour: payloadStartHour,
+                    endHour: payloadEndHour,
                     duration: null,
                     typeSession: existingSession.typeSession,
                     modeSession: existingSession.modeSession,
@@ -539,14 +701,14 @@ export default function PlanningFullCalendar() {
                     moduleId: selectedCourse?.module?.id ?? existingSession.module?.id ?? null,
                     classeId: formState.classeId,
                     classIds: null,
-                    professorId: formState.professeurId || null,
+                    professorId: payloadProfessorId,
                     salleId: formState.salleId
                 });
             } else {
                 const payload: SessionRequestDto = {
                     date: formState.date,
-                    startHour: formState.startHour,
-                    endHour: formState.endHour,
+                    startHour: payloadStartHour,
+                    endHour: payloadEndHour,
                     duration: null,
                     typeSession: 'COURS',
                     modeSession: 'PRESENTIEL',
@@ -557,7 +719,7 @@ export default function PlanningFullCalendar() {
                     moduleId: selectedCourse?.module?.id ?? null,
                     classeId: formState.classeId,
                     classIds: null,
-                    professorId: formState.professeurId || null,
+                    professorId: payloadProfessorId,
                     salleId: formState.salleId
                 };
                 await createSession(payload);
@@ -999,6 +1161,7 @@ export default function PlanningFullCalendar() {
                     dateClick={isProfesseur ? undefined : handleDateClick}
                     eventClick={handleEventClick}
                     eventDrop={isProfesseur ? undefined : handleEventDrop}
+                    select={isProfesseur ? undefined : handleSelect}
                     eventContent={(arg) => {
                         const props = arg.event.extendedProps;
                         const seance = props?.extendedProps || props;
@@ -1167,7 +1330,7 @@ export default function PlanningFullCalendar() {
                                     name="cours"
                                     required
                                     value={formState.coursId}
-                                    onChange={(e) => setFormState(prev => ({ ...prev, coursId: e.target.value }))}
+                                    onChange={(e) => applyCourseSelection(e.target.value)}
                                     style={{
                                         width: '100%',
                                         padding: '10px 14px',
@@ -1190,16 +1353,17 @@ export default function PlanningFullCalendar() {
                                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#4a5568', marginBottom: '6px' }}>Professeur</label>
                                 <select
                                     name="professeur"
-                                    value={formState.professeurId}
+                                    value={effectiveProfessorId}
                                     onChange={(e) => setFormState(prev => ({ ...prev, professeurId: e.target.value }))}
+                                    disabled={isProfessorLockedByCourse}
                                     style={{
                                         width: '100%',
                                         padding: '10px 14px',
                                         borderRadius: '10px',
                                         border: '1.5px solid #e2e8f0',
                                         fontSize: '14px',
-                                        background: 'white',
-                                        cursor: 'pointer',
+                                        background: isProfessorLockedByCourse ? '#f1f5f9' : 'white',
+                                        cursor: isProfessorLockedByCourse ? 'not-allowed' : 'pointer',
                                         color: '#1a202c'
                                     }}
                                 >

@@ -118,7 +118,7 @@ export async function fetchStudentPresenceStats(studentId: string): Promise<Stud
             };
         }
 
-        // Mapper les donnees du backend vers le format attendu
+     
         const totalAbsences = stats.totalAbsences || 0;
         const excusedCount = stats.justifiedAbsences || 0;
         const absentCount = stats.unjustifiedAbsences || 0;
@@ -325,7 +325,7 @@ export async function fetchMyQRCode(): Promise<QRCodeResponse | null> {
             return null;
         }
 
-        const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8081';
+        const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8089';
         const response = await fetch(`${API_BASE_URL}/api/auth/me/qrcode`, {
             method: 'GET',
             headers: {

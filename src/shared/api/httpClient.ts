@@ -1,6 +1,7 @@
 import { ApiError } from '@/shared/errors/ApiError';
 import { ApiResponse, AuthResponse } from './types';
 import { tokenStorage } from './tokenStorage';
+import { getStoredActiveYearId } from './activeYearStorage';
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
@@ -10,7 +11,7 @@ export interface HttpRequestOptions extends RequestInit {
     suppressErrorLog?: boolean; // Suppress console.error for expected errors (e.g., 403 on optional endpoints)
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8081';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8089';
 
 let refreshPromise: Promise<void> | null = null;
 
@@ -70,6 +71,10 @@ export async function httpClient<T>(path: string, options: HttpRequestOptions = 
         if (token) {
             headers.set('Authorization', `Bearer ${token}`);
         }
+    }
+    const activeYearId = getStoredActiveYearId();
+    if (activeYearId && !headers.has('X-Academic-Year-Id')) {
+        headers.set('X-Academic-Year-Id', activeYearId);
     }
 
     // For FormData, don't set Content-Type - let the browser set it with the boundary

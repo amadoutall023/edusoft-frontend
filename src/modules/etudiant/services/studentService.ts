@@ -18,6 +18,7 @@ export interface StudentRequest {
     phone?: string;
     gender?: string;
     classeId?: string;
+    anneeInscription?: number;
     typeInscription?: string;
     observations?: string;
 }

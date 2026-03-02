@@ -97,7 +97,7 @@ export default function ClasseDetailsPage() {
             setUpdatingId(studentId);
 
             const token = tokenStorage.getAccessToken();
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+            const apiUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
             const url = `${apiUrl}/api/v1/students/${studentId}/responsable`;
 
             console.log('Calling API:', url);

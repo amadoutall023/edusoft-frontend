@@ -18,6 +18,97 @@ import Swal from 'sweetalert2';
 
 type SessionFilterType = 'all' | 'COURS' | 'EVALUATION' | 'AUTRE';
 
+interface NormalizedScheduleData {
+    date: string;
+    startHour: string;
+    endHour: string;
+}
+
+function normalizeDate(rawDate: string | null | undefined): string | null {
+    if (!rawDate) return null;
+    const value = String(rawDate).trim();
+    if (!value) return null;
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        return value;
+    }
+
+    if (value.includes(',')) {
+        const [year, month, day] = value.split(',').map(part => part.trim());
+        if (!year || !month || !day) return null;
+        return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    }
+
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+        return parsed.toISOString().split('T')[0];
+    }
+
+    return null;
+}
+
+function normalizeTime(rawTime: string | null | undefined): string | null {
+    if (!rawTime) return null;
+    const value = String(rawTime).trim();
+    if (!value) return null;
+
+    const normalizedSeparators = value.replace(/,/g, ':');
+    const parts = normalizedSeparators.split(':');
+
+    if (parts.length < 2) return null;
+
+    const hour = Number(parts[0]);
+    const minute = Number(parts[1]);
+    const second = Number(parts[2] ?? '0');
+
+    if ([hour, minute, second].some(part => Number.isNaN(part))) return null;
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59) return null;
+
+    return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${String(second).padStart(2, '0')}`;
+}
+
+function toMinutes(time: string): number {
+    const [hour, minute] = time.split(':').map(Number);
+    return hour * 60 + minute;
+}
+
+function fromMinutes(totalMinutes: number): string {
+    const normalized = ((totalMinutes % 1440) + 1440) % 1440;
+    const hour = Math.floor(normalized / 60);
+    const minute = normalized % 60;
+    return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`;
+}
+
+function computeEndTime(startHour: string, endHour?: string | null, duration?: number | null): string {
+    const normalizedEnd = normalizeTime(endHour);
+    if (normalizedEnd && toMinutes(normalizedEnd) > toMinutes(startHour)) {
+        return normalizedEnd;
+    }
+
+    if (typeof duration === 'number' && duration > 0) {
+        const durationInMinutes = duration <= 12 ? duration * 60 : duration;
+        return fromMinutes(toMinutes(startHour) + durationInMinutes);
+    }
+
+    return fromMinutes(toMinutes(startHour) + 120);
+}
+
+function normalizeSessionSchedule(session: SessionResponseDto): NormalizedScheduleData | null {
+    const date = normalizeDate(session.date);
+    const startHour = normalizeTime(session.startHour);
+    if (!date || !startHour) return null;
+
+    return {
+        date,
+        startHour,
+        endHour: computeEndTime(startHour, session.endHour, session.duration)
+    };
+}
+
+function formatDisplayTime(time: string): string {
+    return time.slice(0, 5);
+}
+
 export default function EtudiantPlanningPage() {
     const router = useRouter();
     const { user } = useAuth();
@@ -72,8 +163,11 @@ export default function EtudiantPlanningPage() {
 
         // Only include sessions from the current week
         filteredSessions.forEach(session => {
-            if (weekDates.includes(session.date)) {
-                const dateKey = session.date;
+            const normalized = normalizeSessionSchedule(session);
+            if (!normalized) return;
+
+            if (weekDates.includes(normalized.date)) {
+                const dateKey = normalized.date;
                 if (!grouped[dateKey]) {
                     grouped[dateKey] = [];
                 }
@@ -83,7 +177,11 @@ export default function EtudiantPlanningPage() {
 
         // Sort sessions within each day by start time
         Object.keys(grouped).forEach(date => {
-            grouped[date].sort((a, b) => a.startHour.localeCompare(b.startHour));
+            grouped[date].sort((a, b) => {
+                const aStart = normalizeSessionSchedule(a)?.startHour ?? '00:00:00';
+                const bStart = normalizeSessionSchedule(b)?.startHour ?? '00:00:00';
+                return aStart.localeCompare(bStart);
+            });
         });
 
         return grouped;
@@ -138,7 +236,13 @@ export default function EtudiantPlanningPage() {
     };
 
     const sessionsToEvents = (sessions: SessionResponseDto[]): any[] => {
-        return sessions.map(session => {
+        return sessions
+            .map(session => {
+                const normalized = normalizeSessionSchedule(session);
+                if (!normalized) {
+                    return null;
+                }
+
             let backgroundColor = '#5B8DEF';
             if (session.typeSession === 'EVALUATION') {
                 backgroundColor = '#10b981';
@@ -148,9 +252,9 @@ export default function EtudiantPlanningPage() {
 
             return {
                 id: session.id,
-                title: session.libelle,
-                start: `${session.date}T${session.startHour}`,
-                end: `${session.date}T${session.endHour}`,
+                    title: session.libelle || session.cours?.libelle || 'Session',
+                    start: `${normalized.date}T${normalized.startHour}`,
+                    end: `${normalized.date}T${normalized.endHour}`,
                 backgroundColor,
                 borderColor: backgroundColor,
                 type: session.typeSession,
@@ -162,7 +266,8 @@ export default function EtudiantPlanningPage() {
                     classe: session.classe?.libelle
                 }
             };
-        });
+            })
+            .filter((event): event is NonNullable<typeof event> => Boolean(event));
     };
 
     const handleEventClick = (info: any) => {
@@ -431,7 +536,11 @@ export default function EtudiantPlanningPage() {
                                                         <div>
                                                             <p className="font-medium text-slate-800">{session.libelle}</p>
                                                             <p className="text-sm text-slate-500">
-                                                                {session.startHour} - {session.endHour}
+                                                                {(() => {
+                                                                    const normalized = normalizeSessionSchedule(session);
+                                                                    if (!normalized) return `${session.startHour} - ${session.endHour}`;
+                                                                    return `${formatDisplayTime(normalized.startHour)} - ${formatDisplayTime(normalized.endHour)}`;
+                                                                })()}
                                                             </p>
                                                         </div>
                                                         <span
@@ -561,10 +670,6 @@ export default function EtudiantPlanningPage() {
                         week: 'Semaine',
                         day: 'Jour',
                         list: 'Liste'
-                    }}
-                    validRange={{
-                        start: '2026-01-01',
-                        end: '2026-12-31'
                     }}
                     allDaySlot={false}
                     slotMinTime="07:00:00"
