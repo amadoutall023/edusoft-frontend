@@ -173,8 +173,10 @@ export async function fetchEvaluationsStats(): Promise<StatistiqueEvaluation[]> 
 
 // Récupérer la liste des classes pour les filtres
 export async function fetchClassesForFilter(): Promise<ClasseOption[]> {
+    // Skip year filter to avoid backend serialization issues
     const response = await httpClient<ApiResponse<{ id: UUID; libelle: string }[]>>(
-        '/api/v1/classes?page=0&size=500'
+        '/api/v1/classes?page=0&size=500',
+        { skipYearFilter: true }
     );
 
     return (response.data || []).map(c => ({

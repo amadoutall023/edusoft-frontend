@@ -6,13 +6,17 @@ const BASE_URL = '/api/v1/cours';
 interface FetchCoursesParams {
     page?: number;
     size?: number;
+    classeId?: string;
 }
 
 export async function fetchCourses(params: FetchCoursesParams = {}): Promise<CoursResponseDto[]> {
-    const { page = 0, size = 100 } = params;
-    const response = await httpClient<ApiResponse<CoursResponseDto[]>>(
-        `${BASE_URL}?page=${page}&size=${size}`
-    );
+    const { page = 0, size = 100, classeId } = params;
+    
+    let url = `${BASE_URL}?page=${page}&size=${size}`;
+    if (classeId) url += `&classeId=${classeId}`;
+    
+    // Skip year filter to avoid backend serialization issues
+    const response = await httpClient<ApiResponse<CoursResponseDto[]>>(url, { skipYearFilter: true });
     return response.data ?? [];
 }
 

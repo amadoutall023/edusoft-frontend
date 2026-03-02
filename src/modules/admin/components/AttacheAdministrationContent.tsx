@@ -1,11 +1,14 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { Calendar } from 'lucide-react';
 import AttacheTableAdmin from './AttacheTableAdmin';
+import AnneeScolaireAttache from './AnneeScolaireAttache';
 import { MembreAdministration } from '../types';
 import { fetchAdminMembers } from '../services/adminService';
 import { UserDto } from '@/shared/api/types';
 import { ApiError } from '@/shared/errors/ApiError';
+import { useActiveYear } from '@/shared/context/ActiveYearContext';
 
 const roleLabels: Record<string, string> = {
     ROLE_SUPER_ADMIN: 'Super admin',
@@ -54,6 +57,8 @@ export default function AttacheAdministrationContent() {
     const [members, setMembers] = useState<MembreAdministration[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [activeTab, setActiveTab] = useState<'members' | 'years'>('years');
+    const { refresh: refreshActiveYear } = useActiveYear();
 
     const loadMembers = async () => {
         try {
@@ -77,6 +82,10 @@ export default function AttacheAdministrationContent() {
         loadMembers();
     }, []);
 
+    const handleYearChanged = async () => {
+        await refreshActiveYear();
+    };
+
     return (
         <>
             <div className="page-title" style={{
@@ -96,25 +105,86 @@ export default function AttacheAdministrationContent() {
                         margin: 0,
                         letterSpacing: '-0.5px'
                     }}>Administration</h1>
-                    <p style={{ marginTop: '8px', color: '#64748b', fontSize: '14px' }}>Administrateurs, Directrices, Responsables pédagogiques et Attachés de classe</p>
+                    <p style={{ marginTop: '8px', color: '#64748b', fontSize: '14px' }}>Gestion administrative et annees scolaires</p>
                 </div>
             </div>
 
-            {isLoading && (
-                <div style={{ padding: '24px 40px', color: '#64748b' }}>
-                    Chargement des membres...
+            {/* Tabs */}
+            <div style={{
+                padding: '0 40px',
+                borderBottom: '1px solid #e2e8f0',
+                background: 'white'
+            }}>
+                <div style={{
+                    display: 'flex',
+                    gap: '8px'
+                }}>
+                    <button
+                        onClick={() => setActiveTab('years')}
+                        style={{
+                            padding: '16px 24px',
+                            background: activeTab === 'years' ? 'white' : 'transparent',
+                            border: 'none',
+                            borderBottom: activeTab === 'years' ? '2px solid #5B8DEF' : '2px solid transparent',
+                            fontSize: '14px',
+                            fontWeight: activeTab === 'years' ? '600' : '500',
+                            color: activeTab === 'years' ? '#1e293b' : '#64748b',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            transition: 'all 0.2s'
+                        }}
+                    >
+                        <Calendar size={18} />
+                        Annee scolaire
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('members')}
+                        style={{
+                            padding: '16px 24px',
+                            background: activeTab === 'members' ? 'white' : 'transparent',
+                            border: 'none',
+                            borderBottom: activeTab === 'members' ? '2px solid #5B8DEF' : '2px solid transparent',
+                            fontSize: '14px',
+                            fontWeight: activeTab === 'members' ? '600' : '500',
+                            color: activeTab === 'members' ? '#1e293b' : '#64748b',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            transition: 'all 0.2s'
+                        }}
+                    >
+                        Membres
+                    </button>
                 </div>
-            )}
+            </div>
 
-            {error && !isLoading && (
-                <div style={{ padding: '24px 40px', color: '#dc2626' }}>
-                    {error}
-                </div>
-            )}
+            {/* Tab Content */}
+            <div style={{ padding: activeTab === 'members' ? '0' : '24px 40px' }}>
+                {activeTab === 'years' ? (
+                    <AnneeScolaireAttache onYearChanged={handleYearChanged} />
+                ) : (
+                    <>
+                        {isLoading && (
+                            <div style={{ padding: '24px 40px', color: '#64748b' }}>
+                                Chargement des membres...
+                            </div>
+                        )}
 
-            {!isLoading && !error && (
-                <AttacheTableAdmin data={members} />
-            )}
+                        {error && !isLoading && (
+                            <div style={{ padding: '24px 40px', color: '#dc2626' }}>
+                                {error}
+                            </div>
+                        )}
+
+                        {!isLoading && !error && (
+                            <AttacheTableAdmin data={members} />
+                        )}
+                    </>
+                )}
+            </div>
 
             <style jsx>{`
                 @media (max-width: 768px) {

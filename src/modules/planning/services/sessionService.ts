@@ -10,6 +10,7 @@ interface FetchSessionsParams {
     filiereId?: string;
     salleId?: string;
     coursId?: string;
+    classeId?: string;
 }
 
 export interface FetchSessionsResult {
@@ -24,7 +25,8 @@ export async function fetchSessions(params: FetchSessionsParams = {}): Promise<F
         moduleId,
         filiereId,
         salleId,
-        coursId
+        coursId,
+        classeId
     } = params;
 
     const searchParams = new URLSearchParams({
@@ -36,9 +38,11 @@ export async function fetchSessions(params: FetchSessionsParams = {}): Promise<F
     if (filiereId) searchParams.set('filiereId', filiereId);
     if (salleId) searchParams.set('salleId', salleId);
     if (coursId) searchParams.set('coursId', coursId);
-
+    if (classeId) searchParams.set('classeId', classeId);
+    // Academic year filter disabled to avoid backend serialization issues
     const response = await httpClient<ApiResponse<SessionResponseDto[]>>(
-        `${BASE_URL}?${searchParams.toString()}`
+        `${BASE_URL}?${searchParams.toString()}`,
+        { skipYearFilter: true }
     );
     return {
         data: response.data ?? [],

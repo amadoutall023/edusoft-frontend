@@ -9,9 +9,10 @@ export interface HttpRequestOptions extends RequestInit {
     skipAuth?: boolean;
     method?: HttpMethod;
     suppressErrorLog?: boolean; // Suppress console.error for expected errors (e.g., 403 on optional endpoints)
+    skipYearFilter?: boolean; // Skip adding anneeScolaireId to the request
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8089';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ;
 
 let refreshPromise: Promise<void> | null = null;
 
@@ -63,7 +64,16 @@ async function parseResponse<T>(response: Response): Promise<T> {
 }
 
 export async function httpClient<T>(path: string, options: HttpRequestOptions = {}, retry = false): Promise<T> {
-    const url = path.startsWith('http') ? path : `${API_BASE_URL}${path}`;
+    const activeYearId = getStoredActiveYearId();
+    
+    // Add academic year as query parameter instead of header to avoid CORS issues
+    // Only add if not explicitly skipped and there's an active year
+    let url = path.startsWith('http') ? path : `${API_BASE_URL}${path}`;
+    if (activeYearId && !options.skipYearFilter && !path.includes('anneeScolaireId=')) {
+        const separator = url.includes('?') ? '&' : '?';
+        url = `${url}${separator}anneeScolaireId=${activeYearId}`;
+    }
+    
     const headers = new Headers(options.headers || {});
 
     if (!options.skipAuth) {
@@ -71,10 +81,6 @@ export async function httpClient<T>(path: string, options: HttpRequestOptions = 
         if (token) {
             headers.set('Authorization', `Bearer ${token}`);
         }
-    }
-    const activeYearId = getStoredActiveYearId();
-    if (activeYearId && !headers.has('X-Academic-Year-Id')) {
-        headers.set('X-Academic-Year-Id', activeYearId);
     }
 
     // For FormData, don't set Content-Type - let the browser set it with the boundary

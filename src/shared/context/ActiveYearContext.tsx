@@ -68,7 +68,7 @@ export function ActiveYearProvider({ children }: { children: React.ReactNode }) 
             if (err instanceof ApiError) {
                 setError(err.message);
             } else {
-                setError('Années scolaires indisponibles');
+                setError('Annees scolaires indisponibles');
             }
         } finally {
             setIsLoading(false);
@@ -91,7 +91,7 @@ export function ActiveYearProvider({ children }: { children: React.ReactNode }) 
             if (err instanceof ApiError) {
                 setError(err.message);
             } else {
-                setError('Impossible de définir l’année active');
+                setError('Impossible de definir l\'annee active');
             }
             throw err;
         } finally {
@@ -103,14 +103,15 @@ export function ActiveYearProvider({ children }: { children: React.ReactNode }) 
         void refresh();
     }, [refresh]);
 
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-        const onExternalYearChange = () => {
-            void refresh();
-        };
-        window.addEventListener(ACTIVE_YEAR_CHANGED_EVENT, onExternalYearChange);
-        return () => window.removeEventListener(ACTIVE_YEAR_CHANGED_EVENT, onExternalYearChange);
-    }, [refresh]);
+    // Disabled: This was causing constant reload issues that closed the select immediately
+    // useEffect(() => {
+    //     if (typeof window === 'undefined') return;
+    //     const onExternalYearChange = () => {
+    //         void refresh();
+    //     };
+    //     window.addEventListener(ACTIVE_YEAR_CHANGED_EVENT, onExternalYearChange);
+    //     return () => window.removeEventListener(ACTIVE_YEAR_CHANGED_EVENT, onExternalYearChange);
+    // }, [refresh]);
 
     const value = useMemo<ActiveYearContextShape>(() => ({
         activeYear,

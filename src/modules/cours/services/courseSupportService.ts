@@ -54,7 +54,9 @@ export async function downloadCourseSupport(
         return;
     }
     const token = tokenStorage.getAccessToken();
-    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8089';
+    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL
+    //  ?? 'http://localhost:8089'
+     ;
     const response = await fetch(`${baseUrl}/api/v1/cours/${coursId}/supports/${supportId}/download`, {
         headers: token ? { Authorization: `Bearer ${token}` } : undefined
     });

@@ -189,9 +189,10 @@ export async function fetchMyPresenceStats(): Promise<StudentPresenceStats> {
  */
 export async function fetchCoursByClasse(classeId: string): Promise<CoursEtudiant[]> {
     try {
+        // Skip year filter to avoid backend serialization issues
         const response = await httpClient<ApiResponse<any>>(
             `/api/v1/cours?classeId=${classeId}&size=100`,
-            { suppressErrorLog: true }
+            { suppressErrorLog: true, skipYearFilter: true }
         );
         // Le backend retourne { data: { content: [...] }, meta: {...} }
         const content = response.data?.content || response.data || [];
@@ -233,9 +234,10 @@ export async function fetchSessionsByClasse(classeId: string): Promise<SessionRe
     try {
         console.log('Fetching sessions for classeId:', classeId);
 
+        // Skip year filter to avoid backend serialization issues
         const response = await httpClient<ApiResponse<any>>(
             `/api/v1/sessions?classeId=${classeId}&size=100`,
-            { suppressErrorLog: true }
+            { suppressErrorLog: true, skipYearFilter: true }
         );
 
         console.log('Sessions response:', response);
@@ -274,14 +276,14 @@ export async function fetchMySessions(
         // Debug: afficher l'ID de la classe
         console.log('ID de la classe:', student.classe.id);
 
-        // Construire les parametres de requete
+        // Skip year filter to avoid backend serialization issues
         let url = `/api/v1/sessions?classeId=${student.classe.id}&size=100`;
         if (startDate) url += `&startDate=${startDate}`;
         if (endDate) url += `&endDate=${endDate}`;
 
         console.log('URL des sessions:', url);
 
-        const response = await httpClient<ApiResponse<any>>(url, { suppressErrorLog: true });
+        const response = await httpClient<ApiResponse<any>>(url, { suppressErrorLog: true, skipYearFilter: true });
 
         // Debug: afficher la réponse
         console.log('Réponse sessions:', response);
@@ -325,7 +327,8 @@ export async function fetchMyQRCode(): Promise<QRCodeResponse | null> {
             return null;
         }
 
-        const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8089';
+        const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+        //  ?? 'http://localhost:8089';
         const response = await fetch(`${API_BASE_URL}/api/auth/me/qrcode`, {
             method: 'GET',
             headers: {

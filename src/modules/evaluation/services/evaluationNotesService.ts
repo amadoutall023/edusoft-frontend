@@ -69,7 +69,7 @@ export async function downloadEvaluationNoteFile(
         return;
     }
     const token = tokenStorage.getAccessToken();
-    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8089';
+    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
     const response = await fetch(`${baseUrl}/api/v1/sessions/${sessionId}/notes-files/${fileId}/download`, {
         headers: token ? { Authorization: `Bearer ${token}` } : undefined
     });
