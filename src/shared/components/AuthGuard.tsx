@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/modules/auth/context/AuthContext';
 
@@ -11,11 +11,9 @@ interface AuthGuardProps {
 export default function AuthGuard({ children }: AuthGuardProps) {
     const router = useRouter();
     const { isAuthenticated, isLoading } = useAuth();
-    const [mounted, setMounted] = useState(false);
 
-    useEffect(() => {
-        setMounted(true);
-    }, []);
+    // Utiliser une constante pour éviter setState dans useEffect
+    const mounted = typeof window !== 'undefined';
 
     useEffect(() => {
         if (mounted && !isLoading && !isAuthenticated) {

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Search, Calendar, FileText, MapPin } from 'lucide-react';
+import { Search, FileText } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Pagination from '@/shared/components/Pagination';
 import { Cours } from '../types';
@@ -9,6 +9,7 @@ import { fetchCourses } from '../services/coursService';
 import { CoursResponseDto } from '@/shared/api/types';
 import { ApiError } from '@/shared/errors/ApiError';
 import CoursCard from './CoursCard';
+import { useAuth } from '@/modules/auth/context/AuthContext';
 
 const mapCoursDto = (cours: CoursResponseDto): Cours => {
     const total = cours.totalHour ?? 0;
@@ -29,12 +30,18 @@ const mapCoursDto = (cours: CoursResponseDto): Cours => {
         heuresRestantes: Math.max(0, total - completed),
         progression,
         classes: cours.classes?.map(classe => classe.libelle) ?? [],
-        module: cours.module?.libelle ?? null
+        module: cours.module?.libelle ?? null,
+        summary: cours.summary ?? null,
+        professorId: cours.professor?.id ?? null,
+        moduleId: cours.module?.id ?? null
     };
 };
 
 export default function CoursAttacheContent() {
     const router = useRouter();
+    const { roles } = useAuth();
+    const isProfesseur = roles.includes('ROLE_PROFESSEUR');
+    const isAttache = roles.includes('ROLE_ATTACHE_CLASSE');
     const [courses, setCourses] = useState<Cours[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -92,16 +99,8 @@ export default function CoursAttacheContent() {
     const endIndex = startIndex + itemsPerPage;
     const coursPagines = coursFiltres.slice(startIndex, endIndex);
 
-    const handleVoirPlanning = (coursId: string) => {
-        router.push(`/dashboard/planning?coursId=${coursId}`);
-    };
-
     const handleGererEvaluation = () => {
-        router.push('/dashboard/evaluation');
-    };
-
-    const handleGererSalle = () => {
-        router.push('/dashboard/salle');
+        router.push(isProfesseur ? '/dashboard/prof/evaluations' : '/dashboard/evaluation');
     };
 
     return (
@@ -141,17 +140,17 @@ export default function CoursAttacheContent() {
                         border: 'none',
                         borderRadius: '12px',
                         color: 'white',
-                        fontSize: '14px',
+                        fontSize: '14px', 
                         fontWeight: '600',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s ease',
-                        boxShadow: '0 4px 12px rgba(91,141,239,0.3)'
+                        cursor: 'pointer', 
+                        transition: 'all 0.2s ease', 
+                        boxShadow: '0 4px 12px rgba(91,141,239,0.3)' 
                     }}
                 >
                     <FileText size={18} />
                     Gérer évaluation
                 </button>
-                <button
+                {/* <button
                     onClick={handleGererSalle}
                     style={{
                         display: 'flex',
@@ -170,7 +169,7 @@ export default function CoursAttacheContent() {
                 >
                     <MapPin size={18} />
                     Gérer salle
-                </button>
+                </button> */}
             </div>
 
             {/* Search Section */}
@@ -232,7 +231,10 @@ export default function CoursAttacheContent() {
                                 key={cours.id}
                                 cours={cours}
                                 showActions={false}
-                                showCreateSession={true}
+                                showCreateSession={!isProfesseur}
+                                readOnly={isProfesseur}
+                                showSupportAccess={isProfesseur || isAttache}
+                                canManageSupports={isProfesseur}
                             />
                         ))}
                     </div>

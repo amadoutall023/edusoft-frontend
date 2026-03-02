@@ -43,6 +43,7 @@ import {
 import { fetchCourses } from '@/modules/cours/services/coursService';
 import { fetchProfessors } from '@/modules/prof/services/professorService';
 import { JourSemaine, SeancePlanning } from '../types';
+import { useAuth } from '@/modules/auth/context/AuthContext';
 
 const ALL_CLASSES = 'ALL_CLASSES';
 const ALL_MODULES = 'ALL_MODULES';
@@ -74,6 +75,39 @@ interface SessionFormState {
     salleId: string;
 }
 
+interface CalendarEventClickInfo {
+    event: {
+        extendedProps: {
+            session?: SessionResponseDto;
+            extendedProps?: Partial<SeancePlanning>;
+            [key: string]: unknown;
+        };
+    };
+}
+
+interface CalendarDateClickInfo {
+    date: Date;
+    dateStr: string;
+}
+
+interface CalendarSelectInfo {
+    start: Date;
+    end: Date;
+}
+
+interface CalendarEventDropInfo extends CalendarEventClickInfo {
+    event: {
+        start: Date | null;
+        end: Date | null;
+        extendedProps: {
+            session?: SessionResponseDto;
+            extendedProps?: Partial<SeancePlanning>;
+            [key: string]: unknown;
+        };
+    };
+    revert?: () => void;
+}
+
 function createFormState(overrides: Partial<SessionFormState> = {}): SessionFormState {
     return {
         classeId: '',
@@ -100,9 +134,125 @@ function computeHexColor(status?: SessionStatus | null): string {
     return '#6b7280';
 }
 
+function normalizeDate(rawDate: unknown): string | null {
+    if (!rawDate) return null;
+    const value = String(rawDate).trim();
+    if (!value) return null;
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        return value;
+    }
+
+    if (value.includes(',')) {
+        const [year, month, day] = value.split(',').map(part => part.trim());
+        if (!year || !month || !day) return null;
+        return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    }
+
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+        return parsed.toISOString().split('T')[0];
+    }
+
+    return null;
+}
+
+function normalizeTime(rawTime: unknown): string | null {
+    if (!rawTime) return null;
+    const value = String(rawTime).trim().replace(/,/g, ':');
+    if (!value || !value.includes(':')) return null;
+
+    const parts = value.split(':');
+    const hour = Number(parts[0]);
+    const minute = Number(parts[1]);
+    const second = Number(parts[2] ?? '0');
+
+    if ([hour, minute, second].some(part => Number.isNaN(part))) return null;
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59) return null;
+
+    return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${String(second).padStart(2, '0')}`;
+}
+
+function toMinutes(time: string): number {
+    const [hour, minute] = time.split(':').map(Number);
+    return hour * 60 + minute;
+}
+
+function fromMinutes(totalMinutes: number): string {
+    const normalized = ((totalMinutes % 1440) + 1440) % 1440;
+    const hour = Math.floor(normalized / 60);
+    const minute = normalized % 60;
+    return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`;
+}
+
+function computeEndTime(startHour: string, endHour?: unknown, duration?: number | null): string {
+    const normalizedEnd = normalizeTime(endHour);
+    if (normalizedEnd && toMinutes(normalizedEnd) > toMinutes(startHour)) {
+        return normalizedEnd;
+    }
+
+    if (typeof duration === 'number' && duration > 0) {
+        const durationInMinutes = duration <= 12 ? duration * 60 : duration;
+        return fromMinutes(toMinutes(startHour) + durationInMinutes);
+    }
+
+    return fromMinutes(toMinutes(startHour) + 120);
+}
+
+function normalizeSessionSchedule(session: SessionResponseDto): {
+    date: string;
+    startHour: string;
+    endHour: string;
+} | null {
+    const date = normalizeDate(session.date);
+    const startHour = normalizeTime(session.startHour);
+    if (!date || !startHour) return null;
+
+    return {
+        date,
+        startHour,
+        endHour: computeEndTime(startHour, session.endHour, session.duration)
+    };
+}
+
+function toInputTime(time?: string | null): string {
+    const normalized = normalizeTime(time);
+    if (!normalized) return '';
+    return normalized.slice(0, 5);
+}
+
+function toApiTime(time: string): string {
+    const normalized = normalizeTime(time);
+    return normalized ?? '08:00:00';
+}
+
+function formatLocalDate(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function formatLocalTime(date: Date): string {
+    const hour = String(date.getHours()).padStart(2, '0');
+    const minute = String(date.getMinutes()).padStart(2, '0');
+    return `${hour}:${minute}`;
+}
+
+function addMinutes(time: string, minutesToAdd: number): string {
+    const [hour, minute] = time.split(':').map(Number);
+    const total = hour * 60 + minute + minutesToAdd;
+    const normalized = ((total % 1440) + 1440) % 1440;
+    const nextHour = Math.floor(normalized / 60);
+    const nextMinute = normalized % 60;
+    return `${String(nextHour).padStart(2, '0')}:${String(nextMinute).padStart(2, '0')}`;
+}
+
 function mapSessionToEvent(session: SessionResponseDto): SeancePlanning {
-    const startDateTime = `${session.date}T${session.startHour}:00`;
-    const endDateTime = `${session.date}T${session.endHour}:00`;
+    const normalized = normalizeSessionSchedule(session);
+    const safeDate = normalized?.date ?? normalizeDate(session.date) ?? new Date().toISOString().split('T')[0];
+    const safeStartHour = normalized?.startHour ?? toApiTime(String(session.startHour ?? '08:00'));
+    const safeEndHour = normalized?.endHour ?? fromMinutes(toMinutes(safeStartHour) + 120);
 
     return {
         id: session.id,
@@ -118,10 +268,10 @@ function mapSessionToEvent(session: SessionResponseDto): SeancePlanning {
         professeurId: session.professor?.id ?? null,
         salle: session.salle?.libelle ?? 'Salle',
         salleId: session.salle?.id ?? null,
-        jour: JOUR_OPTIONS[new Date(session.date).getDay() - 1] || 'Lundi',
-        dateISO: session.date,
-        heureDebut: session.startHour,
-        heureFin: session.endHour,
+        jour: JOUR_OPTIONS[new Date(safeDate).getDay() - 1] || 'Lundi',
+        dateISO: safeDate,
+        heureDebut: safeStartHour.slice(0, 5),
+        heureFin: safeEndHour.slice(0, 5),
         couleur: computeColor(session.status),
         status: session.status,
         typeSession: session.typeSession,
@@ -130,6 +280,9 @@ function mapSessionToEvent(session: SessionResponseDto): SeancePlanning {
 }
 
 export default function PlanningFullCalendar() {
+    const { roles } = useAuth();
+    const isProfesseur = roles.includes('ROLE_PROFESSEUR');
+    const [isMobileView, setIsMobileView] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [moduleFilter, setModuleFilter] = useState(ALL_MODULES);
     const [salleFilter, setSalleFilter] = useState(ALL_SALLES);
@@ -154,6 +307,13 @@ export default function PlanningFullCalendar() {
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [calendarKey, setCalendarKey] = useState(0);
     const sessionPageSize = 100;
+    const selectedCourseForForm = useMemo(
+        () => courses.find(course => course.id === formState.coursId) ?? null,
+        [courses, formState.coursId]
+    );
+    const lockedProfessorId = selectedCourseForForm?.professor?.id ?? '';
+    const isProfessorLockedByCourse = Boolean(lockedProfessorId);
+    const effectiveProfessorId = lockedProfessorId || formState.professeurId;
 
     const loadSessionsPage = useCallback(async (page = 0, append = false) => {
         const result = await fetchSessions({
@@ -217,6 +377,28 @@ export default function PlanningFullCalendar() {
         void loadData();
     }, [loadData]);
 
+    useEffect(() => {
+        if (typeof window === 'undefined') {
+            return;
+        }
+        const mediaQuery = window.matchMedia('(max-width: 768px)');
+        const syncMobile = () => setIsMobileView(mediaQuery.matches);
+        syncMobile();
+        mediaQuery.addEventListener('change', syncMobile);
+        return () => mediaQuery.removeEventListener('change', syncMobile);
+    }, []);
+
+    useEffect(() => {
+        if (!calendarRef) {
+            return;
+        }
+        const api = calendarRef.getApi();
+        const targetView = isMobileView ? 'timeGridDay' : 'timeGridWeek';
+        if (api.view.type !== targetView) {
+            api.changeView(targetView);
+        }
+    }, [calendarRef, isMobileView]);
+
     const events = useMemo(() => {
         const mappedEvents = sessions
             .filter(session => {
@@ -246,20 +428,11 @@ export default function PlanningFullCalendar() {
                 return true;
             })
             .map(session => {
-                // Debug: console.log the session data
-                console.log('Session:', session.date, session.startHour, session.endHour);
+                const normalized = normalizeSessionSchedule(session);
+                if (!normalized) return null;
 
-                // Fix: Ensure proper ISO format - startHour may already include seconds
-                const formatTime = (time: string | null | undefined): string => {
-                    if (!time) return '08:00:00';
-                    // If time already has seconds (HH:MM:SS), use as is
-                    if (time.split(':').length === 3) return time;
-                    // If time only has hours and minutes (HH:MM), add seconds
-                    return `${time}:00`;
-                };
-
-                const eventStart = `${session.date}T${formatTime(session.startHour)}`;
-                const eventEnd = `${session.date}T${formatTime(session.endHour)}`;
+                const eventStart = `${normalized.date}T${normalized.startHour}`;
+                const eventEnd = `${normalized.date}T${normalized.endHour}`;
 
                 return {
                     id: session.id,
@@ -273,7 +446,8 @@ export default function PlanningFullCalendar() {
                         session: session
                     }
                 };
-            });
+            })
+            .filter((event): event is NonNullable<typeof event> => Boolean(event));
 
         console.log('Events mapped:', mappedEvents.length);
         return mappedEvents;
@@ -312,47 +486,102 @@ export default function PlanningFullCalendar() {
         [salles]
     );
 
-    const handleDateClick = useCallback((info: { dateStr: string }) => {
-        setSelectedDate(info.dateStr);
+    const applyCourseSelection = useCallback((courseId: string) => {
+        const course = courses.find(c => c.id === courseId);
+        const autoProfessorId = course?.professor?.id ?? '';
+        setFormState(prev => ({
+            ...prev,
+            coursId: courseId,
+            professeurId: autoProfessorId
+        }));
+    }, [courses]);
+
+    const openCreateModalWithSlot = useCallback((start: Date, end?: Date) => {
+        const date = formatLocalDate(start);
+        const startHour = formatLocalTime(start);
+        const endHour = end ? formatLocalTime(end) : addMinutes(startHour, 120);
+        setSelectedDate(date);
         setEditingSessionId(null);
         setFormState(createFormState({
-            date: info.dateStr,
+            date,
+            startHour,
+            endHour: endHour === startHour ? addMinutes(startHour, 120) : endHour,
             salleId: salles[0]?.id ?? ''
         }));
         setShowAddModal(true);
     }, [salles]);
 
-    const handleEventClick = useCallback((info: any) => {
+    const handleDateClick = useCallback((info: CalendarDateClickInfo) => {
+        if (isProfesseur) {
+            return;
+        }
+        openCreateModalWithSlot(info.date);
+    }, [isProfesseur, openCreateModalWithSlot]);
+
+    const handleSelect = useCallback((info: CalendarSelectInfo) => {
+        if (isProfesseur) {
+            return;
+        }
+        openCreateModalWithSlot(info.start, info.end);
+    }, [isProfesseur, openCreateModalWithSlot]);
+
+    const handleEventClick = useCallback((info: CalendarEventClickInfo) => {
+        if (isProfesseur) {
+            return;
+        }
         const session = info.event.extendedProps.session;
-        const seance = info.event.extendedProps.extendedProps;
+        const seanceRaw = info.event.extendedProps.extendedProps;
+        
+        // Validate that seance has required id before using
+        if (!seanceRaw?.id) {
+            return;
+        }
+        
+        const seance = seanceRaw as SeancePlanning;
 
         setSelectedEvent(seance);
-        setEditingSessionId(session.id);
+        setEditingSessionId(session?.id ?? null);
+        const normalizedStart = toInputTime(session?.startHour ?? '');
+        const normalizedEnd = toInputTime(session?.endHour ?? '');
+        const normalizedDate = normalizeDate(session?.date) ?? '';
         setFormState({
-            classeId: session.classe?.id ?? seance.classeId ?? '',
-            coursId: session.cours?.id ?? '',
-            date: session.date,
-            startHour: session.startHour,
-            endHour: session.endHour,
-            professeurId: session.professor?.id ?? '',
-            salleId: session.salle?.id ?? seance.salleId ?? ''
+            classeId: session?.classe?.id ?? seance?.classeId ?? '',
+            coursId: session?.cours?.id ?? '',
+            date: normalizedDate,
+            startHour: normalizedStart || '08:00',
+            endHour: normalizedEnd || '10:00',
+            professeurId: session?.professor?.id ?? '',
+            salleId: session?.salle?.id ?? seance?.salleId ?? ''
         });
         setShowAddModal(true);
-    }, []);
+    }, [isProfesseur]);
 
-    const handleEventDrop = useCallback(async (info: any) => {
+    const handleEventDrop = useCallback(async (info: CalendarEventDropInfo) => {
+        if (isProfesseur) {
+            if (typeof info.revert === 'function') info.revert();
+            return;
+        }
         const session = info.event.extendedProps.session;
-        const newDate = info.event.start ? info.event.start.toISOString().split('T')[0] : session.date;
+        if (!session) {
+            if (typeof info.revert === 'function') info.revert();
+            return;
+        }
+        const newDate = info.event.start
+            ? info.event.start.toISOString().split('T')[0]
+            : (normalizeDate(session.date) ?? new Date().toISOString().split('T')[0]);
 
         // Get time from the dropped event and format as HH:MM:SS
         const getTimeWithSeconds = (date: Date | null, fallback: string): string => {
-            if (!date) return fallback || '08:00:00';
+            if (!date) return toApiTime(fallback);
             const time = date.toTimeString().slice(0, 8); // HH:MM:SS format
             return time;
         };
 
-        const newStartHour = getTimeWithSeconds(info.event.start, session.startHour);
-        const newEndHour = getTimeWithSeconds(info.event.end, session.endHour);
+        const fallbackStart = normalizeTime(session.startHour) ?? '08:00:00';
+        const fallbackEnd = computeEndTime(fallbackStart, session.endHour, session.duration);
+        const newStartHour = getTimeWithSeconds(info.event.start, fallbackStart);
+        const droppedEndHour = getTimeWithSeconds(info.event.end, fallbackEnd);
+        const newEndHour = computeEndTime(newStartHour, droppedEndHour, session.duration);
 
         console.log('Event drop - new values:', { newDate, newStartHour, newEndHour, session: session.id });
 
@@ -391,9 +620,12 @@ export default function PlanningFullCalendar() {
         } finally {
             setIsMutating(false);
         }
-    }, [loadSessionsPage]);
+    }, [isProfesseur, loadSessionsPage]);
 
     const handleDeleteSeance = async (id: string) => {
+        if (isProfesseur) {
+            return;
+        }
         const result = await Swal.fire({
             title: 'Êtes-vous sûr ?',
             text: 'Voulez-vous vraiment supprimer cette séance ?',
@@ -431,6 +663,9 @@ export default function PlanningFullCalendar() {
 
     const handleSubmitSession = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
+        if (isProfesseur) {
+            return;
+        }
 
         if (!formState.classeId) {
             alert('Merci de sélectionner une classe.');
@@ -446,6 +681,9 @@ export default function PlanningFullCalendar() {
         }
 
         const selectedCourse = courses.find(course => course.id === formState.coursId);
+        const payloadStartHour = toApiTime(formState.startHour);
+        const payloadEndHour = computeEndTime(payloadStartHour, toApiTime(formState.endHour), null);
+        const payloadProfessorId = (selectedCourse?.professor?.id ?? formState.professeurId) || null;
 
         try {
             setIsMutating(true);
@@ -458,8 +696,8 @@ export default function PlanningFullCalendar() {
 
                 await updateSession(editingSessionId, {
                     date: formState.date,
-                    startHour: formState.startHour,
-                    endHour: formState.endHour,
+                    startHour: payloadStartHour,
+                    endHour: payloadEndHour,
                     duration: null,
                     typeSession: existingSession.typeSession,
                     modeSession: existingSession.modeSession,
@@ -470,14 +708,14 @@ export default function PlanningFullCalendar() {
                     moduleId: selectedCourse?.module?.id ?? existingSession.module?.id ?? null,
                     classeId: formState.classeId,
                     classIds: null,
-                    professorId: formState.professeurId || null,
+                    professorId: payloadProfessorId,
                     salleId: formState.salleId
                 });
             } else {
                 const payload: SessionRequestDto = {
                     date: formState.date,
-                    startHour: formState.startHour,
-                    endHour: formState.endHour,
+                    startHour: payloadStartHour,
+                    endHour: payloadEndHour,
                     duration: null,
                     typeSession: 'COURS',
                     modeSession: 'PRESENTIEL',
@@ -488,7 +726,7 @@ export default function PlanningFullCalendar() {
                     moduleId: selectedCourse?.module?.id ?? null,
                     classeId: formState.classeId,
                     classIds: null,
-                    professorId: formState.professeurId || null,
+                    professorId: payloadProfessorId,
                     salleId: formState.salleId
                 };
                 await createSession(payload);
@@ -524,14 +762,23 @@ export default function PlanningFullCalendar() {
 
     const handlePrev = () => {
         calendarRef?.getApi().prev();
+        if (calendarRef) {
+            setSelectedDate(calendarRef.getApi().getDate().toISOString().split('T')[0]);
+        }
     };
 
     const handleNext = () => {
         calendarRef?.getApi().next();
+        if (calendarRef) {
+            setSelectedDate(calendarRef.getApi().getDate().toISOString().split('T')[0]);
+        }
     };
 
     const handleToday = () => {
         calendarRef?.getApi().today();
+        if (calendarRef) {
+            setSelectedDate(calendarRef.getApi().getDate().toISOString().split('T')[0]);
+        }
     };
 
     if (isLoading) {
@@ -556,9 +803,10 @@ export default function PlanningFullCalendar() {
             style={{
                 display: 'flex',
                 flexDirection: 'column',
-                height: 'calc(100vh - 140px)',
+                height: isMobileView ? 'auto' : 'calc(100vh - 140px)',
+                minHeight: isMobileView ? 'calc(100vh - 110px)' : undefined,
                 background: 'white',
-                borderRadius: '24px',
+                borderRadius: isMobileView ? '16px' : '24px',
                 overflow: 'hidden',
                 boxShadow: '0 4px 24px rgba(0,0,0,0.08)'
             }}
@@ -607,10 +855,49 @@ export default function PlanningFullCalendar() {
                     .planning-controls {
                         flex-wrap: wrap !important;
                     }
+                    .planning-header {
+                        padding: 14px !important;
+                    }
+                    .planning-title {
+                        font-size: 18px !important;
+                    }
+                    .planning-control-field {
+                        width: 100% !important;
+                    }
+                    .planning-control-input,
+                    .planning-control-select {
+                        width: 100% !important;
+                        min-width: 100% !important;
+                    }
+                    .mobile-hide-filter {
+                        display: none !important;
+                    }
+                    .planning-calendar-nav {
+                        justify-content: space-between !important;
+                        margin-bottom: 10px !important;
+                    }
+                    .planning-date-badge {
+                        display: inline-flex !important;
+                    }
+                    :global(.fc .fc-timegrid-slot) {
+                        height: 40px !important;
+                    }
+                    :global(.fc .fc-timegrid-axis-cushion),
+                    :global(.fc .fc-timegrid-slot-label-cushion) {
+                        font-size: 11px !important;
+                    }
+                    :global(.fc .fc-col-header-cell-cushion) {
+                        font-size: 12px !important;
+                        padding: 8px 0 !important;
+                    }
+                    :global(.fc .fc-event-main) {
+                        font-size: 11px !important;
+                        line-height: 1.2;
+                    }
                 }
             `}</style>
 
-            <div style={{
+            <div className="planning-header" style={{
                 padding: '20px 32px',
                 borderBottom: '1px solid #f1f5f9',
                 display: 'flex',
@@ -619,7 +906,7 @@ export default function PlanningFullCalendar() {
                 flexWrap: 'wrap',
                 gap: '16px'
             }}>
-                <h1 style={{
+                <h1 className="planning-title" style={{
                     fontSize: '24px',
                     fontWeight: '700',
                     color: '#1e293b',
@@ -629,13 +916,14 @@ export default function PlanningFullCalendar() {
                 </h1>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }} className="planning-controls">
-                    <div style={{ position: 'relative' }}>
+                    <div style={{ position: 'relative' }} className="planning-control-field">
                         <Search size={18} color="#94a3b8" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)' }} />
                         <input
                             type="text"
                             placeholder="Rechercher..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
+                            className="planning-control-input"
                             style={{
                                 padding: '10px 16px 10px 42px',
                                 borderRadius: '12px',
@@ -648,11 +936,12 @@ export default function PlanningFullCalendar() {
                         />
                     </div>
 
-                    <div style={{ position: 'relative' }}>
+                    <div style={{ position: 'relative' }} className="planning-control-field">
                         <Layers size={16} color="#64748b" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', zIndex: 1 }} />
                         <select
                             value={selectedClasse}
                             onChange={(e) => setSelectedClasse(e.target.value)}
+                            className="planning-control-select"
                             style={{
                                 padding: '10px 36px 10px 36px',
                                 borderRadius: '12px',
@@ -673,11 +962,12 @@ export default function PlanningFullCalendar() {
                         <ChevronDown size={16} color="#64748b" style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
                     </div>
 
-                    <div style={{ position: 'relative' }}>
+                    <div style={{ position: 'relative' }} className="planning-control-field mobile-hide-filter">
                         <Layers size={16} color="#64748b" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', zIndex: 1 }} />
                         <select
                             value={moduleFilter}
                             onChange={(e) => setModuleFilter(e.target.value)}
+                            className="planning-control-select"
                             style={{
                                 padding: '10px 36px 10px 36px',
                                 borderRadius: '12px',
@@ -698,11 +988,12 @@ export default function PlanningFullCalendar() {
                         <ChevronDown size={16} color="#64748b" style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
                     </div>
 
-                    <div style={{ position: 'relative' }}>
+                    <div style={{ position: 'relative' }} className="planning-control-field mobile-hide-filter">
                         <Layers size={16} color="#64748b" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', zIndex: 1 }} />
                         <select
                             value={salleFilter}
                             onChange={(e) => setSalleFilter(e.target.value)}
+                            className="planning-control-select"
                             style={{
                                 padding: '10px 36px 10px 36px',
                                 borderRadius: '12px',
@@ -723,33 +1014,35 @@ export default function PlanningFullCalendar() {
                         <ChevronDown size={16} color="#64748b" style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
                     </div>
 
-                    <button
-                        onClick={() => {
-                            setEditingSessionId(null);
-                            setFormState(createFormState({
-                                date: new Date().toISOString().split('T')[0],
-                                salleId: salles[0]?.id ?? ''
-                            }));
-                            setShowAddModal(true);
-                        }}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            padding: '10px 20px',
-                            background: 'linear-gradient(135deg, #5B8DEF 0%, #4169B8 100%)',
-                            border: 'none',
-                            borderRadius: '12px',
-                            color: 'white',
-                            fontSize: '14px',
-                            fontWeight: '600',
-                            cursor: 'pointer',
-                            boxShadow: '0 4px 12px rgba(91,141,239,0.3)'
-                        }}
-                    >
-                        <Plus size={18} />
-                        Nouvelle séance
-                    </button>
+                    {!isProfesseur && (
+                        <button
+                            onClick={() => {
+                                setEditingSessionId(null);
+                                setFormState(createFormState({
+                                    date: new Date().toISOString().split('T')[0],
+                                    salleId: salles[0]?.id ?? ''
+                                }));
+                                setShowAddModal(true);
+                            }}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                padding: '10px 20px',
+                                background: 'linear-gradient(135deg, #5B8DEF 0%, #4169B8 100%)',
+                                border: 'none',
+                                borderRadius: '12px',
+                                color: 'white',
+                                fontSize: '14px',
+                                fontWeight: '600',
+                                cursor: 'pointer',
+                                boxShadow: '0 4px 12px rgba(91,141,239,0.3)'
+                            }}
+                        >
+                            <Plus size={18} />
+                            Nouvelle séance
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -758,12 +1051,24 @@ export default function PlanningFullCalendar() {
                 padding: '16px 24px',
                 overflow: 'hidden'
             }}>
-                <div style={{
+                <div className="planning-calendar-nav" style={{
                     display: 'flex',
                     gap: '8px',
                     marginBottom: '16px',
                     justifyContent: 'flex-end'
                 }}>
+                    <span className="planning-date-badge" style={{
+                        display: 'none',
+                        padding: '8px 10px',
+                        borderRadius: '999px',
+                        border: '1px solid #dbeafe',
+                        background: '#eff6ff',
+                        color: '#1e3a8a',
+                        fontSize: '12px',
+                        fontWeight: 600
+                    }}>
+                        {new Date(selectedDate).toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' })}
+                    </span>
                     <button
                         onClick={handlePrev}
                         style={{
@@ -791,7 +1096,7 @@ export default function PlanningFullCalendar() {
                             cursor: 'pointer'
                         }}
                     >
-                        Aujourd'hui
+                        Aujourd&apos;hui
                     </button>
                     <button
                         onClick={handleNext}
@@ -814,9 +1119,9 @@ export default function PlanningFullCalendar() {
                     key={calendarKey}
                     ref={(el) => setCalendarRef(el)}
                     plugins={[timeGridPlugin, interactionPlugin]}
-                    initialView="timeGridWeek"
+                    initialView={isMobileView ? 'timeGridDay' : 'timeGridWeek'}
                     headerToolbar={false}
-                    events={(info, successCallback, failureCallback) => {
+                    events={(info, successCallback) => {
                         // Debug: Log the date range FullCalendar is requesting
                         console.log('FullCalendar requesting events for:', info.start, 'to', info.end);
                         console.log('Total events available:', events.length);
@@ -828,15 +1133,15 @@ export default function PlanningFullCalendar() {
 
                         successCallback(events);
                     }}
-                    editable={true}
-                    droppable={true}
-                    selectable={true}
+                    editable={!isProfesseur}
+                    droppable={!isProfesseur}
+                    selectable={!isProfesseur}
                     selectMirror={true}
-                    dayMaxEvents={true}
+                    dayMaxEvents={!isMobileView}
                     weekends={true}
                     slotMinTime="08:00:00"
                     slotMaxTime="18:00:00"
-                    slotDuration="02:00:00"
+                    slotDuration={isMobileView ? '01:00:00' : '02:00:00'}
                     allDaySlot={false}
                     height="auto"
                     locale="fr"
@@ -857,9 +1162,13 @@ export default function PlanningFullCalendar() {
                         minute: '2-digit',
                         meridiem: false
                     }}
-                    dateClick={handleDateClick}
+                    datesSet={(info) => {
+                        setSelectedDate(info.start.toISOString().split('T')[0]);
+                    }}
+                    dateClick={isProfesseur ? undefined : handleDateClick}
                     eventClick={handleEventClick}
-                    eventDrop={handleEventDrop}
+                    eventDrop={isProfesseur ? undefined : handleEventDrop}
+                    select={isProfesseur ? undefined : handleSelect}
                     eventContent={(arg) => {
                         const props = arg.event.extendedProps;
                         const seance = props?.extendedProps || props;
@@ -1028,7 +1337,7 @@ export default function PlanningFullCalendar() {
                                     name="cours"
                                     required
                                     value={formState.coursId}
-                                    onChange={(e) => setFormState(prev => ({ ...prev, coursId: e.target.value }))}
+                                    onChange={(e) => applyCourseSelection(e.target.value)}
                                     style={{
                                         width: '100%',
                                         padding: '10px 14px',
@@ -1051,16 +1360,17 @@ export default function PlanningFullCalendar() {
                                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#4a5568', marginBottom: '6px' }}>Professeur</label>
                                 <select
                                     name="professeur"
-                                    value={formState.professeurId}
+                                    value={effectiveProfessorId}
                                     onChange={(e) => setFormState(prev => ({ ...prev, professeurId: e.target.value }))}
+                                    disabled={isProfessorLockedByCourse}
                                     style={{
                                         width: '100%',
                                         padding: '10px 14px',
                                         borderRadius: '10px',
                                         border: '1.5px solid #e2e8f0',
                                         fontSize: '14px',
-                                        background: 'white',
-                                        cursor: 'pointer',
+                                        background: isProfessorLockedByCourse ? '#f1f5f9' : 'white',
+                                        cursor: isProfessorLockedByCourse ? 'not-allowed' : 'pointer',
                                         color: '#1a202c'
                                     }}
                                 >

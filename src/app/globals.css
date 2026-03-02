@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import "../../node_modules/tailwindcss/index.css";
 
 :root {
   --background: #ffffff;
@@ -29,6 +29,17 @@ body {
 
 html {
   height: 100%;
+}
+
+/* Force black text in modals for better visibility */
+.fixed.z-1000,
+[class*="fixed"][style*="z-index: 1000"] {
+  color: #000000 !important;
+}
+
+.fixed.z-1000 *,
+[class*="fixed"][style*="z-index: 1000"] * {
+  color: #000000 !important;
 }
 
 /* Global input styles for search fields */

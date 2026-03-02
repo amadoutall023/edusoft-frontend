@@ -41,7 +41,6 @@ import {
 } from '@/modules/structure/services/structureService';
 import { fetchCourses } from '@/modules/cours/services/coursService';
 import { fetchProfessors } from '@/modules/prof/services/professorService';
-import PlanningMobileView from './PlanningMobileView';
 
 const ALL_CLASSES = 'ALL_CLASSES';
 const ALL_MODULES = 'ALL_MODULES';
@@ -153,26 +152,6 @@ function isWithinWeek(dateISO: string, week: WeekOption) {
     return dateISO >= week.debut && dateISO <= week.fin;
 }
 
-// Hook personnalisé pour détecter si l'écran est mobile
-function useIsMobile(breakpoint = 768) {
-    const [isMobile, setIsMobile] = useState(false);
-
-    useEffect(() => {
-        const checkMobile = () => {
-            setIsMobile(window.innerWidth < breakpoint);
-        };
-
-        // Vérifier initial
-        checkMobile();
-
-        // Écouter les changements de taille
-        window.addEventListener('resize', checkMobile);
-        return () => window.removeEventListener('resize', checkMobile);
-    }, [breakpoint]);
-
-    return isMobile;
-}
-
 function mapSessionToSeance(session: SessionResponseDto): SeancePlanning {
     const jour = normalizeJour(session.date);
     return {
@@ -256,7 +235,7 @@ export default function PlanningContent() {
     const [hasMoreSessions, setHasMoreSessions] = useState(false);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [isMobileView, setIsMobileView] = useState(false);
-    const isMobile = useIsMobile(768);
+    const [selectedMobileDay, setSelectedMobileDay] = useState<JourSemaine>('Lundi');
     const sessionPageSize = 100;
 
     const loadSessionsPage = useCallback(async (page = 0, append = false) => {
@@ -318,6 +297,23 @@ export default function PlanningContent() {
         void loadData();
     }, [loadData]);
 
+    useEffect(() => {
+        if (typeof window === 'undefined') {
+            return;
+        }
+        const mediaQuery = window.matchMedia('(max-width: 768px)');
+        const syncView = () => setIsMobileView(mediaQuery.matches);
+        syncView();
+        mediaQuery.addEventListener('change', syncView);
+        return () => mediaQuery.removeEventListener('change', syncView);
+    }, []);
+
+    useEffect(() => {
+        if (isMobileView) {
+            setViewMode('horizontal');
+        }
+    }, [isMobileView]);
+
     const sessionMap = useMemo(() => {
         const entries = new Map<string, SessionResponseDto>();
         sessions.forEach(session => {
@@ -372,13 +368,6 @@ export default function PlanningContent() {
         }
     }, [selectedSemaine, weekMap]);
 
-    // Effet pour détecter automatiquement le mode mobile
-    useEffect(() => {
-        if (isMobile) {
-            setIsMobileView(true);
-        }
-    }, [isMobile]);
-
     const filteredSeances = useMemo(() => {
         return seances.filter(seance => {
             if (searchTerm) {
@@ -403,6 +392,50 @@ export default function PlanningContent() {
             return true;
         });
     }, [moduleFilter, seances, searchTerm, selectedClasse, selectedSemaine, weekMap]);
+
+    const mobileSessionsByDay = useMemo(() => {
+        const byDay: Record<JourSemaine, SeancePlanning[]> = {
+            Lundi: [],
+            Mardi: [],
+            Mercredi: [],
+            Jeudi: [],
+            Vendredi: [],
+            Samedi: []
+        };
+        filteredSeances.forEach(seance => {
+            byDay[seance.jour].push(seance);
+        });
+        return byDay;
+    }, [filteredSeances]);
+
+    const mobileDayCounts = useMemo(
+        () => JOUR_OPTIONS.map(day => ({ day, count: mobileSessionsByDay[day]?.length ?? 0 })),
+        [mobileSessionsByDay]
+    );
+
+    const mobileSelectedDaySessions = useMemo(() => {
+        const sessionsForDay = mobileSessionsByDay[selectedMobileDay] ?? [];
+        return [...sessionsForDay].sort((a, b) => {
+            if (a.dateISO !== b.dateISO) {
+                return a.dateISO.localeCompare(b.dateISO);
+            }
+            return a.heureDebut.localeCompare(b.heureDebut);
+        });
+    }, [mobileSessionsByDay, selectedMobileDay]);
+
+    useEffect(() => {
+        if (!isMobileView) {
+            return;
+        }
+        const currentDayCount = mobileSessionsByDay[selectedMobileDay]?.length ?? 0;
+        if (currentDayCount > 0) {
+            return;
+        }
+        const firstDayWithSessions = JOUR_OPTIONS.find(day => (mobileSessionsByDay[day]?.length ?? 0) > 0);
+        if (firstDayWithSessions) {
+            setSelectedMobileDay(firstDayWithSessions);
+        }
+    }, [isMobileView, mobileSessionsByDay, selectedMobileDay]);
 
     const planningGrid = useMemo(() => {
         const grid: Record<string, Record<string, SeancePlanning[]>> = {};
@@ -510,6 +543,31 @@ export default function PlanningContent() {
         setFormState(createFormState());
     };
 
+    const applyCourseDefaults = useCallback((courseId: string, currentState: SessionFormState): SessionFormState => {
+        if (!courseId) {
+            return { ...currentState, coursId: '' };
+        }
+
+        const selectedCourse = courses.find(course => course.id === courseId);
+        if (!selectedCourse) {
+            return { ...currentState, coursId: courseId };
+        }
+
+        const courseClassIds = selectedCourse.classes?.map(classe => classe.id).filter(Boolean) ?? [];
+        const autoClasseId = courseClassIds.includes(currentState.classeId)
+            ? currentState.classeId
+            : (courseClassIds[0] ?? currentState.classeId);
+
+        const autoProfessorId = selectedCourse.professor?.id ?? currentState.professeurId;
+
+        return {
+            ...currentState,
+            coursId: courseId,
+            classeId: autoClasseId,
+            professeurId: autoProfessorId
+        };
+    }, [courses]);
+
     const handleOpenCreateModal = (preset?: Partial<SessionFormState>) => {
         if (selectedClasse === ALL_CLASSES || !selectedSemaine) {
             alert('Sélectionnez une classe et une semaine avant d’ajouter une séance.');
@@ -528,6 +586,10 @@ export default function PlanningContent() {
             ...preset
         }));
         setShowAddModal(true);
+    };
+
+    const handleCourseChange = (courseId: string) => {
+        setFormState(prev => applyCourseDefaults(courseId, prev));
     };
 
     const handleEditSeance = (seance: SeancePlanning) => {
@@ -553,14 +615,24 @@ export default function PlanningContent() {
 
     const handleSubmitSession = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        if (!formState.classeId) {
-            alert('Merci de sélectionner une classe.');
-            return;
-        }
         if (!formState.coursId) {
             alert('Merci de sélectionner un cours.');
             return;
         }
+
+        const selectedCourse = courses.find(course => course.id === formState.coursId);
+        const effectiveClasseId = formState.classeId || selectedCourse?.classes?.[0]?.id || '';
+        if (!effectiveClasseId) {
+            alert('Merci de sélectionner une classe.');
+            return;
+        }
+
+        const effectiveProfessorId = formState.professeurId || selectedCourse?.professor?.id || '';
+        if (!effectiveProfessorId) {
+            alert('Merci de sélectionner un professeur.');
+            return;
+        }
+
         const salle = salles.find(salleItem =>
             salleItem.id === formState.salleInput ||
             salleItem.libelle.toLowerCase() === formState.salleInput.toLowerCase()
@@ -569,7 +641,6 @@ export default function PlanningContent() {
             alert('Merci de sélectionner une salle existante.');
             return;
         }
-        const selectedCourse = courses.find(course => course.id === formState.coursId);
         const [startHour, endHour] = formState.creneau.split('-');
         try {
             setIsMutating(true);
@@ -585,10 +656,10 @@ export default function PlanningContent() {
                         date: dateFromWeekAndDay(weekStart, formState.jour),
                         startHour,
                         endHour,
-                        classeId: formState.classeId,
+                        classeId: effectiveClasseId,
                         coursId: formState.coursId,
                         moduleId: selectedCourse?.module?.id ?? session.module?.id ?? null,
-                        professorId: formState.professeurId || session.professor?.id || null,
+                        professorId: effectiveProfessorId || session.professor?.id || null,
                         salleId: salle.id,
                         libelle: selectedCourse?.libelle ?? session.libelle
                     })
@@ -619,9 +690,9 @@ export default function PlanningContent() {
                     sessionSummary: null,
                     coursId: selectedCourse.id,
                     moduleId: selectedCourse.module?.id ?? null,
-                    classeId: formState.classeId,
+                    classeId: effectiveClasseId,
                     classIds: null,
-                    professorId: formState.professeurId || null,
+                    professorId: effectiveProfessorId || null,
                     salleId: salle.id
                 };
                 await createSession(payload);
@@ -694,19 +765,22 @@ export default function PlanningContent() {
             style={{
                 display: 'flex',
                 flexDirection: 'column',
-                height: 'calc(100vh - 140px)',
+                height: isMobileView ? 'auto' : 'calc(100vh - 140px)',
+                minHeight: isMobileView ? 'calc(100vh - 110px)' : undefined,
                 background: 'white',
-                borderRadius: '24px',
+                borderRadius: isMobileView ? '16px' : '24px',
                 overflow: 'hidden',
                 boxShadow: '0 4px 24px rgba(0,0,0,0.08)'
             }}>
             <style jsx>{`
                 @media (max-width: 768px) {
                     .planning-container {
-                        padding: 8px !important;
+                        border-radius: 16px !important;
                     }
                     .header-controls {
                         flex-wrap: wrap !important;
+                        width: 100%;
+                        gap: 8px !important;
                     }
                     .view-label {
                         display: inline !important;
@@ -714,19 +788,91 @@ export default function PlanningContent() {
                     .mobile-hidden {
                         display: none !important;
                     }
-                }
-                @media (max-width: 640px) {
                     .planning-header {
-                        padding: 12px 16px !important;
+                        padding: 14px !important;
+                    }
+                    .planning-header h1 {
+                        font-size: 18px !important;
+                    }
+                    .search-input,
+                    .planning-filter {
+                        width: 100% !important;
+                        min-width: 100% !important;
+                    }
+                    .planning-actions {
+                        width: 100%;
+                        justify-content: space-between;
+                        gap: 8px !important;
                     }
                     .planning-info {
-                        padding: 8px 16px !important;
+                        padding: 10px 14px !important;
+                        align-items: flex-start !important;
+                        gap: 10px !important;
                         flex-direction: column !important;
-                        gap: 8px !important;
+                    }
+                    .planning-body {
+                        padding: 10px !important;
+                    }
+                    .planning-mobile-day {
+                        border: 1px solid #e2e8f0;
+                        border-radius: 12px;
+                        background: #fff;
+                    }
+                    .planning-mobile-day-chip {
+                        display: flex;
+                        align-items: center;
+                        justify-content: space-between;
+                        min-width: 92px;
+                        padding: 8px 10px;
+                        border-radius: 999px;
+                        border: 1px solid #dbeafe;
+                        background: #f8fbff;
+                        color: #1e3a8a;
+                        font-size: 12px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        white-space: nowrap;
+                    }
+                    .planning-mobile-day-chip.active {
+                        background: linear-gradient(135deg, #5B8DEF 0%, #4169B8 100%);
+                        color: #fff;
+                        border-color: transparent;
+                        box-shadow: 0 8px 20px rgba(65, 105, 184, 0.28);
+                    }
+                    .planning-mobile-timeline {
+                        border: 1px solid #e2e8f0;
+                        border-radius: 14px;
+                        overflow: hidden;
+                        background: #fff;
+                    }
+                    .planning-mobile-row {
+                        display: grid;
+                        grid-template-columns: 72px 1fr;
+                        gap: 10px;
+                        padding: 10px 12px;
+                        border-bottom: 1px solid #f1f5f9;
+                    }
+                    .planning-mobile-row:last-child {
+                        border-bottom: none;
+                    }
+                    .planning-mobile-time {
+                        color: #334155;
+                        font-size: 11px;
+                        font-weight: 700;
+                        display: flex;
+                        flex-direction: column;
+                        align-items: flex-start;
+                        justify-content: center;
+                        gap: 2px;
+                    }
+                }
+                @media (max-width: 640px) {
+                    .planning-mobile-card {
+                        padding: 10px !important;
                     }
                 }
             `}</style>
-            <div style={{
+            <div className="planning-header" style={{
                 padding: '20px 32px',
                 borderBottom: '1px solid #f1f5f9',
                 display: 'flex',
@@ -744,7 +890,7 @@ export default function PlanningContent() {
                     Planning des séances
                 </h1>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div className="header-controls" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <div style={{ position: 'relative' }}>
                         <Search size={18} color="#94a3b8" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)' }} />
                         <input
@@ -752,6 +898,7 @@ export default function PlanningContent() {
                             placeholder="Rechercher..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
+                            className="search-input"
                             style={{
                                 padding: '10px 16px 10px 42px',
                                 borderRadius: '12px',
@@ -769,6 +916,7 @@ export default function PlanningContent() {
                         <select
                             value={selectedSemaine}
                             onChange={(e) => setSelectedSemaine(e.target.value)}
+                            className="planning-filter"
                             style={{
                                 padding: '10px 36px 10px 36px',
                                 borderRadius: '12px',
@@ -795,6 +943,7 @@ export default function PlanningContent() {
                         <select
                             value={selectedClasse}
                             onChange={(e) => setSelectedClasse(e.target.value)}
+                            className="planning-filter"
                             style={{
                                 padding: '10px 36px 10px 36px',
                                 borderRadius: '12px',
@@ -820,6 +969,7 @@ export default function PlanningContent() {
                         <select
                             value={moduleFilter}
                             onChange={(e) => setModuleFilter(e.target.value)}
+                            className="planning-filter"
                             style={{
                                 padding: '10px 36px 10px 36px',
                                 borderRadius: '12px',
@@ -840,105 +990,82 @@ export default function PlanningContent() {
                         <ChevronDown size={16} color="#64748b" style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
                     </div>
 
-                    <button
-                        onClick={() => setShowCreatePlanningModal(true)}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            padding: '10px 20px',
-                            background: 'linear-gradient(135deg, #5B8DEF 0%, #4169B8 100%)',
-                            border: 'none',
-                            borderRadius: '12px',
-                            color: 'white',
-                            fontSize: '14px',
-                            fontWeight: '600',
-                            cursor: 'pointer',
-                            boxShadow: '0 4px 12px rgba(91,141,239,0.3)'
-                        }}
-                    >
-                        <Plus size={18} />
-                        Nouveau Planning
-                    </button>
-
-                    <button
-                        onClick={() => setViewMode(viewMode === 'vertical' ? 'horizontal' : 'vertical')}
-                        title={viewMode === 'vertical' ? 'Vue horizontale' : 'Vue verticale'}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            padding: '10px 14px',
-                            background: viewMode === 'horizontal' ? 'linear-gradient(135deg, #5B8DEF 0%, #4169B8 100%)' : 'white',
-                            border: '1.5px solid #e2e8f0',
-                            borderRadius: '12px',
-                            color: viewMode === 'horizontal' ? 'white' : '#64748b',
-                            fontSize: '14px',
-                            fontWeight: '500',
-                            cursor: 'pointer',
-                            boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
-                        }}
-                    >
-                        <RotateCw size={18} />
-                        <span className="view-label" style={{ display: 'none' }}>{viewMode === 'vertical' ? 'H' : 'V'}</span>
-                    </button>
-
-                    {/* Bouton vue mobile/desktop */}
-                    <button
-                        onClick={() => setIsMobileView(!isMobileView)}
-                        title={isMobileView ? 'Vue tableau' : 'Vue mobile'}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            padding: '10px 14px',
-                            background: isMobileView ? 'linear-gradient(135deg, #5B8DEF 0%, #4169B8 100%)' : 'white',
-                            border: '1.5px solid #e2e8f0',
-                            borderRadius: '12px',
-                            color: isMobileView ? 'white' : '#64748b',
-                            fontSize: '14px',
-                            fontWeight: '500',
-                            cursor: 'pointer',
-                            boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
-                        }}
-                    >
-                        {isMobileView ? (
-                            <Layers size={18} />
-                        ) : (
-                            <Calendar size={18} />
-                        )}
-                        <span style={{ display: 'none' }}>{isMobileView ? 'Tableau' : 'Mobile'}</span>
-                    </button>
-
-                    {currentPlanning && (
+                    <div className="planning-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                         <button
-                            onClick={() => handleOpenCreateModal()}
-                            disabled={isMutating}
+                            onClick={() => setShowCreatePlanningModal(true)}
                             style={{
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: '8px',
                                 padding: '10px 20px',
-                                background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+                                background: 'linear-gradient(135deg, #5B8DEF 0%, #4169B8 100%)',
                                 border: 'none',
                                 borderRadius: '12px',
                                 color: 'white',
                                 fontSize: '14px',
                                 fontWeight: '600',
                                 cursor: 'pointer',
-                                boxShadow: '0 4px 12px rgba(34,197,94,0.3)',
-                                opacity: isMutating ? 0.7 : 1
+                                boxShadow: '0 4px 12px rgba(91,141,239,0.3)'
                             }}
                         >
                             <Plus size={18} />
-                            Ajouter
+                            Nouveau Planning
                         </button>
-                    )}
+
+                        {!isMobileView && (
+                            <button
+                                onClick={() => setViewMode(viewMode === 'vertical' ? 'horizontal' : 'vertical')}
+                                title={viewMode === 'vertical' ? 'Vue horizontale' : 'Vue verticale'}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    padding: '10px 14px',
+                                    background: viewMode === 'horizontal' ? 'linear-gradient(135deg, #5B8DEF 0%, #4169B8 100%)' : 'white',
+                                    border: '1.5px solid #e2e8f0',
+                                    borderRadius: '12px',
+                                    color: viewMode === 'horizontal' ? 'white' : '#64748b',
+                                    fontSize: '14px',
+                                    fontWeight: '500',
+                                    cursor: 'pointer',
+                                    boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
+                                }}
+                            >
+                                <RotateCw size={18} />
+                                <span className="view-label" style={{ display: 'none' }}>{viewMode === 'vertical' ? 'H' : 'V'}</span>
+                            </button>
+                        )}
+
+                        {currentPlanning && (
+                            <button
+                                onClick={() => handleOpenCreateModal()}
+                                disabled={isMutating}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    padding: '10px 20px',
+                                    background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+                                    border: 'none',
+                                    borderRadius: '12px',
+                                    color: 'white',
+                                    fontSize: '14px',
+                                    fontWeight: '600',
+                                    cursor: 'pointer',
+                                    boxShadow: '0 4px 12px rgba(34,197,94,0.3)',
+                                    opacity: isMutating ? 0.7 : 1
+                                }}
+                            >
+                                <Plus size={18} />
+                                Ajouter
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
 
             {currentPlanning && (
-                <div style={{
+                <div className="planning-info" style={{
                     padding: '12px 32px',
                     background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)',
                     borderBottom: '1px solid #bae6fd',
@@ -973,774 +1100,839 @@ export default function PlanningContent() {
                 </div>
             )}
 
-            <div style={{
+            <div className="planning-body" style={{
                 flex: 1,
                 padding: '16px 24px',
                 overflow: 'hidden',
                 display: 'flex',
                 flexDirection: 'column'
             }}>
-                {/* Vue mobile - lignes par jour */}
-                {isMobileView ? (
-                    <PlanningMobileView
-                        seances={filteredSeances}
-                        onSeanceClick={(seance) => setSelectedSeance(seance)}
-                        onAddSeance={(jour) => handleOpenCreateModal({ jour })}
-                        currentPlanning={!!currentPlanning}
-                    />
-                ) : (
-                    <>
-                        {viewMode === 'vertical' && (
-                            <div style={{
-                                display: 'grid',
-                                gridTemplateColumns: '100px repeat(6, 1fr)',
-                                gap: '8px',
-                                marginBottom: '8px',
-                                flexShrink: 0
-                            }}>
-                                <div
-                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: currentPlanning ? 'pointer' : 'default' }}
-                                    onClick={() => currentPlanning && handleOpenCreateModal()}
+                {isMobileView && (
+                    <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        <div style={{ display: 'flex', overflowX: 'auto', gap: '8px', paddingBottom: '4px' }}>
+                            {mobileDayCounts.map(item => (
+                                <button
+                                    key={`mobile-chip-${item.day}`}
+                                    type="button"
+                                    className={`planning-mobile-day-chip${selectedMobileDay === item.day ? ' active' : ''}`}
+                                    onClick={() => setSelectedMobileDay(item.day)}
                                 >
-                                    <div style={{
-                                        width: '44px',
-                                        height: '44px',
-                                        background: 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)',
-                                        borderRadius: '12px',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
-                                    }}>
-                                        <Plus size={20} color="#cbd5e1" />
-                                    </div>
-                                </div>
+                                    <span>{item.day.slice(0, 3)}</span>
+                                    <span style={{ opacity: selectedMobileDay === item.day ? 0.95 : 0.7 }}>{item.count}</span>
+                                </button>
+                            ))}
+                        </div>
 
-                                {JOUR_OPTIONS.map(jour => (
-                                    <div key={jour} style={{
-                                        background: 'linear-gradient(135deg, #5B8DEF 0%, #4169B8 100%)',
-                                        color: 'white',
-                                        textAlign: 'center',
-                                        padding: '12px',
-                                        borderRadius: '12px',
-                                        fontWeight: '600',
-                                        fontSize: '13px',
-                                        boxShadow: '0 4px 12px rgba(91,141,239,0.35)'
+                        <div className="planning-mobile-timeline">
+                            <div style={{
+                                padding: '10px 12px',
+                                borderBottom: '1px solid #e2e8f0',
+                                fontWeight: 700,
+                                color: '#334155',
+                                fontSize: '13px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between'
+                            }}>
+                                <span>{selectedMobileDay}</span>
+                                <span style={{ fontWeight: 600, fontSize: '12px', color: '#64748b' }}>
+                                    {mobileSelectedDaySessions.length} séance(s)
+                                </span>
+                            </div>
+                            <div style={{ padding: '6px' }}>
+                                {mobileSelectedDaySessions.length === 0 && (
+                                    <div style={{
+                                        border: '1px dashed #cbd5e1',
+                                        borderRadius: '10px',
+                                        padding: '14px 10px',
+                                        color: '#94a3b8',
+                                        fontSize: '12px',
+                                        textAlign: 'center'
                                     }}>
-                                        {jour}
+                                        Aucune séance planifiée ce jour.
+                                    </div>
+                                )}
+                                {mobileSelectedDaySessions.map(seance => (
+                                    <div key={`mobile-row-${seance.id}`} className="planning-mobile-row">
+                                        <div className="planning-mobile-time">
+                                            <span>{seance.heureDebut}</span>
+                                            <span style={{ fontSize: '10px', fontWeight: 500, opacity: 0.7 }}>→ {seance.heureFin}</span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setSelectedSeance(seance)}
+                                            className="planning-mobile-card"
+                                            style={{
+                                                background: getCouleurGradient(seance.status),
+                                                borderRadius: '10px',
+                                                border: 'none',
+                                                color: 'white',
+                                                textAlign: 'left',
+                                                padding: '12px',
+                                                cursor: 'pointer'
+                                            }}
+                                        >
+                                            <div style={{ fontWeight: 700, fontSize: '13px' }}>{seance.cours}</div>
+                                            <div style={{ fontSize: '12px', opacity: 0.95 }}>{seance.classe}</div>
+                                            <div style={{ fontSize: '11px', opacity: 0.85 }}>{seance.professeur}</div>
+                                        </button>
                                     </div>
                                 ))}
                             </div>
-                        )}
+                        </div>
+                    </div>
+                )}
 
-                        {viewMode === 'vertical' && (
+                {!isMobileView && viewMode === 'vertical' && (
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: '100px repeat(6, 1fr)',
+                        gap: '8px',
+                        marginBottom: '8px',
+                        flexShrink: 0
+                    }}>
+                        <div
+                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: currentPlanning ? 'pointer' : 'default' }}
+                            onClick={() => currentPlanning && handleOpenCreateModal()}
+                        >
                             <div style={{
-                                flex: 1,
-                                overflowY: 'auto',
-                                overflowX: 'hidden'
+                                width: '44px',
+                                height: '44px',
+                                background: 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)',
+                                borderRadius: '12px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
                             }}>
-                                {TIME_SLOTS.map(creneau => (
-                                    <div
-                                        key={creneau.id}
-                                        style={{
-                                            display: 'grid',
-                                            gridTemplateColumns: '100px repeat(6, 1fr)',
-                                            gap: '8px',
-                                            marginBottom: '8px'
-                                        }}
-                                    >
-                                        <div style={{
-                                            background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
-                                            border: '1.5px solid #e2e8f0',
-                                            borderRadius: '10px',
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            fontWeight: '600',
-                                            color: '#475569',
-                                            fontSize: '11px',
-                                            padding: '8px 4px',
-                                            minHeight: '60px'
-                                        }}>
-                                            <span>{creneau.debut}</span>
-                                            <span style={{ opacity: 0.6, fontSize: '9px' }}>à</span>
-                                            <span>{creneau.fin}</span>
-                                        </div>
+                                <Plus size={20} color="#cbd5e1" />
+                            </div>
+                        </div>
 
-                                        {JOUR_OPTIONS.map(jour => {
-                                            const seancesCellule = planningGrid[jour]?.[creneau.id] ?? [];
+                        {JOUR_OPTIONS.map(jour => (
+                            <div key={jour} style={{
+                                background: 'linear-gradient(135deg, #5B8DEF 0%, #4169B8 100%)',
+                                color: 'white',
+                                textAlign: 'center',
+                                padding: '12px',
+                                borderRadius: '12px',
+                                fontWeight: '600',
+                                fontSize: '13px',
+                                boxShadow: '0 4px 12px rgba(91,141,239,0.35)'
+                            }}>
+                                {jour}
+                            </div>
+                        ))}
+                    </div>
+                )}
 
-                                            return (
-                                                <div
-                                                    key={`${jour}-${creneau.id}`}
-                                                    style={{
-                                                        background: seancesCellule.length > 0 ? '#fafbfc' : 'white',
-                                                        border: seancesCellule.length > 0 ? '1.5px solid #e2e8f0' : '1.5px dashed #e2e8f0',
-                                                        borderRadius: '10px',
-                                                        padding: '4px',
-                                                        display: 'flex',
-                                                        flexDirection: 'column',
-                                                        gap: '4px',
-                                                        minHeight: '60px'
-                                                    }}
-                                                    onDragOver={handleDragOver}
-                                                    onDrop={() => handleDrop(jour, creneau.id)}
-                                                >
-                                                    {seancesCellule.length > 0 ? (
-                                                        seancesCellule.map(seance => (
-                                                            <div
-                                                                key={seance.id}
-                                                                draggable
-                                                                onDragStart={() => handleDragStart(seance)}
-                                                                onClick={() => setSelectedSeance(seance)}
-                                                                style={{
-                                                                    background: getCouleurGradient(seance.status),
-                                                                    borderRadius: '6px',
-                                                                    padding: '6px 8px',
-                                                                    color: 'white',
-                                                                    cursor: 'grab',
-                                                                    fontSize: '10px',
-                                                                    borderLeft: '3px solid rgba(255,255,255,0.5)',
-                                                                    display: 'flex',
-                                                                    flexDirection: 'column',
-                                                                    gap: '2px'
-                                                                }}
-                                                            >
-                                                                <div style={{ fontWeight: '700', fontSize: '9px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                                    <GripVertical size={12} />
-                                                                    <span>{seance.classe}</span>
-                                                                </div>
-                                                                <div style={{ fontWeight: '600', fontSize: '9px', marginTop: '2px' }}>{seance.cours}</div>
-                                                                <div style={{ fontSize: '8px', opacity: 0.9 }}>{seance.professeur}</div>
-                                                            </div>
-                                                        ))
-                                                    ) : (
-                                                        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                            {currentPlanning && (
-                                                                <button
-                                                                    onClick={() => handleOpenCreateModal({ jour, creneau: creneau.id })}
-                                                                    style={{
-                                                                        width: '24px',
-                                                                        height: '24px',
-                                                                        border: 'none',
-                                                                        background: '#f1f5f9',
-                                                                        borderRadius: '50%',
-                                                                        cursor: 'pointer',
-                                                                        display: 'flex',
-                                                                        alignItems: 'center',
-                                                                        justifyContent: 'center',
-                                                                        opacity: 0.5
-                                                                    }}
-                                                                >
-                                                                    <Plus size={12} color="#94a3b8" />
-                                                                </button>
-                                                            )}
+                {viewMode === 'vertical' && (
+                    <div style={{
+                        flex: 1,
+                        overflowY: 'auto',
+                        overflowX: 'hidden'
+                    }}>
+                        {TIME_SLOTS.map(creneau => (
+                            <div
+                                key={creneau.id}
+                                style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: '100px repeat(6, 1fr)',
+                                    gap: '8px',
+                                    marginBottom: '8px'
+                                }}
+                            >
+                                <div style={{
+                                    background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+                                    border: '1.5px solid #e2e8f0',
+                                    borderRadius: '10px',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontWeight: '600',
+                                    color: '#475569',
+                                    fontSize: '11px',
+                                    padding: '8px 4px',
+                                    minHeight: '60px'
+                                }}>
+                                    <span>{creneau.debut}</span>
+                                    <span style={{ opacity: 0.6, fontSize: '9px' }}>à</span>
+                                    <span>{creneau.fin}</span>
+                                </div>
+
+                                {JOUR_OPTIONS.map(jour => {
+                                    const seancesCellule = planningGrid[jour]?.[creneau.id] ?? [];
+
+                                    return (
+                                        <div
+                                            key={`${jour}-${creneau.id}`}
+                                            style={{
+                                                background: seancesCellule.length > 0 ? '#fafbfc' : 'white',
+                                                border: seancesCellule.length > 0 ? '1.5px solid #e2e8f0' : '1.5px dashed #e2e8f0',
+                                                borderRadius: '10px',
+                                                padding: '4px',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                gap: '4px',
+                                                minHeight: '60px'
+                                            }}
+                                            onDragOver={handleDragOver}
+                                            onDrop={() => handleDrop(jour, creneau.id)}
+                                        >
+                                            {seancesCellule.length > 0 ? (
+                                                seancesCellule.map(seance => (
+                                                    <div
+                                                        key={seance.id}
+                                                        draggable
+                                                        onDragStart={() => handleDragStart(seance)}
+                                                        onClick={() => setSelectedSeance(seance)}
+                                                        style={{
+                                                            background: getCouleurGradient(seance.status),
+                                                            borderRadius: '6px',
+                                                            padding: '6px 8px',
+                                                            color: 'white',
+                                                            cursor: 'grab',
+                                                            fontSize: '10px',
+                                                            borderLeft: '3px solid rgba(255,255,255,0.5)',
+                                                            display: 'flex',
+                                                            flexDirection: 'column',
+                                                            gap: '2px'
+                                                        }}
+                                                    >
+                                                        <div style={{ fontWeight: '700', fontSize: '9px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                            <GripVertical size={12} />
+                                                            <span>{seance.classe}</span>
                                                         </div>
+                                                        <div style={{ fontWeight: '600', fontSize: '9px', marginTop: '2px' }}>{seance.cours}</div>
+                                                        <div style={{ fontSize: '8px', opacity: 0.9 }}>{seance.professeur}</div>
+                                                    </div>
+                                                ))
+                                            ) : (
+                                                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                    {currentPlanning && (
+                                                        <button
+                                                            onClick={() => handleOpenCreateModal({ jour, creneau: creneau.id })}
+                                                            style={{
+                                                                width: '24px',
+                                                                height: '24px',
+                                                                border: 'none',
+                                                                background: '#f1f5f9',
+                                                                borderRadius: '50%',
+                                                                cursor: 'pointer',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                opacity: 0.5
+                                                            }}
+                                                        >
+                                                            <Plus size={12} color="#94a3b8" />
+                                                        </button>
                                                     )}
                                                 </div>
-                                            );
-                                        })}
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-
-                        {viewMode === 'horizontal' && (
-                            <div style={{
-                                flex: 1,
-                                overflowY: 'auto',
-                                overflowX: 'auto'
-                            }}>
-                                {JOUR_OPTIONS.map(jour => (
-                                    <div
-                                        key={jour}
-                                        style={{
-                                            display: 'flex',
-                                            gap: '8px',
-                                            marginBottom: '6px',
-                                            minHeight: '70px'
-                                        }}
-                                    >
-                                        <div style={{
-                                            background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
-                                            border: '1.5px solid #e2e8f0',
-                                            borderRadius: '10px',
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            fontWeight: '600',
-                                            color: '#475569',
-                                            fontSize: '11px',
-                                            padding: '4px',
-                                            width: '80px',
-                                            flexShrink: 0
-                                        }}>
-                                            <span>{jour}</span>
+                                            )}
                                         </div>
-
-                                        {TIME_SLOTS.map(creneau => {
-                                            const seancesCellule = planningGrid[jour]?.[creneau.id] ?? [];
-
-                                            return (
-                                                <div
-                                                    key={`${jour}-${creneau.id}`}
-                                                    style={{
-                                                        background: seancesCellule.length > 0 ? '#fafbfc' : 'white',
-                                                        border: seancesCellule.length > 0 ? '1.5px solid #e2e8f0' : '1.5px dashed #e2e8f0',
-                                                        borderRadius: '10px',
-                                                        padding: '4px',
-                                                        minWidth: '70px',
-                                                        flexShrink: 0,
-                                                        transition: 'all 0.2s ease',
-                                                        display: 'flex',
-                                                        flexDirection: 'column',
-                                                        gap: '4px'
-                                                    }}
-                                                    onDragOver={handleDragOver}
-                                                    onDrop={() => handleDrop(jour, creneau.id)}
-                                                >
-                                                    {seancesCellule.length > 0 ? (
-                                                        seancesCellule.map(seance => (
-                                                            <div
-                                                                key={seance.id}
-                                                                draggable
-                                                                onDragStart={() => handleDragStart(seance)}
-                                                                onClick={() => setSelectedSeance(seance)}
-                                                                style={{
-                                                                    background: getCouleurGradient(seance.status),
-                                                                    borderRadius: '6px',
-                                                                    padding: '4px 6px',
-                                                                    color: 'white',
-                                                                    cursor: 'grab'
-                                                                }}
-                                                            >
-                                                                <div style={{ fontWeight: '700', fontSize: '9px' }}>{seance.classe}</div>
-                                                                <div style={{ fontWeight: '600', fontSize: '9px' }}>{seance.cours}</div>
-                                                            </div>
-                                                        ))
-                                                    ) : null}
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
-                        )}
-
-                        {hasMoreSessions && (
-                            <div style={{ padding: '12px 0 8px', textAlign: 'center' }}>
-                                <button
-                                    onClick={handleLoadMoreSessions}
-                                    disabled={isLoadingMore}
-                                    style={{
-                                        padding: '10px 26px',
-                                        borderRadius: '999px',
-                                        border: '1px solid #cbd5f5',
-                                        background: 'white',
-                                        color: '#1d4ed8',
-                                        fontWeight: 600,
-                                        cursor: isLoadingMore ? 'not-allowed' : 'pointer',
-                                        opacity: isLoadingMore ? 0.7 : 1,
-                                        boxShadow: '0 6px 18px rgba(59,130,246,0.15)'
-                                    }}
-                                >
-                                    {isLoadingMore ? 'Chargement...' : 'Charger plus de séances'}
-                                </button>
-                            </div>
-                        )}
-                    </>
-                )}
-
-                {selectedSeance && (
-                    <div style={{
-                        position: 'fixed',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        background: 'rgba(0,0,0,0.5)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        zIndex: 9999,
-                        backdropFilter: 'blur(4px)'
-                    }}
-                        onClick={() => setSelectedSeance(null)}
-                    >
-                        <div style={{
-                            background: 'white',
-                            borderRadius: '20px',
-                            padding: '28px',
-                            width: '90%',
-                            maxWidth: '400px',
-                            boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
-                        }}
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                                <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#1a202c', margin: 0 }}>
-                                    Détails de la séance
-                                </h2>
-                                <button
-                                    onClick={() => setSelectedSeance(null)}
-                                    style={{
-                                        width: '32px',
-                                        height: '32px',
-                                        borderRadius: '8px',
-                                        border: 'none',
-                                        background: '#f1f5f9',
-                                        cursor: 'pointer',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center'
-                                    }}
-                                >
-                                    <X size={18} color="#64748b" />
-                                </button>
-                            </div>
-
-                            <div style={{
-                                background: getCouleurGradient(selectedSeance.status),
-                                borderRadius: '12px',
-                                padding: '16px',
-                                color: 'white',
-                                marginBottom: '20px'
-                            }}>
-                                <div style={{ fontWeight: '700', fontSize: '16px', marginBottom: '4px' }}>{selectedSeance.classe}</div>
-                                <div style={{ fontWeight: '600', fontSize: '15px' }}>{selectedSeance.cours}</div>
-                                <div style={{ fontSize: '12px', opacity: 0.9 }}>{selectedSeance.moduleLibelle ?? 'Sans module'}</div>
-                            </div>
-
-                            <div style={{ marginBottom: '12px' }}>
-                                <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '2px' }}>Professeur</div>
-                                <div style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>{selectedSeance.professeur}</div>
-                            </div>
-
-                            <div style={{ marginBottom: '12px' }}>
-                                <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '2px' }}>Salle</div>
-                                <div style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>{selectedSeance.salle}</div>
-                            </div>
-
-                            <div style={{ marginBottom: '20px' }}>
-                                <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '2px' }}>Horaire</div>
-                                <div style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>
-                                    {selectedSeance.jour} • {selectedSeance.heureDebut} - {selectedSeance.heureFin}
-                                </div>
-                            </div>
-
-                            <div style={{ display: 'flex', gap: '10px' }}>
-                                <button
-                                    onClick={() => handleEditSeance(selectedSeance)}
-                                    disabled={isMutating}
-                                    style={{
-                                        flex: 1,
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        gap: '6px',
-                                        padding: '12px',
-                                        borderRadius: '10px',
-                                        border: '1.5px solid #e2e8f0',
-                                        background: 'white',
-                                        color: '#475569',
-                                        fontSize: '14px',
-                                        fontWeight: '500',
-                                        cursor: 'pointer'
-                                    }}>
-                                    <Edit2 size={16} />
-                                    Modifier
-                                </button>
-                                <button
-                                    onClick={() => handleDeleteSeance(selectedSeance.id)}
-                                    disabled={isMutating}
-                                    style={{
-                                        flex: 1,
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        gap: '6px',
-                                        padding: '12px',
-                                        borderRadius: '10px',
-                                        border: 'none',
-                                        background: '#fee2e2',
-                                        color: '#dc2626',
-                                        fontSize: '14px',
-                                        fontWeight: '500',
-                                        cursor: 'pointer',
-                                        opacity: isMutating ? 0.7 : 1
-                                    }}>
-                                    <Trash2 size={16} />
-                                    Supprimer
-                                </button>
-                            </div>
-                        </div>
+                        ))}
                     </div>
                 )}
 
-                {showCreatePlanningModal && (
+                {!isMobileView && viewMode === 'horizontal' && (
                     <div style={{
-                        position: 'fixed',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        background: 'rgba(0,0,0,0.5)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        zIndex: 9999,
-                        backdropFilter: 'blur(4px)'
-                    }}
-                        onClick={() => setShowCreatePlanningModal(false)}
-                    >
-                        <div style={{
-                            background: 'white',
-                            borderRadius: '20px',
-                            padding: '28px',
-                            width: '90%',
-                            maxWidth: '480px',
-                            maxHeight: '90vh',
-                            overflowY: 'auto',
-                            boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
-                        }}
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                                <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#1a202c', margin: 0 }}>
-                                    Créer un nouveau planning
-                                </h2>
-                                <button
-                                    onClick={() => setShowCreatePlanningModal(false)}
-                                    style={{
-                                        width: '32px',
-                                        height: '32px',
-                                        borderRadius: '8px',
-                                        border: 'none',
-                                        background: '#f1f5f9',
-                                        cursor: 'pointer',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center'
-                                    }}
-                                >
-                                    <X size={18} color="#64748b" />
-                                </button>
+                        flex: 1,
+                        overflowY: 'auto',
+                        overflowX: 'auto'
+                    }}>
+                        {JOUR_OPTIONS.map(jour => (
+                            <div
+                                key={jour}
+                                style={{
+                                    display: 'flex',
+                                    gap: '8px',
+                                    marginBottom: '6px',
+                                    minHeight: '70px'
+                                }}
+                            >
+                                <div style={{
+                                    background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+                                    border: '1.5px solid #e2e8f0',
+                                    borderRadius: '10px',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontWeight: '600',
+                                    color: '#475569',
+                                    fontSize: '11px',
+                                    padding: '4px',
+                                    width: '80px',
+                                    flexShrink: 0
+                                }}>
+                                    <span>{jour}</span>
+                                </div>
+
+                                {TIME_SLOTS.map(creneau => {
+                                    const seancesCellule = planningGrid[jour]?.[creneau.id] ?? [];
+
+                                    return (
+                                        <div
+                                            key={`${jour}-${creneau.id}`}
+                                            style={{
+                                                background: seancesCellule.length > 0 ? '#fafbfc' : 'white',
+                                                border: seancesCellule.length > 0 ? '1.5px solid #e2e8f0' : '1.5px dashed #e2e8f0',
+                                                borderRadius: '10px',
+                                                padding: '4px',
+                                                minWidth: '70px',
+                                                flexShrink: 0,
+                                                transition: 'all 0.2s ease',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                gap: '4px'
+                                            }}
+                                            onDragOver={handleDragOver}
+                                            onDrop={() => handleDrop(jour, creneau.id)}
+                                        >
+                                            {seancesCellule.length > 0 ? (
+                                                seancesCellule.map(seance => (
+                                                    <div
+                                                        key={seance.id}
+                                                        draggable
+                                                        onDragStart={() => handleDragStart(seance)}
+                                                        onClick={() => setSelectedSeance(seance)}
+                                                        style={{
+                                                            background: getCouleurGradient(seance.status),
+                                                            borderRadius: '6px',
+                                                            padding: '4px 6px',
+                                                            color: 'white',
+                                                            cursor: 'grab'
+                                                        }}
+                                                    >
+                                                        <div style={{ fontWeight: '700', fontSize: '9px' }}>{seance.classe}</div>
+                                                        <div style={{ fontWeight: '600', fontSize: '9px' }}>{seance.cours}</div>
+                                                    </div>
+                                                ))
+                                            ) : null}
+                                        </div>
+                                    );
+                                })}
                             </div>
-
-                            <form onSubmit={(e) => {
-                                e.preventDefault();
-                                const form = e.currentTarget;
-                                const formData = new FormData(form);
-                                handleCreatePlanning(formData.get('classe') as string, formData.get('semaine') as string);
-                            }}>
-                                <div style={{ marginBottom: '14px' }}>
-                                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#4a5568', marginBottom: '6px' }}>Classe</label>
-                                    <select name="classe" required style={{
-                                        width: '100%',
-                                        padding: '10px 14px',
-                                        borderRadius: '10px',
-                                        border: '1.5px solid #e2e8f0',
-                                        fontSize: '14px',
-                                        background: 'white',
-                                        cursor: 'pointer'
-                                    }}>
-                                        <option value="">Sélectionner une classe</option>
-                                        {classOptions.filter(option => option.id !== ALL_CLASSES).map(option => (
-                                            <option key={option.id} value={option.id}>{option.label}</option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                <div style={{ marginBottom: '20px' }}>
-                                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#4a5568', marginBottom: '6px' }}>Semaine</label>
-                                    <select name="semaine" required style={{
-                                        width: '100%',
-                                        padding: '10px 14px',
-                                        borderRadius: '10px',
-                                        border: '1.5px solid #e2e8f0',
-                                        fontSize: '14px',
-                                        background: 'white',
-                                        cursor: 'pointer'
-                                    }}>
-                                        <option value="">Sélectionner une semaine</option>
-                                        {weekOptions.map(semaine => (
-                                            <option key={semaine.id} value={semaine.id}>{semaine.label}</option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowCreatePlanningModal(false)}
-                                        style={{
-                                            padding: '10px 20px',
-                                            borderRadius: '10px',
-                                            border: '1.5px solid #e2e8f0',
-                                            background: 'white',
-                                            color: '#64748b',
-                                            fontSize: '14px',
-                                            fontWeight: '500',
-                                            cursor: 'pointer'
-                                        }}
-                                    >
-                                        Annuler
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        style={{
-                                            padding: '10px 20px',
-                                            borderRadius: '10px',
-                                            border: 'none',
-                                            background: 'linear-gradient(135deg, #5B8DEF 0%, #4169B8 100%)',
-                                            color: 'white',
-                                            fontSize: '14px',
-                                            fontWeight: '600',
-                                            cursor: 'pointer'
-                                        }}
-                                    >
-                                        Créer le planning
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
+                        ))}
                     </div>
                 )}
 
-                {showAddModal && (
-                    <div style={{
-                        position: 'fixed',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        background: 'rgba(0,0,0,0.5)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        zIndex: 9999,
-                        backdropFilter: 'blur(4px)'
-                    }}
-                        onClick={closeFormModal}
-                    >
-                        <div style={{
-                            background: 'white',
-                            borderRadius: '20px',
-                            padding: '28px',
-                            width: '90%',
-                            maxWidth: '480px',
-                            maxHeight: '90vh',
-                            overflowY: 'auto',
-                            boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
-                        }}
-                            onClick={(e) => e.stopPropagation()}
+                {hasMoreSessions && (
+                    <div style={{ padding: '12px 0 8px', textAlign: 'center' }}>
+                        <button
+                            onClick={handleLoadMoreSessions}
+                            disabled={isLoadingMore}
+                            style={{
+                                padding: '10px 26px',
+                                borderRadius: '999px',
+                                border: '1px solid #cbd5f5',
+                                background: 'white',
+                                color: '#1d4ed8',
+                                fontWeight: 600,
+                                cursor: isLoadingMore ? 'not-allowed' : 'pointer',
+                                opacity: isLoadingMore ? 0.7 : 1,
+                                boxShadow: '0 6px 18px rgba(59,130,246,0.15)'
+                            }}
                         >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                                <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#1a202c', margin: 0 }}>
-                                    {editingSessionId ? 'Modifier la séance' : 'Ajouter une séance'}
-                                </h2>
-                                <button
-                                    onClick={closeFormModal}
-                                    style={{
-                                        width: '32px',
-                                        height: '32px',
-                                        borderRadius: '8px',
-                                        border: 'none',
-                                        background: '#f1f5f9',
-                                        cursor: 'pointer',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center'
-                                    }}
-                                >
-                                    <X size={18} color="#64748b" />
-                                </button>
-                            </div>
-
-                            <form onSubmit={handleSubmitSession}>
-                                <div style={{ marginBottom: '14px' }}>
-                                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#4a5568', marginBottom: '6px' }}>Classe</label>
-                                    <select
-                                        name="classe"
-                                        required
-                                        value={formState.classeId}
-                                        onChange={(e) => setFormState(prev => ({ ...prev, classeId: e.target.value }))}
-                                        style={{
-                                            width: '100%',
-                                            padding: '10px 14px',
-                                            borderRadius: '10px',
-                                            border: '1.5px solid #e2e8f0',
-                                            fontSize: '14px',
-                                            background: 'white',
-                                            cursor: 'pointer'
-                                        }}>
-                                        <option value="">Sélectionner une classe</option>
-                                        {classOptions.filter(option => option.id !== ALL_CLASSES).map(option => (
-                                            <option key={option.id} value={option.id}>{option.label}</option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                <div style={{ marginBottom: '14px' }}>
-                                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#4a5568', marginBottom: '6px' }}>Cours</label>
-                                    <select
-                                        name="cours"
-                                        required
-                                        value={formState.coursId}
-                                        onChange={(e) => setFormState(prev => ({ ...prev, coursId: e.target.value }))}
-                                        style={{
-                                            width: '100%',
-                                            padding: '10px 14px',
-                                            borderRadius: '10px',
-                                            border: '1.5px solid #e2e8f0',
-                                            fontSize: '14px',
-                                            background: 'white',
-                                            cursor: 'pointer'
-                                        }}>
-                                        <option value="">Sélectionner un cours</option>
-                                        {courses.map(cours => (
-                                            <option key={cours.id} value={cours.id}>{cours.libelle}</option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '14px' }}>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#4a5568', marginBottom: '6px' }}>Jour</label>
-                                        <select
-                                            name="jour"
-                                            required
-                                            value={formState.jour}
-                                            onChange={(e) => setFormState(prev => ({ ...prev, jour: e.target.value as JourSemaine }))}
-                                            style={{
-                                                width: '100%',
-                                                padding: '10px 14px',
-                                                borderRadius: '10px',
-                                                border: '1.5px solid #e2e8f0',
-                                                fontSize: '14px',
-                                                background: 'white',
-                                                cursor: 'pointer'
-                                            }}>
-                                            {JOUR_OPTIONS.map(jour => (
-                                                <option key={jour} value={jour}>{jour}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#4a5568', marginBottom: '6px' }}>Créneau</label>
-                                        <select
-                                            name="creneau"
-                                            required
-                                            value={formState.creneau}
-                                            onChange={(e) => setFormState(prev => ({ ...prev, creneau: e.target.value }))}
-                                            style={{
-                                                width: '100%',
-                                                padding: '10px 14px',
-                                                borderRadius: '10px',
-                                                border: '1.5px solid #e2e8f0',
-                                                fontSize: '14px',
-                                                background: 'white',
-                                                cursor: 'pointer'
-                                            }}>
-                                            {TIME_SLOTS.map(c => (
-                                                <option key={c.id} value={c.id}>{c.label}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                </div>
-
-                                <div style={{ marginBottom: '14px' }}>
-                                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#4a5568', marginBottom: '6px' }}>Professeur</label>
-                                    <select
-                                        name="professeur"
-                                        required
-                                        value={formState.professeurId}
-                                        onChange={(e) => setFormState(prev => ({ ...prev, professeurId: e.target.value }))}
-                                        style={{
-                                            width: '100%',
-                                            padding: '10px 14px',
-                                            borderRadius: '10px',
-                                            border: '1.5px solid #e2e8f0',
-                                            fontSize: '14px',
-                                            background: 'white',
-                                            cursor: 'pointer'
-                                        }}>
-                                        <option value="">Sélectionner un professeur</option>
-                                        {professors.map(prof => (
-                                            <option key={prof.professorId} value={prof.professorId}>
-                                                {prof.firstName} {prof.lastName}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                <div style={{ marginBottom: '20px' }}>
-                                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#4a5568', marginBottom: '6px' }}>Salle</label>
-                                    <input
-                                        name="salle"
-                                        list="salle-options"
-                                        type="text"
-                                        required
-                                        placeholder="Sélectionner une salle"
-                                        value={formState.salleInput}
-                                        onChange={(e) => setFormState(prev => ({ ...prev, salleInput: e.target.value }))}
-                                        style={{
-                                            width: '100%',
-                                            padding: '10px 14px',
-                                            borderRadius: '10px',
-                                            border: '1.5px solid #e2e8f0',
-                                            fontSize: '14px',
-                                            outline: 'none'
-                                        }}
-                                    />
-                                    <datalist id="salle-options">
-                                        {salles.map(salle => (
-                                            <option key={salle.id} value={salle.libelle}>{salle.id}</option>
-                                        ))}
-                                    </datalist>
-                                </div>
-
-                                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                                    <button
-                                        type="button"
-                                        onClick={closeFormModal}
-                                        style={{
-                                            padding: '10px 20px',
-                                            borderRadius: '10px',
-                                            border: '1.5px solid #e2e8f0',
-                                            background: 'white',
-                                            color: '#64748b',
-                                            fontSize: '14px',
-                                            fontWeight: '500',
-                                            cursor: 'pointer'
-                                        }}
-                                    >
-                                        Annuler
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        disabled={isMutating}
-                                        style={{
-                                            padding: '10px 20px',
-                                            borderRadius: '10px',
-                                            border: 'none',
-                                            background: 'linear-gradient(135deg, #5B8DEF 0%, #4169B8 100%)',
-                                            color: 'white',
-                                            fontSize: '14px',
-                                            fontWeight: '600',
-                                            cursor: 'pointer',
-                                            opacity: isMutating ? 0.7 : 1
-                                        }}
-                                    >
-                                        {editingSessionId ? 'Mettre à jour' : 'Ajouter'}
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
+                            {isLoadingMore ? 'Chargement...' : 'Charger plus de séances'}
+                        </button>
                     </div>
                 )}
             </div>
-            );
+
+            {selectedSeance && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(0,0,0,0.5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 9999,
+                    backdropFilter: 'blur(4px)'
+                }}
+                    onClick={() => setSelectedSeance(null)}
+                >
+                    <div style={{
+                        background: 'white',
+                        borderRadius: '20px',
+                        padding: '28px',
+                        width: '90%',
+                        maxWidth: '400px',
+                        boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+                    }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                            <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#1a202c', margin: 0 }}>
+                                Détails de la séance
+                            </h2>
+                            <button
+                                onClick={() => setSelectedSeance(null)}
+                                style={{
+                                    width: '32px',
+                                    height: '32px',
+                                    borderRadius: '8px',
+                                    border: 'none',
+                                    background: '#f1f5f9',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}
+                            >
+                                <X size={18} color="#64748b" />
+                            </button>
+                        </div>
+
+                        <div style={{
+                            background: getCouleurGradient(selectedSeance.status),
+                            borderRadius: '12px',
+                            padding: '16px',
+                            color: 'white',
+                            marginBottom: '20px'
+                        }}>
+                            <div style={{ fontWeight: '700', fontSize: '16px', marginBottom: '4px' }}>{selectedSeance.classe}</div>
+                            <div style={{ fontWeight: '600', fontSize: '15px' }}>{selectedSeance.cours}</div>
+                            <div style={{ fontSize: '12px', opacity: 0.9 }}>{selectedSeance.moduleLibelle ?? 'Sans module'}</div>
+                        </div>
+
+                        <div style={{ marginBottom: '12px' }}>
+                            <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '2px' }}>Professeur</div>
+                            <div style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>{selectedSeance.professeur}</div>
+                        </div>
+
+                        <div style={{ marginBottom: '12px' }}>
+                            <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '2px' }}>Salle</div>
+                            <div style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>{selectedSeance.salle}</div>
+                        </div>
+
+                        <div style={{ marginBottom: '20px' }}>
+                            <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '2px' }}>Horaire</div>
+                            <div style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>
+                                {selectedSeance.jour} • {selectedSeance.heureDebut} - {selectedSeance.heureFin}
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                            <button
+                                onClick={() => handleEditSeance(selectedSeance)}
+                                disabled={isMutating}
+                                style={{
+                                flex: 1,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '6px',
+                                padding: '12px',
+                                borderRadius: '10px',
+                                border: '1.5px solid #e2e8f0',
+                                background: 'white',
+                                color: '#475569',
+                                fontSize: '14px',
+                                fontWeight: '500',
+                                cursor: 'pointer'
+                            }}>
+                                <Edit2 size={16} />
+                                Modifier
+                            </button>
+                            <button
+                                onClick={() => handleDeleteSeance(selectedSeance.id)}
+                                disabled={isMutating}
+                                style={{
+                                    flex: 1,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '6px',
+                                    padding: '12px',
+                                    borderRadius: '10px',
+                                    border: 'none',
+                                    background: '#fee2e2',
+                                    color: '#dc2626',
+                                    fontSize: '14px',
+                                    fontWeight: '500',
+                                    cursor: 'pointer',
+                                    opacity: isMutating ? 0.7 : 1
+                                }}>
+                                <Trash2 size={16} />
+                                Supprimer
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showCreatePlanningModal && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(0,0,0,0.5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 9999,
+                    backdropFilter: 'blur(4px)'
+                }}
+                    onClick={() => setShowCreatePlanningModal(false)}
+                >
+                    <div style={{
+                        background: 'white',
+                        borderRadius: '20px',
+                        padding: '28px',
+                        width: '90%',
+                        maxWidth: '480px',
+                        maxHeight: '90vh',
+                        overflowY: 'auto',
+                        boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+                    }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                            <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#1a202c', margin: 0 }}>
+                                Créer un nouveau planning
+                            </h2>
+                            <button
+                                onClick={() => setShowCreatePlanningModal(false)}
+                                style={{
+                                    width: '32px',
+                                    height: '32px',
+                                    borderRadius: '8px',
+                                    border: 'none',
+                                    background: '#f1f5f9',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}
+                            >
+                                <X size={18} color="#64748b" />
+                            </button>
+                        </div>
+
+                        <form onSubmit={(e) => {
+                            e.preventDefault();
+                            const form = e.currentTarget;
+                            const formData = new FormData(form);
+                            handleCreatePlanning(formData.get('classe') as string, formData.get('semaine') as string);
+                        }}>
+                            <div style={{ marginBottom: '14px' }}>
+                                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#4a5568', marginBottom: '6px' }}>Classe</label>
+                                <select name="classe" required style={{
+                                    width: '100%',
+                                    padding: '10px 14px',
+                                    borderRadius: '10px',
+                                    border: '1.5px solid #e2e8f0',
+                                    fontSize: '14px',
+                                    background: 'white',
+                                    cursor: 'pointer'
+                                }}>
+                                    <option value="">Sélectionner une classe</option>
+                                    {classOptions.filter(option => option.id !== ALL_CLASSES).map(option => (
+                                        <option key={option.id} value={option.id}>{option.label}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div style={{ marginBottom: '20px' }}>
+                                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#4a5568', marginBottom: '6px' }}>Semaine</label>
+                                <select name="semaine" required style={{
+                                    width: '100%',
+                                    padding: '10px 14px',
+                                    borderRadius: '10px',
+                                    border: '1.5px solid #e2e8f0',
+                                    fontSize: '14px',
+                                    background: 'white',
+                                    cursor: 'pointer'
+                                }}>
+                                    <option value="">Sélectionner une semaine</option>
+                                    {weekOptions.map(semaine => (
+                                        <option key={semaine.id} value={semaine.id}>{semaine.label}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowCreatePlanningModal(false)}
+                                    style={{
+                                        padding: '10px 20px',
+                                        borderRadius: '10px',
+                                        border: '1.5px solid #e2e8f0',
+                                        background: 'white',
+                                        color: '#64748b',
+                                        fontSize: '14px',
+                                        fontWeight: '500',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    Annuler
+                                </button>
+                                <button
+                                    type="submit"
+                                    style={{
+                                        padding: '10px 20px',
+                                        borderRadius: '10px',
+                                        border: 'none',
+                                        background: 'linear-gradient(135deg, #5B8DEF 0%, #4169B8 100%)',
+                                        color: 'white',
+                                        fontSize: '14px',
+                                        fontWeight: '600',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    Créer le planning
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {showAddModal && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(0,0,0,0.5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 9999,
+                    backdropFilter: 'blur(4px)'
+                }}
+                    onClick={closeFormModal}
+                >
+                    <div style={{
+                        background: 'white',
+                        borderRadius: '20px',
+                        padding: '28px',
+                        width: '90%',
+                        maxWidth: '480px',
+                        maxHeight: '90vh',
+                        overflowY: 'auto',
+                        boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+                    }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                            <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#1a202c', margin: 0 }}>
+                                {editingSessionId ? 'Modifier la séance' : 'Ajouter une séance'}
+                            </h2>
+                            <button
+                                onClick={closeFormModal}
+                                style={{
+                                    width: '32px',
+                                    height: '32px',
+                                    borderRadius: '8px',
+                                    border: 'none',
+                                    background: '#f1f5f9',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}
+                            >
+                                <X size={18} color="#64748b" />
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleSubmitSession}>
+                            <div style={{ marginBottom: '14px' }}>
+                                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#4a5568', marginBottom: '6px' }}>Classe</label>
+                                <select
+                                    name="classe"
+                                    required
+                                    value={formState.classeId}
+                                    onChange={(e) => setFormState(prev => ({ ...prev, classeId: e.target.value }))}
+                                    style={{
+                                    width: '100%',
+                                    padding: '10px 14px',
+                                    borderRadius: '10px',
+                                    border: '1.5px solid #e2e8f0',
+                                    fontSize: '14px',
+                                    background: 'white',
+                                    cursor: 'pointer'
+                                }}>
+                                    <option value="">Sélectionner une classe</option>
+                                    {classOptions.filter(option => option.id !== ALL_CLASSES).map(option => (
+                                        <option key={option.id} value={option.id}>{option.label}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div style={{ marginBottom: '14px' }}>
+                                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#4a5568', marginBottom: '6px' }}>Cours</label>
+                                <select
+                                    name="cours"
+                                    required
+                                    value={formState.coursId}
+                                    onChange={(e) => handleCourseChange(e.target.value)}
+                                    style={{
+                                    width: '100%',
+                                    padding: '10px 14px',
+                                    borderRadius: '10px',
+                                    border: '1.5px solid #e2e8f0',
+                                    fontSize: '14px',
+                                    background: 'white',
+                                    cursor: 'pointer'
+                                }}>
+                                    <option value="">Sélectionner un cours</option>
+                                    {courses.map(cours => (
+                                        <option key={cours.id} value={cours.id}>{cours.libelle}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '14px' }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#4a5568', marginBottom: '6px' }}>Jour</label>
+                                    <select
+                                        name="jour"
+                                        required
+                                        value={formState.jour}
+                                        onChange={(e) => setFormState(prev => ({ ...prev, jour: e.target.value as JourSemaine }))}
+                                        style={{
+                                        width: '100%',
+                                        padding: '10px 14px',
+                                        borderRadius: '10px',
+                                        border: '1.5px solid #e2e8f0',
+                                        fontSize: '14px',
+                                        background: 'white',
+                                        cursor: 'pointer'
+                                    }}>
+                                        {JOUR_OPTIONS.map(jour => (
+                                            <option key={jour} value={jour}>{jour}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#4a5568', marginBottom: '6px' }}>Créneau</label>
+                                    <select
+                                        name="creneau"
+                                        required
+                                        value={formState.creneau}
+                                        onChange={(e) => setFormState(prev => ({ ...prev, creneau: e.target.value }))}
+                                        style={{
+                                        width: '100%',
+                                        padding: '10px 14px',
+                                        borderRadius: '10px',
+                                        border: '1.5px solid #e2e8f0',
+                                        fontSize: '14px',
+                                        background: 'white',
+                                        cursor: 'pointer'
+                                    }}>
+                                        {TIME_SLOTS.map(c => (
+                                            <option key={c.id} value={c.id}>{c.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div style={{ marginBottom: '14px' }}>
+                                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#4a5568', marginBottom: '6px' }}>Professeur</label>
+                                <select
+                                    name="professeur"
+                                    required
+                                    value={formState.professeurId}
+                                    onChange={(e) => setFormState(prev => ({ ...prev, professeurId: e.target.value }))}
+                                    style={{
+                                    width: '100%',
+                                    padding: '10px 14px',
+                                    borderRadius: '10px',
+                                    border: '1.5px solid #e2e8f0',
+                                    fontSize: '14px',
+                                    background: 'white',
+                                    cursor: 'pointer'
+                                }}>
+                                    <option value="">Sélectionner un professeur</option>
+                                    {professors.map(prof => (
+                                        <option key={prof.professorId} value={prof.professorId}>
+                                            {prof.firstName} {prof.lastName}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div style={{ marginBottom: '20px' }}>
+                                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#4a5568', marginBottom: '6px' }}>Salle</label>
+                                <input
+                                    name="salle"
+                                    list="salle-options"
+                                    type="text"
+                                    required
+                                    placeholder="Sélectionner une salle"
+                                    value={formState.salleInput}
+                                    onChange={(e) => setFormState(prev => ({ ...prev, salleInput: e.target.value }))}
+                                    style={{
+                                        width: '100%',
+                                        padding: '10px 14px',
+                                        borderRadius: '10px',
+                                        border: '1.5px solid #e2e8f0',
+                                        fontSize: '14px',
+                                        outline: 'none'
+                                    }}
+                                />
+                                <datalist id="salle-options">
+                                    {salles.map(salle => (
+                                        <option key={salle.id} value={salle.libelle}>{salle.id}</option>
+                                    ))}
+                                </datalist>
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                                <button
+                                    type="button"
+                                    onClick={closeFormModal}
+                                    style={{
+                                        padding: '10px 20px',
+                                        borderRadius: '10px',
+                                        border: '1.5px solid #e2e8f0',
+                                        background: 'white',
+                                        color: '#64748b',
+                                        fontSize: '14px',
+                                        fontWeight: '500',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    Annuler
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isMutating}
+                                    style={{
+                                        padding: '10px 20px',
+                                        borderRadius: '10px',
+                                        border: 'none',
+                                        background: 'linear-gradient(135deg, #5B8DEF 0%, #4169B8 100%)',
+                                        color: 'white',
+                                        fontSize: '14px',
+                                        fontWeight: '600',
+                                        cursor: 'pointer',
+                                        opacity: isMutating ? 0.7 : 1
+                                    }}
+                                >
+                                    {editingSessionId ? 'Mettre à jour' : 'Ajouter'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
 }

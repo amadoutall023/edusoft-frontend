@@ -5,11 +5,14 @@ import { useParams, useRouter } from 'next/navigation';
 import { fetchSessionById } from '@/modules/planning/services/sessionService';
 import { SessionResponseDto } from '@/shared/api/types';
 import EmargementPanel from '@/modules/cours/components/EmargementPanel';
+import { useAuth } from '@/modules/auth/context/AuthContext';
 
 export default function EmargementPage() {
     const params = useParams();
     const router = useRouter();
+    const { roles } = useAuth();
     const sessionId = params.sessionId as string;
+    const isProfesseur = roles.includes('ROLE_PROFESSEUR');
 
     const [session, setSession] = useState<SessionResponseDto | null>(null);
     const [loading, setLoading] = useState(true);
@@ -139,6 +142,7 @@ export default function EmargementPage() {
                 professorId={professorId}
                 sessionDate={sessionDate}
                 sessionHeureDebut={sessionHeureDebut}
+                readOnly={isProfesseur}
                 onClose={handleBack}
             />
         </div>

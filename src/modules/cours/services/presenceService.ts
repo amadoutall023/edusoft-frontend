@@ -1,6 +1,6 @@
 import { httpClient, HttpRequestOptions } from '@/shared/api/httpClient';
 
-export type HemargeType = 'DEBUT' | 'MILIEU' | 'FIN';
+export type HemargeType = 'DEBUT' | 'FIN';
 export type PresenceStatus = 'PRESENT' | 'ABSENT' | 'RETARD' | 'EXCUSE';
 
 export interface HemargeResponseDto {

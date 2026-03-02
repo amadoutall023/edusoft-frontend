@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { createPortal } from 'react-dom';
 import { Notification } from '@/modules/auth/types';
 import {
     getUnreadCount,
@@ -135,7 +136,7 @@ export default function NotificationDropdown({ isOpen, onClose }: NotificationDr
         display: 'none'
     };
 
-    return (
+    const dropdownContent = (
         <>
             {/* Mobile overlay */}
             <div
@@ -301,4 +302,6 @@ export default function NotificationDropdown({ isOpen, onClose }: NotificationDr
             </div>
         </>
     );
+
+    return createPortal(dropdownContent, document.body);
 }

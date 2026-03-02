@@ -18,6 +18,7 @@ export interface StudentRequest {
     phone?: string;
     gender?: string;
     classeId?: string;
+    anneeInscription?: number;
     typeInscription?: string;
     observations?: string;
 }
@@ -44,7 +45,7 @@ export async function fetchStudents(filters?: StudentFilters): Promise<Paginated
     if (filters?.size !== undefined) params.set('size', filters.size.toString());
     if (filters?.sortBy) params.set('sortBy', filters.sortBy);
     if (filters?.sortDir) params.set('sortDir', filters.sortDir);
-    
+
     const query = params.toString();
     const response = await httpClient<ApiResponse<PaginatedResponse<StudentResponseDto>>>(
         `${API_BASE}${query ? '?' + query : ''}`
@@ -142,7 +143,7 @@ export async function importStudentsFromExcel(file: File, autoGenerateMatricule 
     if (!autoGenerateMatricule) {
         formData.append('autoGenerateMatricule', 'false');
     }
-    
+
     const response = await httpClient<ApiResponse<any>>(`${API_BASE}/import`, {
         method: 'POST',
         body: formData
@@ -190,4 +191,57 @@ export async function fetchStudentAbsenceStats(studentId: string): Promise<Absen
 export async function fetchClasseAbsenceStats(classeId: string): Promise<AbsenceStats[]> {
     const response = await httpClient<ApiResponse<AbsenceStats[]>>(`${PRESENCE_API_BASE}/classe/${classeId}/stats`);
     return response.data ?? [];
+}
+
+// ============================================================================
+// FONCTIONS POUR LE DASHBOARD ETUDIANT
+// ============================================================================
+
+/**
+ * Récupérer les informations de l'étudiant connecté (depuis le token)
+ * Cette fonction utilise l'endpoint /me du backend pour récupérer les infos de l'utilisateur connecté
+ */
+export async function fetchCurrentStudent(): Promise<StudentResponseDto> {
+    const response = await httpClient<ApiResponse<StudentResponseDto>>('/api/v1/students/me', {
+        suppressErrorLog: true
+    });
+    return response.data!;
+}
+
+/**
+ * Récupérer les sessions à venir pour l'étudiant
+ */
+export async function fetchStudentUpcomingSessions(): Promise<any[]> {
+    const response = await httpClient<ApiResponse<any[]>>('/api/v1/sessions/upcoming', {
+        suppressErrorLog: true
+    });
+    return response.data ?? [];
+}
+
+/**
+ * Récupérer les présences de l'étudiant pour calculer le pourcentage
+ */
+export async function fetchStudentPresenceStats(): Promise<{
+    totalSessions: number;
+    presentCount: number;
+    absentCount: number;
+    excusedCount: number;
+    presenceRate: number;
+}> {
+    const response = await httpClient<ApiResponse<{
+        totalSessions: number;
+        presentCount: number;
+        absentCount: number;
+        excusedCount: number;
+        presenceRate: number;
+    }>>('/api/v1/presences/my-stats', {
+        suppressErrorLog: true
+    });
+    return response.data ?? {
+        totalSessions: 0,
+        presentCount: 0,
+        absentCount: 0,
+        excusedCount: 0,
+        presenceRate: 0
+    };
 }

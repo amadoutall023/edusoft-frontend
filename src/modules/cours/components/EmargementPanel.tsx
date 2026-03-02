@@ -20,11 +20,11 @@ interface EmargementPanelProps {
   onClose: () => void;
   sessionDate?: string;
   sessionHeureDebut?: string;
+  readOnly?: boolean;
 }
 
 const HEMARGEMENT_TYPES: { value: HemargeType; label: string }[] = [
   { value: 'DEBUT', label: 'Début' },
-  { value: 'MILIEU', label: 'Milieu' },
   { value: 'FIN', label: 'Fin' }
 ];
 
@@ -40,7 +40,8 @@ export default function EmargementPanel({
   professorId,
   onClose,
   sessionDate,
-  sessionHeureDebut
+  sessionHeureDebut,
+  readOnly = false
 }: EmargementPanelProps) {
   const [hemargeType, setHemargeType] = useState<HemargeType>('DEBUT');
   const [presences, setPresences] = useState<HemargeResponseDto[]>([]);
@@ -286,6 +287,7 @@ export default function EmargementPanel({
           <select
             value={hemargeType}
             onChange={(e) => setHemargeType(e.target.value as HemargeType)}
+            disabled={readOnly}
             style={selectStyle}
           >
             {HEMARGEMENT_TYPES.map(type => (
@@ -304,18 +306,20 @@ export default function EmargementPanel({
               ✓ Émargé
             </span>
           ) : (
-            <button
-              onClick={handleHemargerProfesseur}
-              disabled={saving}
-              style={{
-                ...buttonPrimaryStyle,
-                backgroundColor: '#2563eb',
-                color: 'white',
-                opacity: saving ? 0.6 : 1
-              }}
-            >
-              {saving ? '...' : 'Émarger'}
-            </button>
+            !readOnly && (
+              <button
+                onClick={handleHemargerProfesseur}
+                disabled={saving}
+                style={{
+                  ...buttonPrimaryStyle,
+                  backgroundColor: '#2563eb',
+                  color: 'white',
+                  opacity: saving ? 0.6 : 1
+                }}
+              >
+                {saving ? '...' : 'Émarger'}
+              </button>
+            )
           )}
         </div>
       </div>
@@ -344,19 +348,21 @@ export default function EmargementPanel({
             <p style={{ color: '#64748b', marginBottom: '16px', fontSize: '14px' }}>
               Aucune présence initialisée pour ce type d'émargement
             </p>
-            <button
-              onClick={handleInitialiserPresences}
-              disabled={initializing}
-              style={{
-                ...buttonPrimaryStyle,
-                backgroundColor: '#2563eb',
-                color: 'white',
-                padding: '8px 16px',
-                opacity: initializing ? 0.6 : 1
-              }}
-            >
-              {initializing ? 'Initialisation...' : 'Initialiser les présences'}
-            </button>
+            {!readOnly && (
+              <button
+                onClick={handleInitialiserPresences}
+                disabled={initializing}
+                style={{
+                  ...buttonPrimaryStyle,
+                  backgroundColor: '#2563eb',
+                  color: 'white',
+                  padding: '8px 16px',
+                  opacity: initializing ? 0.6 : 1
+                }}
+              >
+                {initializing ? 'Initialisation...' : 'Initialiser les présences'}
+              </button>
+            )}
           </div>
         ) : (
           <>
@@ -391,30 +397,34 @@ export default function EmargementPanel({
 
             {/* Actions */}
             <div className="emargement-actions" style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-              <button
-                onClick={handleMarquerTousPresents}
-                disabled={saving || stats.absents === 0}
-                style={{
-                  ...buttonPrimaryStyle,
-                  backgroundColor: '#10b981',
-                  color: 'white',
-                  opacity: saving || stats.absents === 0 ? 0.5 : 1
-                }}
-              >
-                Tous présents
-              </button>
-              <button
-                onClick={handleMarquerTousAbsents}
-                disabled={saving || stats.presents === 0}
-                style={{
-                  ...buttonPrimaryStyle,
-                  backgroundColor: '#ef4444',
-                  color: 'white',
-                  opacity: saving || stats.presents === 0 ? 0.5 : 1
-                }}
-              >
-                Tous absents
-              </button>
+              {!readOnly && (
+                <>
+                  <button
+                    onClick={handleMarquerTousPresents}
+                    disabled={saving || stats.absents === 0}
+                    style={{
+                      ...buttonPrimaryStyle,
+                      backgroundColor: '#10b981',
+                      color: 'white',
+                      opacity: saving || stats.absents === 0 ? 0.5 : 1
+                    }}
+                  >
+                    Tous présents
+                  </button>
+                  <button
+                    onClick={handleMarquerTousAbsents}
+                    disabled={saving || stats.presents === 0}
+                    style={{
+                      ...buttonPrimaryStyle,
+                      backgroundColor: '#ef4444',
+                      color: 'white',
+                      opacity: saving || stats.presents === 0 ? 0.5 : 1
+                    }}
+                  >
+                    Tous absents
+                  </button>
+                </>
+              )}
               <button
                 onClick={loadPresences}
                 style={buttonSecondaryStyle}
@@ -452,6 +462,7 @@ export default function EmargementPanel({
                           <select
                             value={presence.status}
                             onChange={(e) => handleStatutChange(presence.studentId!, e.target.value as PresenceStatus)}
+                            disabled={readOnly}
                             style={{
                               ...selectStyle,
                               padding: '4px 8px',
@@ -523,6 +534,7 @@ export default function EmargementPanel({
                       <select
                         value={presence.status}
                         onChange={(e) => handleStatutChange(presence.studentId!, e.target.value as PresenceStatus)}
+                        disabled={readOnly}
                         style={{
                           ...selectStyle,
                           padding: '6px 10px',

@@ -9,15 +9,18 @@ import TableCard from '@/shared/components/TableCard';
 import { Etudiant, EtudiantFormData } from '../types';
 import { fetchClasses } from '@/modules/structure/services/structureService';
 import { useAuth } from '@/modules/auth/context/AuthContext';
+import { useActiveYear } from '@/shared/context/ActiveYearContext';
 import {
     fetchStudents,
+    fetchStudentsByYear,
     createStudent,
     updateStudent,
     deleteStudent,
     importStudentsFromExcel,
     generateMatricule,
     assignStudentToClasse,
-    removeStudentFromClasse
+    removeStudentFromClasse,
+    StudentRequest
 } from '../services/studentService';
 import { StudentResponseDto } from '@/shared/api/types';
 import { ApiError } from '@/shared/errors/ApiError';
@@ -66,6 +69,7 @@ const mapStudent = (student: StudentResponseDto): Etudiant => ({
 
 export default function EtudiantsContent() {
     const { roles } = useAuth();
+    const { activeStartYear } = useActiveYear();
     const isAttachéClasse = roles.includes('ROLE_ATTACHE_CLASSE');
     const [students, setStudents] = useState<Etudiant[]>([]);
     const [currentPage, setCurrentPage] = useState(1);
@@ -100,7 +104,7 @@ export default function EtudiantsContent() {
         firstName: '',
         lastName: '',
         dateOfBirth: '',
-        lieuNaissace: '',
+        lieuNaissnace: '',
         nationalite: '',
         address: '',
         phone: '',
@@ -111,15 +115,23 @@ export default function EtudiantsContent() {
     const itemsPerPage = 5;
 
     useEffect(() => {
-        loadStudents();
         loadClasses();
     }, []);
+
+    useEffect(() => {
+        loadStudents();
+    }, [activeStartYear]);
 
     const loadStudents = async () => {
         try {
             setIsLoading(true);
-            const response = await fetchStudents({ page: 0, size: 100 });
-            setStudents(response.content.map(mapStudent));
+            if (activeStartYear) {
+                const studentsByYear = await fetchStudentsByYear(activeStartYear);
+                setStudents(studentsByYear.map(mapStudent));
+            } else {
+                const response = await fetchStudents({ page: 0, size: 100 });
+                setStudents(response.content.map(mapStudent));
+            }
             setError(null);
         } catch (err) {
             if (err instanceof ApiError) {
@@ -225,7 +237,12 @@ export default function EtudiantsContent() {
         e.preventDefault();
         setIsSubmitting(true);
         try {
-            await createStudent(formData);
+            const payload: StudentRequest = {
+                ...formData,
+                lieuNaissance: formData.lieuNaissace || undefined,
+                anneeInscription: activeStartYear ?? undefined
+            };
+            await createStudent(payload);
             setSuccessMessage('Étudiant créé avec succès');
             setShowAddModal(false);
             resetForm();
@@ -530,7 +547,7 @@ export default function EtudiantsContent() {
                         >
                             <option value="">Toutes les classes</option>
                             {uniqueClasses.map(classe => (
-                                <option key={classe} value={classe}>{classe}</option>
+                                <option key={classe || ''} value={classe || ''}>{classe}</option>
                             ))}
                         </select>
                     </div>
@@ -818,11 +835,11 @@ export default function EtudiantsContent() {
                             onClick={() => { setShowAddModal(false); resetForm(); }}
                             style={{ position: 'absolute', top: '16px', right: '16px', border: 'none', background: 'transparent', cursor: 'pointer' }}
                         >
-                            <X size={18} color="#94a3b8" />
+                            <X size={18} color="black" />
                         </button>
-                        <h3 style={{ marginBottom: '16px', fontSize: '18px', fontWeight: 700 }}>Ajouter un étudiant</h3>
+                        <h3 style={{ marginBottom: '16px', fontSize: '18px', fontWeight: 700, color: 'black' }}>Ajouter un étudiant</h3>
                         {matriculePreview && (
-                            <div style={{ marginBottom: '16px', padding: '8px 12px', background: '#f0f9ff', borderRadius: '8px', fontSize: '13px' }}>
+                            <div style={{ marginBottom: '16px', padding: '8px 12px', background: '#f0f9ff', borderRadius: '8px', fontSize: '13px', color: 'black' }}>
                                 Matricule généré: <strong>{matriculePreview}</strong>
                             </div>
                         )}
@@ -834,7 +851,7 @@ export default function EtudiantsContent() {
                                     value={formData.firstName}
                                     onChange={e => setFormData({ ...formData, firstName: e.target.value })}
                                     required
-                                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', color: 'black' }}
                                 />
                                 <input
                                     type="text"
@@ -842,7 +859,7 @@ export default function EtudiantsContent() {
                                     value={formData.lastName}
                                     onChange={e => setFormData({ ...formData, lastName: e.target.value })}
                                     required
-                                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', color: 'black' }}
                                 />
                                 <input
                                     type="email"
@@ -850,7 +867,7 @@ export default function EtudiantsContent() {
                                     value={formData.email}
                                     onChange={e => setFormData({ ...formData, email: e.target.value })}
                                     required
-                                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', color: 'black' }}
                                 />
                                 <input
                                     type="password"
@@ -858,7 +875,7 @@ export default function EtudiantsContent() {
                                     value={formData.password}
                                     onChange={e => setFormData({ ...formData, password: e.target.value })}
                                     required
-                                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', color: 'black' }}
                                 />
                                 <input
                                     type="date"
@@ -866,19 +883,19 @@ export default function EtudiantsContent() {
                                     value={formData.dateOfBirth}
                                     onChange={e => setFormData({ ...formData, dateOfBirth: e.target.value })}
                                     required
-                                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', color: 'black' }}
                                 />
                                 <input
                                     type="text"
                                     placeholder="Téléphone"
                                     value={formData.phone}
                                     onChange={e => setFormData({ ...formData, phone: e.target.value })}
-                                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', color: 'black' }}
                                 />
                                 <select
                                     value={formData.gender}
                                     onChange={e => setFormData({ ...formData, gender: e.target.value })}
-                                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', color: 'black' }}
                                 >
                                     <option value="">Genre</option>
                                     <option value="M">Masculin</option>
@@ -889,12 +906,12 @@ export default function EtudiantsContent() {
                                     placeholder="Nationalité"
                                     value={formData.nationalite}
                                     onChange={e => setFormData({ ...formData, nationalite: e.target.value })}
-                                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', color: 'black' }}
                                 />
                                 <select
                                     value={formData.classeId}
                                     onChange={e => setFormData({ ...formData, classeId: e.target.value })}
-                                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', color: 'black' }}
                                 >
                                     <option value="">Sélectionner une classe</option>
                                     {classes.map(c => (
@@ -907,13 +924,13 @@ export default function EtudiantsContent() {
                                 placeholder="Lieu de naissance"
                                 value={formData.lieuNaissace}
                                 onChange={e => setFormData({ ...formData, lieuNaissace: e.target.value })}
-                                style={{ marginTop: '12px', width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                                style={{ marginTop: '12px', width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', color: 'black' }}
                             />
                             <textarea
                                 placeholder="Adresse"
                                 value={formData.address}
                                 onChange={e => setFormData({ ...formData, address: e.target.value })}
-                                style={{ marginTop: '12px', width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', minHeight: '60px' }}
+                                style={{ marginTop: '12px', width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', minHeight: '60px', color: 'black' }}
                             />
                             <button
                                 type="submit"
@@ -964,10 +981,10 @@ export default function EtudiantsContent() {
                             onClick={() => { setShowEditModal(false); setEditingEtudiant(null); resetForm(); }}
                             style={{ position: 'absolute', top: '16px', right: '16px', border: 'none', background: 'transparent', cursor: 'pointer' }}
                         >
-                            <X size={18} color="#94a3b8" />
+                            <X size={18} color="black" />
                         </button>
-                        <h3 style={{ marginBottom: '16px', fontSize: '18px', fontWeight: 700 }}>Modifier l'étudiant</h3>
-                        <div style={{ marginBottom: '16px', padding: '8px 12px', background: '#f0f9ff', borderRadius: '8px', fontSize: '13px' }}>
+                        <h3 style={{ marginBottom: '16px', fontSize: '18px', fontWeight: 700, color: 'black' }}>Modifier l'étudiant</h3>
+                        <div style={{ marginBottom: '16px', padding: '8px 12px', background: '#f0f9ff', borderRadius: '8px', fontSize: '13px', color: 'black' }}>
                             Matricule: <strong>{editingEtudiant.matricule}</strong>
                         </div>
                         <form onSubmit={handleEditStudent}>
@@ -978,7 +995,7 @@ export default function EtudiantsContent() {
                                     value={formData.firstName}
                                     onChange={e => setFormData({ ...formData, firstName: e.target.value })}
                                     required
-                                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', color: 'black' }}
                                 />
                                 <input
                                     type="text"
@@ -986,7 +1003,7 @@ export default function EtudiantsContent() {
                                     value={formData.lastName}
                                     onChange={e => setFormData({ ...formData, lastName: e.target.value })}
                                     required
-                                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', color: 'black' }}
                                 />
                                 <input
                                     type="email"
@@ -994,14 +1011,14 @@ export default function EtudiantsContent() {
                                     value={formData.email}
                                     onChange={e => setFormData({ ...formData, email: e.target.value })}
                                     required
-                                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', color: 'black' }}
                                 />
                                 <input
                                     type="password"
                                     placeholder="Nouveau mot de passe (laisser vide pour conserver)"
                                     value={formData.password}
                                     onChange={e => setFormData({ ...formData, password: e.target.value })}
-                                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', color: 'black' }}
                                 />
                                 <input
                                     type="date"
@@ -1009,19 +1026,19 @@ export default function EtudiantsContent() {
                                     value={formData.dateOfBirth}
                                     onChange={e => setFormData({ ...formData, dateOfBirth: e.target.value })}
                                     required
-                                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', color: 'black' }}
                                 />
                                 <input
                                     type="text"
                                     placeholder="Téléphone"
                                     value={formData.phone}
                                     onChange={e => setFormData({ ...formData, phone: e.target.value })}
-                                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', color: 'black' }}
                                 />
                                 <select
                                     value={formData.gender}
                                     onChange={e => setFormData({ ...formData, gender: e.target.value })}
-                                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', color: 'black' }}
                                 >
                                     <option value="">Genre</option>
                                     <option value="M">Masculin</option>
@@ -1032,7 +1049,7 @@ export default function EtudiantsContent() {
                                     placeholder="Nationalité"
                                     value={formData.nationalite}
                                     onChange={e => setFormData({ ...formData, nationalite: e.target.value })}
-                                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                                    style={{ padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', color: 'black' }}
                                 />
                             </div>
                             <input
@@ -1040,13 +1057,13 @@ export default function EtudiantsContent() {
                                 placeholder="Lieu de naissance"
                                 value={formData.lieuNaissace}
                                 onChange={e => setFormData({ ...formData, lieuNaissace: e.target.value })}
-                                style={{ marginTop: '12px', width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                                style={{ marginTop: '12px', width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', color: 'black' }}
                             />
                             <textarea
                                 placeholder="Adresse"
                                 value={formData.address}
                                 onChange={e => setFormData({ ...formData, address: e.target.value })}
-                                style={{ marginTop: '12px', width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', minHeight: '60px' }}
+                                style={{ marginTop: '12px', width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', minHeight: '60px', color: 'black' }}
                             />
                             <button
                                 type="submit"
@@ -1234,44 +1251,44 @@ export default function EtudiantsContent() {
                         <h3 style={{ marginBottom: '16px', fontSize: '18px', fontWeight: 700 }}>Détails de l'étudiant</h3>
                         <div style={{ display: 'grid', gap: '12px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
-                                <span style={{ color: '#64748b' }}>Matricule</span>
-                                <span style={{ fontWeight: '600' }}>{selectedEtudiant.matricule}</span>
+                                <span style={{ color: 'black' }}>Matricule</span>
+                                <span style={{ fontWeight: '600', color: 'black' }}>{selectedEtudiant.matricule}</span>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
-                                <span style={{ color: '#64748b' }}>Nom complet</span>
-                                <span style={{ fontWeight: '600' }}>{selectedEtudiant.firstName} {selectedEtudiant.lastName}</span>
+                                <span style={{ color: 'black' }}>Nom complet</span>
+                                <span style={{ fontWeight: '600', color: 'black' }}>{selectedEtudiant.firstName} {selectedEtudiant.lastName}</span>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
-                                <span style={{ color: '#64748b' }}>Email</span>
-                                <span>{selectedEtudiant.email ?? '—'}</span>
+                                <span style={{ color: 'black' }}>Email</span>
+                                <span style={{ color: 'black' }}>{selectedEtudiant.email ?? '—'}</span>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
-                                <span style={{ color: '#64748b' }}>Téléphone</span>
-                                <span>{selectedEtudiant.phone ?? '—'}</span>
+                                <span style={{ color: 'black' }}>Téléphone</span>
+                                <span style={{ color: 'black' }}>{selectedEtudiant.phone ?? '—'}</span>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
-                                <span style={{ color: '#64748b' }}>Date de naissance</span>
-                                <span>{selectedEtudiant.dateOfBirth ?? '—'}</span>
+                                <span style={{ color: 'black' }}>Date de naissance</span>
+                                <span style={{ color: 'black' }}>{selectedEtudiant.dateOfBirth ?? '—'}</span>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
-                                <span style={{ color: '#64748b' }}>Genre</span>
-                                <span>{selectedEtudiant.gender === 'M' ? 'Masculin' : selectedEtudiant.gender === 'F' ? 'Féminin' : '—'}</span>
+                                <span style={{ color: 'black' }}>Genre</span>
+                                <span style={{ color: 'black' }}>{selectedEtudiant.gender === 'M' ? 'Masculin' : selectedEtudiant.gender === 'F' ? 'Féminin' : '—'}</span>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
-                                <span style={{ color: '#64748b' }}>Classe</span>
-                                <span>{selectedEtudiant.classe ?? '—'}</span>
+                                <span style={{ color: 'black' }}>Classe</span>
+                                <span style={{ color: 'black' }}>{selectedEtudiant.classe ?? '—'}</span>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
-                                <span style={{ color: '#64748b' }}>Année d'inscription</span>
-                                <span>{selectedEtudiant.anneeInscription ?? '—'}</span>
+                                <span style={{ color: 'black' }}>Année d'inscription</span>
+                                <span style={{ color: 'black' }}>{selectedEtudiant.anneeInscription ?? '—'}</span>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
-                                <span style={{ color: '#64748b' }}>Nationalité</span>
-                                <span>{selectedEtudiant.nationalite ?? '—'}</span>
+                                <span style={{ color: 'black' }}>Nationalité</span>
+                                <span style={{ color: 'black' }}>{selectedEtudiant.nationalite ?? '—'}</span>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}>
-                                <span style={{ color: '#64748b' }}>Adresse</span>
-                                <span>{selectedEtudiant.address ?? '—'}</span>
+                                <span style={{ color: 'black' }}>Adresse</span>
+                                <span style={{ color: 'black' }}>{selectedEtudiant.address ?? '—'}</span>
                             </div>
                         </div>
                         <button

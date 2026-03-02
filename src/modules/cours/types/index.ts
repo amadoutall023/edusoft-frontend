@@ -13,6 +13,7 @@ export interface Cours {
     progression: number;
     classes?: string[];
     module?: string | null;
+    summary?: string | null;
     isArchive?: boolean;
 }
 

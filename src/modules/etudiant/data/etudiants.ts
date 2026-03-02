@@ -1,89 +1,115 @@
-import { Etudiant } from '../types';
+import { LucideIcon } from 'lucide-react';
+import { Calendar, User, QrCode, Bell, FileText } from 'lucide-react';
+import { Etudiant, MenuAction } from '../types';
+import { StudentResponseDto, ClasseInfoDto } from '@/shared/api/types';
 
-export const etudiantsData: Etudiant[] = [
+// Helper pour construire le label de la classe
+const buildClasseLabel = (classe?: ClasseInfoDto | null) => {
+    if (!classe) return null;
+    const parts = [
+        classe.libelle ?? '',
+        classe.niveau?.libelle ? ` - ${classe.niveau.libelle}` : '',
+        classe.filiere?.libelle ? ` (${classe.filiere.libelle})` : ''
+    ];
+    return parts.join('').trim();
+};
+
+// Mapper pour convertir StudentResponseDto en Etudiant
+export const mapStudentToEtudiant = (student: StudentResponseDto): Etudiant => ({
+    id: student.id,
+    matricule: student.matricule,
+    firstName: student.firstName ?? '',
+    lastName: student.lastName ?? '',
+    email: student.email ?? '',
+    phone: student.phone ?? '',
+    dateOfBirth: student.dateOfBirth ?? undefined,
+    lieuNaissance: student.lieuNaissance ?? undefined,
+    nationalite: student.nationalite ?? undefined,
+    address: student.address ?? undefined,
+    gender: student.gender ?? undefined,
+    classe: buildClasseLabel(student.classe) ?? 'Non assigne',
+    classeInfo: student.classe ? {
+        id: student.classe.id ?? null,
+        libelle: student.classe.libelle ?? null,
+        filiere: student.classe.filiere ? {
+            id: student.classe.filiere.id ?? '',
+            libelle: student.classe.filiere.libelle ?? ''
+        } : null,
+        niveau: student.classe.niveau ? {
+            id: student.classe.niveau.id ?? '',
+            libelle: student.classe.niveau.libelle ?? ''
+        } : null
+    } : undefined,
+    anneeInscription: student.anneeInscription ?? undefined,
+    qrToken: student.qrToken ?? undefined,
+    qrCodeImage: student.qrCodeImage ?? undefined,
+    createdAt: student.createdAt ?? undefined,
+    updatedAt: student.updatedAt ?? undefined
+});
+
+// Donnees par defaut pour l'etudiant (fallback quand API non disponible)
+export const etudiantActuel: Etudiant = {
+    id: '',
+    matricule: '',
+    firstName: '',
+    lastName: '',
+    classe: 'Non assigne',
+    presence: 0
+};
+
+// Menu des actions pour l'etudiant
+export const menuActions: MenuAction[] = [
     {
-        id: 1,
-        matricule: 'ETU2024001',
-        firstName: 'Amadou',
-        lastName: 'SALL',
-        email: 'amadou.sall@ecoleism.sn',
-        phone: '+221 77 123 45 67',
-        dateOfBirth: '2005-03-15',
-        lieuNaissance: 'Dakar',
-        nationalite: 'Sénégalaise',
-        address: 'Fann, Dakar',
-        gender: 'M',
-        classe: 'L1-CPD',
-        anneeInscription: 2024,
-        qrToken: 'QR_ETU2024001_ABC123'
+        id: 'planning',
+        titre: 'Planning',
+        sousTitre: 'Voir Vos Cours',
+        icon: Calendar,
+        couleur: 'blue',
+        route: '/dashboard/etudiant/planning'
     },
     {
-        id: 2,
-        matricule: 'ETU2024002',
-        firstName: 'Fatou',
-        lastName: 'DIOP',
-        email: 'fatou.diop@ecoleism.sn',
-        phone: '+221 77 234 56 78',
-        dateOfBirth: '2004-07-22',
-        lieuNaissance: 'Thiès',
-        nationalite: 'Sénégalaise',
-        address: 'Mermoz, Dakar',
-        gender: 'F',
-        classe: 'L2-CDSD',
-        anneeInscription: 2024,
-        qrToken: 'QR_ETU2024002_DEF456'
+        id: 'absences',
+        titre: 'Absences Et Retard',
+        sousTitre: 'Historique De Presence',
+        icon: User,
+        couleur: 'yellow',
+        route: '/dashboard/etudiant/absences'
     },
     {
-        id: 3,
-        matricule: 'ETU2024003',
-        firstName: 'Moussa',
-        lastName: 'NDIAYE',
-        email: 'moussa.ndiaye@ecoleism.sn',
-        phone: '+221 76 345 67 89',
-        dateOfBirth: '2006-01-10',
-        lieuNaissance: 'Kaolack',
-        nationalite: 'Sénégalaise',
-        address: 'Sicap Liberté, Dakar',
-        gender: 'M',
-        classe: 'L1-GRLS',
-        anneeInscription: 2024,
-        qrToken: 'QR_ETU2024003_GHI789'
+        id: 'scanner',
+        titre: 'Scanner De Code QR',
+        sousTitre: 'Enregistrer Votre Presence',
+        icon: QrCode,
+        couleur: 'green',
+        route: '/dashboard/etudiant/scanner'
     },
     {
-        id: 4,
-        matricule: 'ETU2024004',
-        firstName: 'Mariama',
-        lastName: 'SOW',
-        email: 'mariama.sow@ecoleism.sn',
-        phone: '+221 70 456 78 90',
-        dateOfBirth: '2005-11-05',
-        lieuNaissance: 'Saint-Louis',
-        nationalite: 'Sénégalaise',
-        address: 'Point E, Dakar',
-        gender: 'F',
-        classe: 'L3-CDSD',
-        anneeInscription: 2024,
-        qrToken: 'QR_ETU2024004_JKL012'
+        id: 'notifications',
+        titre: 'Notification',
+        sousTitre: 'Voir Les Notifications',
+        icon: Bell,
+        couleur: 'red',
+        route: '/dashboard/etudiant/notifications'
     },
     {
-        id: 5,
-        matricule: 'ETU2024005',
-        firstName: 'Ousmane',
-        lastName: 'SENE',
-        email: 'ousmane.sene@ecoleism.sn',
-        phone: '+221 78 567 89 01',
-        dateOfBirth: '2004-05-18',
-        lieuNaissance: 'Ziguinchor',
-        nationalite: 'Sénégalaise',
-        address: 'Ouakam, Dakar',
-        gender: 'M',
-        classe: 'L2-CPD',
-        anneeInscription: 2024,
-        qrToken: 'QR_ETU2024005_MNO345'
+        id: 'evaluations',
+        titre: 'Mes Evaluations',
+        sousTitre: 'Voir Vos Notes',
+        icon: FileText,
+        couleur: 'purple',
+        route: '/dashboard/etudiant/evaluation'
     }
 ];
 
-export const classes = ['L1-CPD', 'L1-GRLS', 'L2-CPD', 'L2-CDSD', 'L3-CDSD'];
-
-export const anneesInscription = [2022, 2023, 2024, 2025];
-
+/*
+ * ANCIENNES DONNEES MOCK - SUPPRIMEES
+ * Les donnees sont maintenant chargees depuis le backend via les services API:
+ * - fetchMyPresenceStats() pour les statistiques de presence
+ * - fetchMyAbsences() pour l'historique des absences
+ * - fetchMyCours() pour les cours de l'etudiant
+ * - fetchMySessions() pour le planning
+ * - fetchMyEvaluations() / fetchMyNotes() pour les evaluations et notes
+ * - fetchMyQRCode() pour le code QR personnel
+ * 
+ * Voir: src/modules/etudiant/services/dashboardService.ts
+ */

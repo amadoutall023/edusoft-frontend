@@ -1,15 +1,18 @@
 import { ApiError } from '@/shared/errors/ApiError';
 import { ApiResponse, AuthResponse } from './types';
 import { tokenStorage } from './tokenStorage';
+import { getStoredActiveYearId } from './activeYearStorage';
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 export interface HttpRequestOptions extends RequestInit {
     skipAuth?: boolean;
     method?: HttpMethod;
+    suppressErrorLog?: boolean; // Suppress console.error for expected errors (e.g., 403 on optional endpoints)
+    skipYearFilter?: boolean; // Skip adding anneeScolaireId to the request
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8081';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ;
 
 let refreshPromise: Promise<void> | null = null;
 
@@ -61,7 +64,16 @@ async function parseResponse<T>(response: Response): Promise<T> {
 }
 
 export async function httpClient<T>(path: string, options: HttpRequestOptions = {}, retry = false): Promise<T> {
-    const url = path.startsWith('http') ? path : `${API_BASE_URL}${path}`;
+    const activeYearId = getStoredActiveYearId();
+    
+    // Add academic year as query parameter instead of header to avoid CORS issues
+    // Only add if not explicitly skipped and there's an active year
+    let url = path.startsWith('http') ? path : `${API_BASE_URL}${path}`;
+    if (activeYearId && !options.skipYearFilter && !path.includes('anneeScolaireId=')) {
+        const separator = url.includes('?') ? '&' : '?';
+        url = `${url}${separator}anneeScolaireId=${activeYearId}`;
+    }
+    
     const headers = new Headers(options.headers || {});
 
     if (!options.skipAuth) {
@@ -107,7 +119,11 @@ export async function httpClient<T>(path: string, options: HttpRequestOptions = 
         } catch {
             details = null;
         }
-        console.error('Erreur API:', response.status, details);
+        // Only log errors if not suppressed
+        const suppressLog = (options as HttpRequestOptions)?.suppressErrorLog;
+        if (!suppressLog) {
+            console.error('Erreur API:', response.status, details);
+        }
         const message = (details as { message?: string })?.message ?? response.statusText;
         throw new ApiError(response.status, message, details);
     }

@@ -10,29 +10,39 @@ import {
     UUID
 } from '@/shared/api/types';
 
+function getActiveYearId(customId?: UUID): UUID | undefined {
+    // Academic year is now handled globally in httpClient
+    return customId;
+}
+
 export interface ClassePayload {
     libelle: string;
     filiereId: UUID;
     niveauId: UUID;
     schoolId: UUID;
+    anneeScolaireId?: UUID;
 }
 
 export interface FilierePayload {
     libelle: string;
+    anneeScolaireId?: UUID;
 }
 
 export interface ModulePayload {
     libelle: string;
     filiereId?: UUID | null;
+    anneeScolaireId?: UUID;
 }
 
 export interface NiveauPayload {
     libelle: string;
+    anneeScolaireId?: UUID;
 }
 
 export interface SallePayload {
     libelle: string;
     capacity?: number;
+    anneeScolaireId?: UUID;
 }
 
 export interface StructureListQuery {
@@ -46,25 +56,30 @@ export interface ClassesQuery extends StructureListQuery {
     schoolId?: UUID;
     filiereId?: UUID;
     niveauId?: UUID;
+    anneeScolaireId?: UUID;
 }
 
 export interface FilieresQuery extends StructureListQuery {
     schoolId?: UUID;
+    anneeScolaireId?: UUID;
 }
 
 export interface ModulesQuery extends StructureListQuery {
     schoolId?: UUID;
     filiereId?: UUID;
+    anneeScolaireId?: UUID;
 }
 
 export interface NiveauxQuery extends StructureListQuery {
     schoolId?: UUID;
+    anneeScolaireId?: UUID;
 }
 
 export interface SallesQuery extends StructureListQuery {
     schoolId?: UUID;
     minCapacity?: number;
     maxCapacity?: number;
+    anneeScolaireId?: UUID;
 }
 
 export interface PagedResult<T> {
@@ -97,6 +112,7 @@ function normalizePagedResponse<T>(response: ApiResponse<T[]>): PagedResult<T> {
 }
 
 export async function fetchClassesPage(query: ClassesQuery = {}): Promise<PagedResult<ClasseResponseDto>> {
+    // Skip year filter for structure endpoints - can cause serialization issues
     const response = await httpClient<ApiResponse<ClasseResponseDto[]>>(
         `/api/v1/classes${buildQueryString({
             page: query.page ?? DEFAULT_QUERY.page,
@@ -106,12 +122,14 @@ export async function fetchClassesPage(query: ClassesQuery = {}): Promise<PagedR
             schoolId: query.schoolId,
             filiereId: query.filiereId,
             niveauId: query.niveauId
-        })}`
+        })}`,
+        { skipYearFilter: true }
     );
     return normalizePagedResponse(response);
 }
 
 export async function fetchFilieresPage(query: FilieresQuery = {}): Promise<PagedResult<FiliereResponseDto>> {
+    // Skip year filter for structure endpoints - can cause serialization issues
     const response = await httpClient<ApiResponse<FiliereResponseDto[]>>(
         `/api/v1/filieres${buildQueryString({
             page: query.page ?? DEFAULT_QUERY.page,
@@ -119,12 +137,14 @@ export async function fetchFilieresPage(query: FilieresQuery = {}): Promise<Page
             sort: query.sort ?? DEFAULT_QUERY.sort,
             q: query.q,
             schoolId: query.schoolId
-        })}`
+        })}`,
+        { skipYearFilter: true }
     );
     return normalizePagedResponse(response);
 }
 
 export async function fetchModulesPage(query: ModulesQuery = {}): Promise<PagedResult<ModuleResponseDto>> {
+    // Skip year filter for structure endpoints - can cause serialization issues
     const response = await httpClient<ApiResponse<ModuleResponseDto[]>>(
         `/api/v1/modules${buildQueryString({
             page: query.page ?? DEFAULT_QUERY.page,
@@ -133,12 +153,14 @@ export async function fetchModulesPage(query: ModulesQuery = {}): Promise<PagedR
             q: query.q,
             schoolId: query.schoolId,
             filiereId: query.filiereId
-        })}`
+        })}`,
+        { skipYearFilter: true }
     );
     return normalizePagedResponse(response);
 }
 
 export async function fetchNiveauxPage(query: NiveauxQuery = {}): Promise<PagedResult<NiveauResponseDto>> {
+    // Skip year filter for structure endpoints - can cause serialization issues
     const response = await httpClient<ApiResponse<NiveauResponseDto[]>>(
         `/api/v1/niveaux${buildQueryString({
             page: query.page ?? DEFAULT_QUERY.page,
@@ -146,12 +168,14 @@ export async function fetchNiveauxPage(query: NiveauxQuery = {}): Promise<PagedR
             sort: query.sort ?? DEFAULT_QUERY.sort,
             q: query.q,
             schoolId: query.schoolId
-        })}`
+        })}`,
+        { skipYearFilter: true }
     );
     return normalizePagedResponse(response);
 }
 
 export async function fetchSallesPage(query: SallesQuery = {}): Promise<PagedResult<SalleResponseDto>> {
+    // Skip year filter for structure endpoints - can cause serialization issues
     const response = await httpClient<ApiResponse<SalleResponseDto[]>>(
         `/api/v1/salles${buildQueryString({
             page: query.page ?? DEFAULT_QUERY.page,
@@ -161,7 +185,8 @@ export async function fetchSallesPage(query: SallesQuery = {}): Promise<PagedRes
             schoolId: query.schoolId,
             minCapacity: query.minCapacity,
             maxCapacity: query.maxCapacity
-        })}`
+        })}`,
+        { skipYearFilter: true }
     );
     return normalizePagedResponse(response);
 }

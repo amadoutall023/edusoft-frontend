@@ -1,13 +1,13 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Bell, Menu } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import { useAuth } from '@/modules/auth/context/AuthContext';
-import NotificationDropdown from './NotificationDropdown';
 import { useSidebar } from '@/shared/context/SidebarContext';
-import { getActiveYear, getAvailableYears, setActiveYear } from '@/shared/api/activeYearService';
-import { ActiveYearResponse } from '@/shared/api/types';
-import { ApiError } from '@/shared/errors/ApiError';
+import { useActiveYear } from '@/shared/context/ActiveYearContext';
+
+const NotificationDropdown = dynamic(() => import('./NotificationDropdown'), { ssr: false });
 
 interface HeaderProps {
     onMenuClick?: () => void;
@@ -17,44 +17,18 @@ interface HeaderProps {
 export default function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
     const { user, roles } = useAuth();
     const [isNotificationOpen, setIsNotificationOpen] = useState(false);
-    const { toggleSidebar, isOpen } = useSidebar();
-    const [availableYears, setAvailableYears] = useState<ActiveYearResponse[]>([]);
-    const [selectedYearId, setSelectedYearId] = useState<string>('');
-    const [isYearLoading, setIsYearLoading] = useState(true);
-    const [isYearSaving, setIsYearSaving] = useState(false);
-    const [yearError, setYearError] = useState<string | null>(null);
+    const { toggleSidebar } = useSidebar();
+    const {
+        availableYears,
+        selectedYearId,
+        isLoading: isYearLoading,
+        isSaving: isYearSaving,
+        error: yearError,
+        setActiveYearById
+    } = useActiveYear();
 
     const userName = user ? `${user.firstName} ${user.lastName}` : '';
     const userRole = roles.length > 0 ? roles[0].replace('ROLE_', '').replaceAll('_', ' ') : '';
-
-    useEffect(() => {
-        const loadYears = async () => {
-            try {
-                setIsYearLoading(true);
-                const [available, active] = await Promise.all([
-                    getAvailableYears(),
-                    getActiveYear()
-                ]);
-                setAvailableYears(available);
-                if (active?.id) {
-                    setSelectedYearId(active.id);
-                } else if (available.length > 0) {
-                    setSelectedYearId(available[0].id);
-                }
-                setYearError(null);
-            } catch (err) {
-                if (err instanceof ApiError) {
-                    setYearError(err.message);
-                } else {
-                    setYearError('Années scolaires indisponibles');
-                }
-            } finally {
-                setIsYearLoading(false);
-            }
-        };
-
-        loadYears();
-    }, []);
 
     const toggleNotifications = () => {
         setIsNotificationOpen(!isNotificationOpen);
@@ -118,20 +92,11 @@ export default function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
                     value={selectedYearId}
                     onChange={async (e) => {
                         const value = e.target.value;
-                        setSelectedYearId(value);
                         if (!value) return;
                         try {
-                            setIsYearSaving(true);
-                            await setActiveYear(value);
-                            setYearError(null);
-                        } catch (err) {
-                            if (err instanceof ApiError) {
-                                setYearError(err.message);
-                            } else {
-                                setYearError('Impossible de définir l’année active');
-                            }
-                        } finally {
-                            setIsYearSaving(false);
+                            await setActiveYearById(value);
+                        } catch {
+                            // Error state is handled by context
                         }
                     }}
                     disabled={isYearLoading || availableYears.length === 0}
