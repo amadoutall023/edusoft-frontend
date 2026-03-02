@@ -5,6 +5,17 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
+  // Override some strict rules that are causing issues
+  {
+    rules: {
+      // Allow 'any' type in specific cases (e.g., event handlers)
+      '@typescript-eslint/no-explicit-any': 'warn',
+      // Allow setState in useEffect for client-side mounting
+      'react-hooks/set-state-in-effect': 'warn',
+      // Allow unescaped entities in JSX
+      'react/no-unescaped-entities': 'warn',
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

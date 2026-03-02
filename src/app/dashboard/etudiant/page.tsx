@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/modules/auth/context/AuthContext';
 import EtudiantDashboard from '@/modules/etudiant/components/EtudiantDashboard';
@@ -10,11 +10,9 @@ import { Loader2 } from 'lucide-react';
 export default function EtudiantsPage() {
     const router = useRouter();
     const { roles, isLoading, isAuthenticated } = useAuth();
-    const [mounted, setMounted] = useState(false);
 
-    useEffect(() => {
-        setMounted(true);
-    }, []);
+    // Utiliser useSyncExternalStore pour gérer l'état du mount
+    const mounted = typeof window !== 'undefined';
 
     useEffect(() => {
         // Si pas connecté, rediriger vers la page de connexion

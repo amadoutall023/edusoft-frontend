@@ -1,26 +1,23 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/modules/auth/context/AuthContext';
 
 export default function Home() {
   const router = useRouter();
   const { isAuthenticated, isLoading } = useAuth();
-  const [hasNavigated, setHasNavigated] = useState(false);
 
   useEffect(() => {
     // Prevent multiple navigations
-    if (hasNavigated || isLoading) return;
+    if (isLoading) return;
 
     if (isAuthenticated) {
-      setHasNavigated(true);
       router.push('/dashboard');
     } else {
-      setHasNavigated(true);
       router.push('/connexion');
     }
-  }, [isAuthenticated, isLoading, router, hasNavigated]);
+  }, [isAuthenticated, isLoading, router]);
 
   return (
     <div style={{
