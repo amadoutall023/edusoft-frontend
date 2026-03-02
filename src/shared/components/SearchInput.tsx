@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { FocusEvent } from 'react';
 import { Search } from 'lucide-react';
 
 interface SearchInputProps {
@@ -50,11 +50,11 @@ export default function SearchInput({
                     background: 'white',
                     color: '#000000'
                 }}
-                onFocus={(e: any) => {
+                onFocus={(e: FocusEvent<HTMLInputElement>) => {
                     e.currentTarget.style.borderColor = '#5B8DEF';
                     e.currentTarget.style.boxShadow = '0 0 0 3px rgba(91,141,239,0.1)';
                 }}
-                onBlur={(e: any) => {
+                onBlur={(e: FocusEvent<HTMLInputElement>) => {
                     e.currentTarget.style.borderColor = '#e5e7eb';
                     e.currentTarget.style.boxShadow = 'none';
                 }}

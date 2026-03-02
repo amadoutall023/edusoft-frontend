@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { MouseEvent } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface PaginationProps {
@@ -90,13 +90,13 @@ export default function Pagination({
                     transition: 'all 0.2s ease',
                     opacity: currentPage === 1 ? 0.5 : 1
                 }}
-                onMouseEnter={(e: any) => {
+                onMouseEnter={(e: MouseEvent<HTMLButtonElement>) => {
                     if (currentPage !== 1) {
                         e.currentTarget.style.borderColor = '#5B8DEF';
                         e.currentTarget.style.background = '#f7fafc';
                     }
                 }}
-                onMouseLeave={(e: any) => {
+                onMouseLeave={(e: MouseEvent<HTMLButtonElement>) => {
                     e.currentTarget.style.borderColor = '#e5e7eb';
                     e.currentTarget.style.background = 'white';
                 }}
@@ -123,13 +123,13 @@ export default function Pagination({
                             transition: 'all 0.2s ease',
                             fontFamily: 'inherit'
                         }}
-                        onMouseEnter={(e: any) => {
+                        onMouseEnter={(e: MouseEvent<HTMLButtonElement>) => {
                             if (currentPage !== page) {
                                 e.currentTarget.style.borderColor = '#5B8DEF';
                                 e.currentTarget.style.background = '#f7fafc';
                             }
                         }}
-                        onMouseLeave={(e: any) => {
+                        onMouseLeave={(e: MouseEvent<HTMLButtonElement>) => {
                             if (currentPage !== page) {
                                 e.currentTarget.style.borderColor = '#e5e7eb';
                                 e.currentTarget.style.background = 'white';
@@ -162,13 +162,13 @@ export default function Pagination({
                     transition: 'all 0.2s ease',
                     opacity: currentPage === totalPages ? 0.5 : 1
                 }}
-                onMouseEnter={(e: any) => {
+                onMouseEnter={(e: MouseEvent<HTMLButtonElement>) => {
                     if (currentPage !== totalPages) {
                         e.currentTarget.style.borderColor = '#5B8DEF';
                         e.currentTarget.style.background = '#f7fafc';
                     }
                 }}
-                onMouseLeave={(e: any) => {
+                onMouseLeave={(e: MouseEvent<HTMLButtonElement>) => {
                     e.currentTarget.style.borderColor = '#e5e7eb';
                     e.currentTarget.style.background = 'white';
                 }}
