@@ -513,7 +513,11 @@ export default function PlanningContent() {
             await loadSessionsPage(0, false);
         } catch (err) {
             const message = err instanceof ApiError ? err.message : 'Impossible de déplacer la séance.';
-            alert(message);
+            Swal.fire({
+                title: 'Erreur',
+                text: message,
+                icon: 'error'
+            });
         } finally {
             setDraggedSeance(null);
             setIsMutating(false);
@@ -595,7 +599,11 @@ export default function PlanningContent() {
     const handleEditSeance = (seance: SeancePlanning) => {
         const session = sessionMap.get(seance.id);
         if (!session) {
-            alert('Impossible de récupérer les détails de la séance.');
+            Swal.fire({
+                title: 'Erreur',
+                text: 'Impossible de récupérer les détails de la séance.',
+                icon: 'error'
+            });
             return;
         }
         const week = buildWeekOption(session.date);
@@ -616,20 +624,32 @@ export default function PlanningContent() {
     const handleSubmitSession = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         if (!formState.coursId) {
-            alert('Merci de sélectionner un cours.');
+            Swal.fire({
+                title: 'Attention',
+                text: 'Merci de sélectionner un cours.',
+                icon: 'warning'
+            });
             return;
         }
 
         const selectedCourse = courses.find(course => course.id === formState.coursId);
         const effectiveClasseId = formState.classeId || selectedCourse?.classes?.[0]?.id || '';
         if (!effectiveClasseId) {
-            alert('Merci de sélectionner une classe.');
+            Swal.fire({
+                title: 'Attention',
+                text: 'Merci de sélectionner une classe.',
+                icon: 'warning'
+            });
             return;
         }
 
         const effectiveProfessorId = formState.professeurId || selectedCourse?.professor?.id || '';
         if (!effectiveProfessorId) {
-            alert('Merci de sélectionner un professeur.');
+            Swal.fire({
+                title: 'Attention',
+                text: 'Merci de sélectionner un professeur.',
+                icon: 'warning'
+            });
             return;
         }
 
@@ -638,7 +658,11 @@ export default function PlanningContent() {
             salleItem.libelle.toLowerCase() === formState.salleInput.toLowerCase()
         );
         if (!salle) {
-            alert('Merci de sélectionner une salle existante.');
+            Swal.fire({
+                title: 'Attention',
+                text: 'Merci de sélectionner une salle existante.',
+                icon: 'warning'
+            });
             return;
         }
         const [startHour, endHour] = formState.creneau.split('-');
@@ -666,16 +690,28 @@ export default function PlanningContent() {
                 );
             } else {
                 if (!selectedSemaine) {
-                    alert('Sélectionnez une semaine pour planifier.');
+                    Swal.fire({
+                        title: 'Attention',
+                        text: 'Sélectionnez une semaine pour planifier.',
+                        icon: 'warning'
+                    });
                     return;
                 }
                 const week = weekMap.get(selectedSemaine);
                 if (!week) {
-                    alert('Semaine invalide.');
+                    Swal.fire({
+                        title: 'Attention',
+                        text: 'Semaine invalide.',
+                        icon: 'warning'
+                    });
                     return;
                 }
                 if (!selectedCourse) {
-                    alert('Cours introuvable.');
+                    Swal.fire({
+                        title: 'Erreur',
+                        text: 'Cours introuvable.',
+                        icon: 'error'
+                    });
                     return;
                 }
                 const payload: SessionRequestDto = {

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import FullCalendar from '@fullcalendar/react';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
@@ -281,7 +282,11 @@ function mapSessionToEvent(session: SessionResponseDto): SeancePlanning {
 
 export default function PlanningFullCalendar() {
     const { roles } = useAuth();
+    const router = useRouter();
     const isProfesseur = roles.includes('ROLE_PROFESSEUR');
+    const isAttache = roles.includes('ROLE_ATTACHE_CLASSE');
+    // Les rôles qui peuvent gérer les émargements: PROFESSEUR et ATTACHE_CLASSE
+    const canAccessEmargement = roles.includes('ROLE_PROFESSEUR') || roles.includes('ROLE_ATTACHE_CLASSE');
     const [isMobileView, setIsMobileView] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [moduleFilter, setModuleFilter] = useState(ALL_MODULES);
@@ -512,31 +517,42 @@ export default function PlanningFullCalendar() {
     }, [salles]);
 
     const handleDateClick = useCallback((info: CalendarDateClickInfo) => {
-        if (isProfesseur) {
+        // Les attachés de classe ne peuvent pas créer de sessions
+        if (isProfesseur || isAttache) {
             return;
         }
         openCreateModalWithSlot(info.date);
-    }, [isProfesseur, openCreateModalWithSlot]);
+    }, [isProfesseur, isAttache, openCreateModalWithSlot]);
 
     const handleSelect = useCallback((info: CalendarSelectInfo) => {
-        if (isProfesseur) {
+        // Les attachés de classe ne peuvent pas créer de sessions
+        if (isProfesseur || isAttache) {
             return;
         }
         openCreateModalWithSlot(info.start, info.end);
-    }, [isProfesseur, openCreateModalWithSlot]);
+    }, [isProfesseur, isAttache, openCreateModalWithSlot]);
 
     const handleEventClick = useCallback((info: CalendarEventClickInfo) => {
-        if (isProfesseur) {
+        // Les attachés de classe ne peuvent pas modifier les sessions
+        if (isProfesseur || isAttache) {
+            // Pour les professeurs et attachés de classe, rediriger vers la page d'émargement
+            if (canAccessEmargement) {
+                const session = info.event.extendedProps.session;
+                if (session?.id) {
+                    router.push(`/dashboard/emargement/${session.id}`);
+                    return;
+                }
+            }
             return;
         }
         const session = info.event.extendedProps.session;
         const seanceRaw = info.event.extendedProps.extendedProps;
-        
+
         // Validate that seance has required id before using
         if (!seanceRaw?.id) {
             return;
         }
-        
+
         const seance = seanceRaw as SeancePlanning;
 
         setSelectedEvent(seance);
@@ -554,10 +570,11 @@ export default function PlanningFullCalendar() {
             salleId: session?.salle?.id ?? seance?.salleId ?? ''
         });
         setShowAddModal(true);
-    }, [isProfesseur]);
+    }, [isProfesseur, isAttache, canAccessEmargement, router]);
 
     const handleEventDrop = useCallback(async (info: CalendarEventDropInfo) => {
-        if (isProfesseur) {
+        // Les attachés de classe ne peuvent pas modifier les sessions
+        if (isProfesseur || isAttache) {
             if (typeof info.revert === 'function') info.revert();
             return;
         }
@@ -620,10 +637,11 @@ export default function PlanningFullCalendar() {
         } finally {
             setIsMutating(false);
         }
-    }, [isProfesseur, loadSessionsPage]);
+    }, [isProfesseur, isAttache, loadSessionsPage]);
 
     const handleDeleteSeance = async (id: string) => {
-        if (isProfesseur) {
+        // Les attachés de classe ne peuvent pas supprimer de sessions
+        if (isProfesseur || isAttache) {
             return;
         }
         const result = await Swal.fire({
@@ -663,20 +681,33 @@ export default function PlanningFullCalendar() {
 
     const handleSubmitSession = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        if (isProfesseur) {
+        // Les attachés de classe ne peuvent pas soumettre le formulaire
+        if (isProfesseur || isAttache) {
             return;
         }
 
         if (!formState.classeId) {
-            alert('Merci de sélectionner une classe.');
+            Swal.fire({
+                title: 'Attention',
+                text: 'Merci de sélectionner une classe.',
+                icon: 'warning'
+            });
             return;
         }
         if (!formState.coursId) {
-            alert('Merci de sélectionner un cours.');
+            Swal.fire({
+                title: 'Attention',
+                text: 'Merci de sélectionner un cours.',
+                icon: 'warning'
+            });
             return;
         }
         if (!formState.salleId) {
-            alert('Merci de sélectionner une salle.');
+            Swal.fire({
+                title: 'Attention',
+                text: 'Merci de sélectionner une salle.',
+                icon: 'warning'
+            });
             return;
         }
 
@@ -748,7 +779,11 @@ export default function PlanningFullCalendar() {
             setCalendarKey(prev => prev + 1);
         } catch (err) {
             const message = err instanceof ApiError ? err.message : 'Impossible d\'enregistrer la séance.';
-            alert(message);
+            Swal.fire({
+                title: 'Erreur',
+                text: message,
+                icon: 'error'
+            });
         } finally {
             setIsMutating(false);
         }
@@ -1014,7 +1049,7 @@ export default function PlanningFullCalendar() {
                         <ChevronDown size={16} color="#64748b" style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
                     </div>
 
-                    {!isProfesseur && (
+                    {!isProfesseur && !isAttache && (
                         <button
                             onClick={() => {
                                 setEditingSessionId(null);
@@ -1133,9 +1168,9 @@ export default function PlanningFullCalendar() {
 
                         successCallback(events);
                     }}
-                    editable={!isProfesseur}
-                    droppable={!isProfesseur}
-                    selectable={!isProfesseur}
+                    editable={!isProfesseur && !isAttache}
+                    droppable={!isProfesseur && !isAttache}
+                    selectable={!isProfesseur && !isAttache}
                     selectMirror={true}
                     dayMaxEvents={!isMobileView}
                     weekends={true}
@@ -1165,10 +1200,10 @@ export default function PlanningFullCalendar() {
                     datesSet={(info) => {
                         setSelectedDate(info.start.toISOString().split('T')[0]);
                     }}
-                    dateClick={isProfesseur ? undefined : handleDateClick}
+                    dateClick={isProfesseur || isAttache ? undefined : handleDateClick}
                     eventClick={handleEventClick}
-                    eventDrop={isProfesseur ? undefined : handleEventDrop}
-                    select={isProfesseur ? undefined : handleSelect}
+                    eventDrop={isProfesseur || isAttache ? undefined : handleEventDrop}
+                    select={isProfesseur || isAttache ? undefined : handleSelect}
                     eventContent={(arg) => {
                         const props = arg.event.extendedProps;
                         const seance = props?.extendedProps || props;

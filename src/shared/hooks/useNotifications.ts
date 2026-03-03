@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Notification } from '@/modules/auth/types';
 import { fetchDynamicNotifications } from '@/shared/api/notificationsService';
+import { tokenStorage } from '@/shared/api/tokenStorage';
 
 export function useNotifications() {
     const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -10,7 +11,9 @@ export function useNotifications() {
     const load = useCallback(async () => {
         try {
             setIsLoading(true);
-            const payload = await fetchDynamicNotifications();
+            // Get roles directly from tokenStorage to avoid timing issues
+            const roles = tokenStorage.getRoles();
+            const payload = await fetchDynamicNotifications(roles);
             setNotifications(payload);
             setError(null);
         } catch (err) {

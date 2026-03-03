@@ -2,6 +2,9 @@ import { ApiResponse, CoursResponseDto, SessionResponseDto, StudentResponseDto }
 import { httpClient } from '@/shared/api/httpClient';
 import { Notification } from '@/modules/auth/types';
 
+// Rôles autorisés à accéder à la liste des étudiants
+const ALLOWED_ROLES_FOR_STUDENTS = ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_ATTACHE_CLASSE', 'ROLE_DIRECTRICE', 'ROLE_RP'];
+
 const STUDENTS_ENDPOINT = '/api/v1/students/list';
 const COURSES_ENDPOINT = '/api/v1/cours?page=0&size=200';
 const SESSIONS_ENDPOINT = '/api/v1/sessions?page=0&size=200';
@@ -22,17 +25,31 @@ function isWithinDays(date: Date | null, maxDays: number) {
     return diff <= maxDays * DAYS_IN_MS;
 }
 
-export async function fetchDynamicNotifications(): Promise<Notification[]> {
+/**
+ * Vérifie si l'utilisateur a les rôles requis pour accéder aux données des étudiants
+ */
+function hasRequiredRoleForStudents(userRoles: string[]): boolean {
+    // Si aucun rôle fourni, vérifier depuis le contexte
+    if (!userRoles || userRoles.length === 0) {
+        return false;
+    }
+    return userRoles.some(role => ALLOWED_ROLES_FOR_STUDENTS.includes(role));
+}
+
+export async function fetchDynamicNotifications(userRoles: string[] = []): Promise<Notification[]> {
   
     let students: StudentResponseDto[] = [];
     let courses: CoursResponseDto[] = [];
     let sessions: SessionResponseDto[] = [];
     
-    try {
-        const studentsRes = await httpClient<ApiResponse<StudentResponseDto[]>>(STUDENTS_ENDPOINT, { suppressErrorLog: true });
-        students = studentsRes.data ?? []
-    } catch {
-        // Expected for unauthorized roles - silently ignore
+    // Only fetch students if user has the required role
+    if (hasRequiredRoleForStudents(userRoles)) {
+        try {
+            const studentsRes = await httpClient<ApiResponse<StudentResponseDto[]>>(STUDENTS_ENDPOINT, { suppressErrorLog: true });
+            students = studentsRes.data ?? []
+        } catch {
+            // Expected for unauthorized roles - silently ignore
+        }
     }
     
     try {

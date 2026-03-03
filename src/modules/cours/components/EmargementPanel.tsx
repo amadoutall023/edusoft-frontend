@@ -13,6 +13,7 @@ import {
   PresenceStatus
 } from '../services/presenceService';
 import { tokenStorage } from '@/shared/api/tokenStorage';
+import Swal from 'sweetalert2';
 
 interface EmargementPanelProps {
   sessionId: string;
@@ -77,7 +78,11 @@ export default function EmargementPanel({
       setPresences(newPresences);
     } catch (error) {
       console.error('Erreur lors de l\'initialisation:', error);
-      alert('Impossible d\'initialiser les présences. Vérifiez que la session a une classe associée.');
+      Swal.fire({
+        title: 'Erreur',
+        text: 'Impossible d\'initialiser les présences. Vérifiez que la session a une classe associée.',
+        icon: 'error'
+      });
     } finally {
       setInitializing(false);
     }
@@ -85,7 +90,11 @@ export default function EmargementPanel({
 
   const handleHemargerProfesseur = async () => {
     if (!professorId) {
-      alert('Aucun professeur assigné à cette session');
+      Swal.fire({
+        title: 'Attention',
+        text: 'Aucun professeur assigné à cette session',
+        icon: 'warning'
+      });
       return;
     }
     setSaving(true);

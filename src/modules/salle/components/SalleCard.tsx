@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { X, Calendar, Clock, Users, MapPin, BookOpen, GraduationCap } from 'lucide-react';
 import { Salle, PlanningSlot } from './types';
+import Swal from 'sweetalert2';
 
 interface SalleCardProps {
     salle: Salle;
@@ -45,7 +46,11 @@ export default function SalleCard({ salle }: SalleCardProps) {
             setShowModal(false);
             setReservation({ date: '', heureDebut: '', heureFin: '', motif: '' });
             setIsSubmitting(false);
-            alert('Réservation enregistrée avec succès!');
+            Swal.fire({
+                title: 'Succès !',
+                text: 'Réservation enregistrée avec succès!',
+                icon: 'success'
+            });
         }, 1000);
     };
 
