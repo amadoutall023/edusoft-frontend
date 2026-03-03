@@ -51,8 +51,8 @@ export const menuItemsByRole: MenuItem[] = [
     // Professeurs - pour admin, RP, AC, Directrice (PAS pour PROFESSEUR)
     { icon: UserCheck, label: 'Professeurs', path: '/dashboard/prof', roles: ['ROLE_ADMIN', 'ROLE_RP', 'ROLE_ATTACHE_CLASSE', 'ROLE_DIRECTRICE', 'ROLE_SUPER_ADMIN'] },
 
-    // Administration - pour admin, RP, AC, Directrice (PAS pour PROFESSEUR)
-    { icon: Users, label: 'Administration', path: '/dashboard/administration', roles: ['ROLE_ADMIN', 'ROLE_RP', 'ROLE_ATTACHE_CLASSE', 'ROLE_DIRECTRICE', 'ROLE_SUPER_ADMIN'] },
+    // Administration - pour admin, AC, Directrice, SUPER_ADMIN (PAS pour RP et PROFESSEUR)
+    { icon: Users, label: 'Administration', path: '/dashboard/administration', roles: ['ROLE_ADMIN' , 'ROLE_DIRECTRICE',  'ROLE_SUPER_ADMIN'] },
 
     // Structure académique - pour admin, RP, AC, Directrice (PAS pour PROFESSEUR)
     { icon: Building2, label: 'Structure académique', path: '/dashboard/structure', roles: ['ROLE_ADMIN', 'ROLE_RP', 'ROLE_ATTACHE_CLASSE', 'ROLE_DIRECTRICE', 'ROLE_SUPER_ADMIN'] },

@@ -71,6 +71,10 @@ export const tokenStorage = {
         return readSession()?.user ?? null;
     },
 
+    getRoles(): string[] {
+        return readSession()?.roles ?? [];
+    },
+
     hasValidAccessToken(): boolean {
         const session = readSession();
         if (!session) {

@@ -36,7 +36,7 @@ export default function FilieresTable({
     const [formError, setFormError] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
-    const [newFiliere, setNewFiliere] = useState({ nom: '', description: '' });
+    const [newFiliere, setNewFiliere] = useState({ nom: '' });
     const [isMobile, setIsMobile] = useState(false);
 
     useEffect(() => {
@@ -54,14 +54,14 @@ export default function FilieresTable({
     const openCreate = () => {
         setEditingId(null);
         setFormError(null);
-        setNewFiliere({ nom: '', description: '' });
+        setNewFiliere({ nom: '' });
         setShowModal(true);
     };
 
     const openEdit = (filiere: FiliereData) => {
         setEditingId(filiere.id);
         setFormError(null);
-        setNewFiliere({ nom: filiere.nom, description: filiere.description ?? '' });
+        setNewFiliere({ nom: filiere.nom });
         setShowModal(true);
     };
 
@@ -111,7 +111,7 @@ export default function FilieresTable({
             }
             setShowModal(false);
             setEditingId(null);
-            setNewFiliere({ nom: '', description: '' });
+            setNewFiliere({ nom: '' });
         } catch (err) {
             if (err instanceof ApiError) {
                 setFormError(err.message);
@@ -174,7 +174,7 @@ export default function FilieresTable({
                             <th style={{ padding: '16px', color: 'white', textAlign: 'center' }}>N°</th>
                             <th style={{ padding: '16px', color: 'white', textAlign: 'center' }}>Nom</th>
                             <th style={{ padding: '16px', color: 'white', textAlign: 'center' }}>Code</th>
-                            <th style={{ padding: '16px', color: 'white', textAlign: 'center' }}>Description</th>
+                           
                             <th style={{ padding: '16px', color: 'white', textAlign: 'center' }}>Actions</th>
                         </tr>
                     </thead>
@@ -184,7 +184,6 @@ export default function FilieresTable({
                                 <td style={{ padding: '16px', textAlign: 'center', color: 'black' }}>{startIndex + index + 1}</td>
                                 <td style={{ padding: '16px', textAlign: 'center', color: 'black' }}>{filiere.nom}</td>
                                 <td style={{ padding: '16px', textAlign: 'center', color: 'black' }}>{filiere.code}</td>
-                                <td style={{ padding: '16px', textAlign: 'center', color: 'black' }}>{filiere.description ?? 'Non renseigné'}</td>
                                 <td style={{ padding: '16px', textAlign: 'center' }}>
                                     <div style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}>
                                         <button style={iconButtonStyle} onClick={() => openEdit(filiere)}>
@@ -224,7 +223,7 @@ export default function FilieresTable({
                             fields={[
                                 { label: 'Nom', value: filiere.nom, highlight: true },
                                 { label: 'Code', value: filiere.code },
-                                { label: 'Description', value: filiere.description || 'Non renseigné' }
+                               
                             ]}
                             onEdit={() => openEdit(filiere)}
                             onDelete={() => handleDelete(filiere)}
@@ -270,15 +269,7 @@ export default function FilieresTable({
                                     style={inputStyle}
                                 />
                             </div>
-                            <div style={{ marginBottom: '20px' }}>
-                                <label style={labelStyle}>Description</label>
-                                <textarea
-                                    value={newFiliere.description}
-                                    onChange={(e) => setNewFiliere(prev => ({ ...prev, description: e.target.value }))}
-                                    rows={3}
-                                    style={{ ...inputStyle, resize: 'vertical' }}
-                                />
-                            </div>
+                            
                             {formError && (
                                 <div style={{ color: '#dc2626', marginBottom: '12px', fontSize: '13px' }}>{formError}</div>
                             )}

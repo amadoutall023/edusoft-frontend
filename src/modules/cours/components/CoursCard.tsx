@@ -7,6 +7,7 @@ import { Cours } from '../types';
 import { fetchSessions, createSession, updateSession } from '@/modules/planning/services/sessionService';
 import { SessionResponseDto, SessionMode, SessionType, SessionStatus } from '@/shared/api/types';
 import CourseSupportModal from './CourseSupportModal';
+import Swal from 'sweetalert2';
 
 interface SessionFormData {
     date: string;
@@ -24,6 +25,7 @@ interface CoursCardProps {
     readOnly?: boolean;
     showSupportAccess?: boolean;
     canManageSupports?: boolean;
+    canAccessEmargement?: boolean;
     onArchive?: (id: string) => void;
     onEdit?: (cours: Cours) => void;
     onDelete?: (id: string) => void;
@@ -37,6 +39,7 @@ export default function CoursCard({
     readOnly = false,
     showSupportAccess = false,
     canManageSupports = false,
+    canAccessEmargement = true,
     onArchive,
     onEdit,
     onDelete,
@@ -160,7 +163,11 @@ export default function CoursCard({
             ));
         } catch (err) {
             console.error('Erreur lors de la mise à jour du statut:', err);
-            alert('Erreur lors de la mise à jour du statut de la session.');
+            Swal.fire({
+                title: 'Erreur',
+                text: 'Erreur lors de la mise à jour du statut de la session.',
+                icon: 'error'
+            });
         } finally {
             setActionLoading(null);
         }
@@ -179,7 +186,11 @@ export default function CoursCard({
         e.preventDefault();
 
         if (!newSession.date || !newSession.startHour || !newSession.endHour) {
-            alert('Veuillez remplir tous les champs obligatoires.');
+            Swal.fire({
+                title: 'Attention',
+                text: 'Veuillez remplir tous les champs obligatoires.',
+                icon: 'warning'
+            });
             return;
         }
 
@@ -215,10 +226,18 @@ export default function CoursCard({
                 typeSession: 'AUTRE',
                 libelle: ''
             });
-            alert('Session créée avec succès!');
+            Swal.fire({
+                title: 'Succès !',
+                text: 'Session créée avec succès!',
+                icon: 'success'
+            });
         } catch (err) {
             console.error('Erreur lors de la création de la session:', err);
-            alert('Impossible de créer la session. Veuillez réessayer.');
+            Swal.fire({
+                title: 'Erreur',
+                text: 'Impossible de créer la session. Veuillez réessayer.',
+                icon: 'error'
+            });
         } finally {
             setIsCreatingSession(false);
         }
@@ -307,8 +326,18 @@ export default function CoursCard({
                         {showActions && onDelete && (
                             <button
                                 title="Supprimer"
-                                onClick={() => {
-                                    if (confirm('Êtes-vous sûr de vouloir supprimer ce cours ?')) {
+                                onClick={async () => {
+                                    const result = await Swal.fire({
+                                        title: 'Êtes-vous sûr ?',
+                                        text: "Vous ne pourrez pas récupérer ce cours !",
+                                        icon: 'warning',
+                                        showCancelButton: true,
+                                        confirmButtonText: 'Oui, supprimer',
+                                        cancelButtonText: 'Annuler',
+                                        confirmButtonColor: '#d33',
+                                        cancelButtonColor: '#3085d6',
+                                    });
+                                    if (result.isConfirmed) {
                                         onDelete(cours.id);
                                     }
                                 }}
@@ -727,29 +756,31 @@ export default function CoursCard({
                                                         </button>
                                                     </>
                                                 )}
-                                                <button
-                                                    onClick={() => {
-                                                        router.push(`/dashboard/emargement/${session.id}`);
-                                                    }}
-                                                    style={{
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        gap: '6px',
-                                                        padding: '8px 12px',
-                                                        borderRadius: '6px',
-                                                        border: 'none',
-                                                        background: '#6366f1',
-                                                        color: 'white',
-                                                        fontSize: '12px',
-                                                        fontWeight: '500',
-                                                        cursor: 'pointer',
-                                                        flex: isProgramme ? undefined : 1
-                                                    }}
-                                                >
-                                                    <ClipboardList size={14} />
-                                                    {readOnly || isTerminee ? 'Voir émargement' : 'Émargement'}
-                                                </button>
+                                                {canAccessEmargement && (
+                                                    <button
+                                                        onClick={() => {
+                                                            router.push(`/dashboard/emargement/${session.id}`);
+                                                        }}
+                                                        style={{
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            gap: '6px',
+                                                            padding: '8px 12px',
+                                                            borderRadius: '6px',
+                                                            border: 'none',
+                                                            background: '#6366f1',
+                                                            color: 'white',
+                                                            fontSize: '12px',
+                                                            fontWeight: '500',
+                                                            cursor: 'pointer',
+                                                            flex: isProgramme ? undefined : 1
+                                                        }}
+                                                    >
+                                                        <ClipboardList size={14} />
+                                                        {readOnly || isTerminee ? 'Voir émargement' : 'Émargement'}
+                                                    </button>
+                                                )}
                                             </div>
                                         </div>
                                     );

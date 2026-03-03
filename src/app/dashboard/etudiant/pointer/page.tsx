@@ -8,6 +8,7 @@ import { ApiResponse, StudentResponseDto, UUID } from '@/shared/api/types';
 import { useAuth } from '@/modules/auth/context/AuthContext';
 import { mettreAJourPresenceEtudiant, getPresencesEtudiantsByType, HemargeType, PresenceStatus } from '@/modules/cours/services/presenceService';
 import { Html5Qrcode } from 'html5-qrcode';
+import Swal from 'sweetalert2';
 
 interface Student {
     id: string;
@@ -189,7 +190,11 @@ export default function PointerPage() {
     // Démarrer le scan QR pour un étudiant spécifique
     const handleStudentClick = (student: Student) => {
         if (!selectedSession) {
-            alert('Veuillez sélectionner une session (cours) avant de pointer les étudiants.');
+            Swal.fire({
+                title: 'Attention',
+                text: 'Veuillez sélectionner une session (cours) avant de pointer les étudiants.',
+                icon: 'warning'
+            });
             return;
         }
 
@@ -296,7 +301,11 @@ export default function PointerPage() {
     // Marquer tous les étudiants comme présents (sans scan QR)
     const handleMarkAllPresent = async () => {
         if (!selectedSession) {
-            alert('Veuillez sélectionner une session (cours) avant de pointer les étudiants.');
+            Swal.fire({
+                title: 'Attention',
+                text: 'Veuillez sélectionner une session (cours) avant de pointer les étudiants.',
+                icon: 'warning'
+            });
             return;
         }
 

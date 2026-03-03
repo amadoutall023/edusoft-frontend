@@ -12,11 +12,12 @@ interface AddMemberModalProps {
 }
 
 // Rôles disponibles pour les membres administratifs
-// Note: Le backend attend 'ROLE_ADMIN' ou 'ROLE_ATTACHE_CLASSE'
+// Note: Un admin ne peut pas créer un autre admin (ROLE_ADMIN)
+// Roles autorisés: Attaché de Classe, Responsable Pédagogique, Directeur/Directrice
 const roleOptions = [
-    { value: 'ROLE_ADMIN', label: 'Administrateur' },
     { value: 'ROLE_ATTACHE_CLASSE', label: 'Attaché de classe' },
-    { value: 'ROLE_RESPONSABLE', label: 'Responsable de classe' }
+    { value: 'ROLE_RP', label: 'Responsable pédagogique' },
+    { value: 'ROLE_DIRECTRICE', label: 'Directeur/Directrice' }
 ];
 
 export default function AddMemberModal({ isOpen, onClose, onSuccess }: AddMemberModalProps) {

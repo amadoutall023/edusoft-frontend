@@ -8,6 +8,7 @@ import { StudentResponseDto } from '@/shared/api/types';
 import { httpClient } from '@/shared/api/httpClient';
 import { ApiResponse } from '@/shared/api/types';
 import { tokenStorage } from '@/shared/api/tokenStorage';
+import Swal from 'sweetalert2';
 
 interface PresenceStats {
     totalAbsences: number;
@@ -105,7 +106,11 @@ export default function ClasseDetailsPage() {
 
             if (!token) {
                 console.error('Pas de token d\'authentification');
-                alert('Veuillez vous reconnecter');
+                Swal.fire({
+                    title: 'Erreur',
+                    text: 'Veuillez vous reconnecter',
+                    icon: 'error'
+                });
                 return;
             }
 
@@ -131,11 +136,19 @@ export default function ClasseDetailsPage() {
             } else {
                 const errorText = await response.text();
                 console.error('Erreur lors de la mise a jour du responsable:', response.status, errorText);
-                alert('Erreur: ' + response.status + ' - ' + errorText);
+                Swal.fire({
+                    title: 'Erreur',
+                    text: 'Erreur: ' + response.status + ' - ' + errorText,
+                    icon: 'error'
+                });
             }
         } catch (error) {
             console.error('Erreur lors de la mise a jour du responsable:', error);
-            alert('Erreur de connexion: ' + error);
+            Swal.fire({
+                title: 'Erreur',
+                text: 'Erreur de connexion: ' + error,
+                icon: 'error'
+            });
         } finally {
             setUpdatingId(null);
         }

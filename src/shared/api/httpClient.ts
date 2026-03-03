@@ -124,7 +124,25 @@ export async function httpClient<T>(path: string, options: HttpRequestOptions = 
         if (!suppressLog) {
             console.error('Erreur API:', response.status, details);
         }
-        const message = (details as { message?: string })?.message ?? response.statusText;
+        
+        // Extraire le message d'erreur de la réponse JSON ou du texte brut
+        let message = response.statusText;
+        
+        if (details) {
+            const detailsObj = details as Record<string, unknown>;
+            // Priorité 1: message dans la réponse JSON (notre structure d'API)
+            if (typeof detailsObj.message === 'string') {
+                message = detailsObj.message;
+            }
+            // Priorité 2: code d'erreur s'il y a un objet data avec un code
+            if (detailsObj.data && typeof detailsObj.data === 'object') {
+                const data = detailsObj.data as Record<string, unknown>;
+                if (data.code === 'DATA_INTEGRITY_ERROR' && data.message) {
+                    message = data.message as string;
+                }
+            }
+        }
+        
         throw new ApiError(response.status, message, details);
     }
 
