@@ -527,12 +527,7 @@ export default function CoursCard({
                         <div className="modal-content" style={modalContentStyle} onClick={(e) => e.stopPropagation()}>
                             <ModalHeader title="Créer une session" onClose={() => setShowModal(false)} />
                             <form onSubmit={handleSubmit}>
-                                <ModalInputRow
-                                    label="Libellé"
-                                    value={newSession.libelle}
-                                    onChange={(value) => setNewSession({ ...newSession, libelle: value })}
-                                    placeholder={`Session - ${cours.titre}`}
-                                />
+                               
                                 <ModalInputRow
                                     label="Date"
                                     type="date"
