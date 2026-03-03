@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
+import Swal from 'sweetalert2';
 import { 
     Calendar, 
     Plus, 
@@ -170,7 +171,17 @@ export default function AnneeScolaireManager({ onYearChanged }: AnneeScolaireMan
     };
 
     const handleDelete = async (id: string) => {
-        if (!confirm('Êtes-vous sûr de vouloir supprimer cette année scolaire ?')) {
+        const result = await Swal.fire({
+            title: 'Êtes-vous sûr ?',
+            text: "Vous ne pourrez pas récupérer cette année scolaire !",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Oui, supprimer',
+            cancelButtonText: 'Annuler',
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+        });
+        if (!result.isConfirmed) {
             return;
         }
         try {

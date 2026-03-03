@@ -42,6 +42,9 @@ export default function CoursAttacheContent() {
     const { roles } = useAuth();
     const isProfesseur = roles.includes('ROLE_PROFESSEUR');
     const isAttache = roles.includes('ROLE_ATTACHE_CLASSE');
+    // Les rôles qui peuvent gérer les émargements: PROFESSEUR et ATTACHE_CLASSE
+    const canAccessEmargement = roles.includes('ROLE_PROFESSEUR') || roles.includes('ROLE_ATTACHE_CLASSE');
+    
     const [courses, setCourses] = useState<Cours[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -231,10 +234,11 @@ export default function CoursAttacheContent() {
                                 key={cours.id}
                                 cours={cours}
                                 showActions={false}
-                                showCreateSession={!isProfesseur}
-                                readOnly={isProfesseur}
-                                showSupportAccess={isProfesseur || isAttache}
-                                canManageSupports={isProfesseur}
+                                showCreateSession={false}  // L'attaché ne peut pas créer de sessions
+                                readOnly={true}  // L'attaché ne peut pas modifier les sessions
+                                showSupportAccess={false}  // L'attaché n'a pas accès aux supports
+                                canManageSupports={false}
+                                canAccessEmargement={canAccessEmargement}
                             />
                         ))}
                     </div>

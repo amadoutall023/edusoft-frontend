@@ -107,7 +107,11 @@ export default function SallesTable({
             await onDelete(salle.id);
         } catch (err) {
             const message = err instanceof ApiError ? err.message : 'Suppression impossible';
-            alert(message);
+            Swal.fire({
+                title: 'Erreur',
+                text: message,
+                icon: 'error'
+            });
         }
     };
 

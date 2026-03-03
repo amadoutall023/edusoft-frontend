@@ -338,8 +338,6 @@ export default function ModulesTable({
                                 <th style={{ padding: '16px', textAlign: 'center', color: 'white', fontWeight: '600', fontSize: '14px', width: '200px', borderBottom: '3px solid rgba(255,255,255,0.2)' }}>Nom</th>
                                 <th style={{ padding: '16px', textAlign: 'center', color: 'white', fontWeight: '600', fontSize: '14px', width: '150px', borderBottom: '3px solid rgba(255,255,255,0.2)' }}>Code</th>
                                 <th style={{ padding: '16px', textAlign: 'center', color: 'white', fontWeight: '600', fontSize: '14px', width: '150px', borderBottom: '3px solid rgba(255,255,255,0.2)' }}>Filière</th>
-                                <th style={{ padding: '16px', textAlign: 'center', color: 'white', fontWeight: '600', fontSize: '14px', width: '150px', borderBottom: '3px solid rgba(255,255,255,0.2)' }}>Classe</th>
-                                <th style={{ padding: '16px', textAlign: 'center', color: 'white', fontWeight: '600', fontSize: '14px', width: '120px', borderBottom: '3px solid rgba(255,255,255,0.2)' }}>Crédits</th>
                                 <th style={{ padding: '16px', textAlign: 'center', color: 'white', fontWeight: '600', fontSize: '14px', width: '120px', borderBottom: '3px solid rgba(255,255,255,0.2)' }}>ACTIONS</th>
                             </tr>
                         </thead>
@@ -353,8 +351,6 @@ export default function ModulesTable({
                                     <td style={{ padding: '16px', textAlign: 'center', color: '#1a202c', fontSize: '14px', fontWeight: '600', borderBottom: '1px solid #f1f5f9' }}>{module.nom}</td>
                                     <td style={{ padding: '16px', textAlign: 'center', color: '#5B8DEF', fontSize: '14px', fontWeight: '600', borderBottom: '1px solid #f1f5f9' }}>{module.code}</td>
                                     <td style={{ padding: '16px', textAlign: 'center', color: '#5B8DEF', fontSize: '14px', fontWeight: '500', borderBottom: '1px solid #f1f5f9' }}>{module.filiereLabel ?? module.filiereId}</td>
-                                    <td style={{ padding: '16px', textAlign: 'center', color: '#4a5568', fontSize: '14px', fontWeight: '500', borderBottom: '1px solid #f1f5f9' }}>{module.classeId || '-'}</td>
-                                    <td style={{ padding: '16px', textAlign: 'center', color: '#4a5568', fontSize: '14px', fontWeight: '500', borderBottom: '1px solid #f1f5f9' }}>{module.credits}</td>
                                     <td style={{ padding: '16px', textAlign: 'center', borderBottom: '1px solid #f1f5f9' }}>
                                         <div style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}>
                                             <button style={iconButtonStyle} onClick={() => openEdit(module)}>
@@ -384,7 +380,7 @@ export default function ModulesTable({
                                     { label: 'Nom', value: module.nom, highlight: true },
                                     { label: 'Code', value: module.code },
                                     { label: 'Filière', value: module.filiereLabel || module.filiereId },
-                                    { label: 'Crédits', value: (module.credits ?? 0).toString() }
+                                    // { label: 'Crédits', value: (module.credits ?? 0).toString() }
                                 ]}
                                 onEdit={() => openEdit(module)}
                                 onDelete={() => handleDelete(module)}
@@ -416,10 +412,10 @@ export default function ModulesTable({
                                 <label style={labelStyle}>Nom</label>
                                 <input type="text" value={newModule.nom} onChange={(e) => setNewModule({ ...newModule, nom: e.target.value })} placeholder="Ex: Programmation Web" required style={inputStyle} />
                             </div>
-                            <div style={{ marginBottom: '20px' }}>
+                            {/* <div style={{ marginBottom: '20px' }}>
                                 <label style={labelStyle}>Crédits</label>
                                 <input type="number" value={newModule.credits} onChange={(e) => setNewModule({ ...newModule, credits: parseInt(e.target.value) || 0 })} placeholder="Ex: 4" min="0" required style={inputStyle} />
-                            </div>
+                            </div> */}
                             <div style={{ marginBottom: '24px' }}>
                                 <label style={labelStyle}>Filière</label>
                                 <select value={newModule.filiereId} onChange={(e) => setNewModule({ ...newModule, filiereId: e.target.value })} required style={{ ...inputStyle, cursor: 'pointer' }}>
@@ -461,10 +457,10 @@ export default function ModulesTable({
                                 <label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: '4px' }}>Filière</label>
                                 <p style={{ fontSize: '16px', fontWeight: 500, color: '#1a202c', margin: 0 }}>{selectedModule.filiereLabel || 'Non défini'}</p>
                             </div>
-                            <div style={{ padding: '16px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                            {/* <div style={{ padding: '16px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
                                 <label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: '4px' }}>Crédits</label>
                                 <p style={{ fontSize: '16px', fontWeight: 500, color: '#1a202c', margin: 0 }}>{selectedModule.credits ?? 0}</p>
-                            </div>
+                            </div> */}
                             {selectedModule.classeId && (
                                 <div style={{ padding: '16px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
                                     <label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: '4px' }}>Classe</label>

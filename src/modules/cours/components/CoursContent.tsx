@@ -10,6 +10,8 @@ import { CoursResponseDto, ClasseResponseDto, ModuleResponseDto, ProfessorRespon
 import { fetchClasses, fetchModules } from '@/modules/structure/services/structureService';
 import { fetchProfessors } from '@/modules/prof/services/professorService';
 import { ApiError } from '@/shared/errors/ApiError';
+import { useAuth } from '@/modules/auth/context/AuthContext';
+import Swal from 'sweetalert2';
 
 const mapCoursDto = (cours: CoursResponseDto): Cours => {
     const total = cours.totalHour ?? 0;
@@ -47,6 +49,10 @@ const INITIAL_COURSE_FORM = {
 };
 
 export default function CoursContent() {
+    const { roles } = useAuth();
+    // Les rôles qui peuvent gérer les émargements: PROFESSEUR et ATTACHE_CLASSE
+    const canAccessEmargement = roles.includes('ROLE_PROFESSEUR') || roles.includes('ROLE_ATTACHE_CLASSE');
+    
     const [courses, setCourses] = useState<Cours[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -88,7 +94,11 @@ export default function CoursContent() {
             setCourses(prev => prev.filter(c => c.id !== id));
         } catch (err) {
             const message = err instanceof ApiError ? err.message : 'Impossible de supprimer le cours.';
-            alert(message);
+            Swal.fire({
+                title: 'Erreur',
+                text: message,
+                icon: 'error'
+            });
         } finally {
             setIsLoading(false);
         }
@@ -210,7 +220,11 @@ export default function CoursContent() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!newCours.moduleId || !newCours.classeId) {
-            alert('Merci de sélectionner un module et une classe.');
+            Swal.fire({
+                title: 'Attention',
+                text: 'Merci de sélectionner un module et une classe.',
+                icon: 'warning'
+            });
             return;
         }
 
@@ -246,7 +260,11 @@ export default function CoursContent() {
             setEditingCours(null);
         } catch (err) {
             const message = err instanceof ApiError ? err.message : (editingCours ? 'Impossible de modifier le cours.' : 'Impossible de créer le cours.');
-            alert(message);
+            Swal.fire({
+                title: 'Erreur',
+                text: message,
+                icon: 'error'
+            });
         } finally {
             setIsCreating(false);
         }
@@ -490,6 +508,7 @@ export default function CoursContent() {
                                 onEdit={handleEdit}
                                 onDelete={handleDelete}
                                 isArchiveView={showArchive}
+                                canAccessEmargement={canAccessEmargement}
                             />
                         ))}
                     </div>

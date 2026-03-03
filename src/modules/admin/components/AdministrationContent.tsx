@@ -9,6 +9,7 @@ import { MembreAdministration } from '../types';
 import { fetchAdminMembers } from '../services/adminService';
 import { UserDto } from '@/shared/api/types';
 import { ApiError } from '@/shared/errors/ApiError';
+import { useAuth } from '@/modules/auth/context/AuthContext';
 import { useActiveYear } from '@/shared/context/ActiveYearContext';
 
 const roleLabels: Record<string, string> = {
@@ -28,6 +29,9 @@ const ALLOWED_ROLES = [
     'ROLE_RP',
     'ROLE_ATTACHE_CLASSE'
 ];
+
+// Rôles qui peuvent ajouter des membres (uniquement ADMIN et SUPER_ADMIN)
+const CAN_ADD_MEMBER_ROLES = ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'];
 
 // Vérifie si l'utilisateur est un membre du personnel administratif
 const isAdminMember = (user: UserDto): boolean => {
@@ -55,12 +59,16 @@ const mapMember = (user: UserDto): MembreAdministration | null => {
 };
 
 export default function AdministrationContent() {
+    const { roles } = useAuth();
     const [members, setMembers] = useState<MembreAdministration[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [activeTab, setActiveTab] = useState<'members' | 'years'>('members');
     const { refresh: refreshActiveYear } = useActiveYear();
+
+    // Vérifier si l'utilisateur peut ajouter des membres (ADMIN ou SUPER_ADMIN uniquement)
+    const canAddMember = roles.some(role => CAN_ADD_MEMBER_ROLES.includes(role));
 
     const handleAddMember = () => {
         setIsModalOpen(true);
@@ -182,27 +190,29 @@ export default function AdministrationContent() {
                 {activeTab === 'members' ? (
                     <>
                         <div style={{ padding: '24px 40px 0' }}>
-                            <button
-                                onClick={handleAddMember}
-                                style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '8px',
-                                    padding: '12px 20px',
-                                    background: 'linear-gradient(135deg, #5B8DEF 0%, #4169B8 100%)',
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: '10px',
-                                    fontSize: '14px',
-                                    fontWeight: '600',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s ease',
-                                    boxShadow: '0 4px 12px rgba(91,141,239,0.3)'
-                                }}
-                            >
-                                <Plus size={18} />
-                                Ajouter un membre
-                            </button>
+                            {canAddMember && (
+                                <button
+                                    onClick={handleAddMember}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        padding: '12px 20px',
+                                        background: 'linear-gradient(135deg, #5B8DEF 0%, #4169B8 100%)',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '10px',
+                                        fontSize: '14px',
+                                        fontWeight: '600',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s ease',
+                                        boxShadow: '0 4px 12px rgba(91,141,239,0.3)'
+                                    }}
+                                >
+                                    <Plus size={18} />
+                                    Ajouter un membre
+                                </button>
+                            )}
                         </div>
 
                         {isLoading && (
